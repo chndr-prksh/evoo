@@ -5,7 +5,8 @@ import Foundation
 
 /// Audio → final text, with per-stage timings. Shared by the app and `evoo-cli`.
 ///
-///   ASR ─▶ TextCleaner ─▶ personal dictionary ─▶ number formatting (NeMo ITN) ─▶ DictationRules ─▶ LLM (only if needed)
+///   ASR ─▶ TextCleaner ─▶ personal dictionary ─▶ DictationRules ─▶ DictationFormatter ─▶ numbers (NeMo ITN)
+///       ─▶ LLM (only if needed)
 ///
 /// The first four stages are fast (ASR ≈ 100–300 ms, the rest < 5 ms). The LLM costs ~1 s on an 8 GB M1,
 /// so it only runs when the rules flag an unresolved correction, or for Hinglish/Hindi.
@@ -53,7 +54,7 @@ public final class DictationPipeline {
     }
 
     public func run(samples: [Float], engine: SpeechEngine, language: DictationLanguage,
-                    llm: LLMPolicy) async throws -> Output
+                    style: OutputStyle? = .plain, llm: LLMPolicy) async throws -> Output
     {
         let clock = ContinuousClock()
         var t = clock.now
@@ -61,7 +62,7 @@ public final class DictationPipeline {
         let asr = clock.now - t
 
         t = clock.now
-        let post = postProcess(raw, language: language)
+        let post = postProcess(raw, language: language, style: style)
         let postTime = clock.now - t
 
         var text = post.text
@@ -77,17 +78,62 @@ public final class DictationPipeline {
         return Output(text: text, raw: raw, asrMs: asr.ms, postMs: postTime.ms, refineMs: refineTime.ms, usedLLM: usedLLM)
     }
 
-    /// Everything after ASR except the LLM. Pure and fast.
-    public func postProcess(_ raw: String, language: DictationLanguage) -> DictationRules.Result {
+    /// Everything after ASR except the LLM. Pure and fast. `style` nil = no list/line formatting.
+    public func postProcess(_ raw: String, language: DictationLanguage, style: OutputStyle? = .plain)
+        -> DictationRules.Result
+    {
         var text = TextCleaner.clean(raw)
         guard !text.isEmpty else { return .init(text: "", unresolved: false) }
         if !dictionary.isEmpty {
             text = dictionary.apply(text) { Self.knownWords.contains($0) } // "DeVeo" → "Divya"
         }
-        if language == .english {
-            text = normalizer.normalizeSentence(text) // "four hundred ms" → "400 ms"
+        var result = DictationRules.apply(text) // corrections, fillers, stutters
+        if let style {
+            result.text = DictationFormatter.format(result.text, style: style) // lists, line breaks, emails
         }
-        return DictationRules.apply(text)
+        if language == .english {
+            result.text = formatNumbers(result.text) // "four hundred ms" → "400 ms"
+        }
+        return result
+    }
+
+    /// Runs NeMo ITN line by line, leaving list markers alone and keeping ordinals used as words
+    /// ("first run the tests" must not become "1st run the tests"; "January first" still becomes "January 1").
+    func formatNumbers(_ text: String) -> String {
+        text.components(separatedBy: "\n").map { line in
+            let marker = line.range(of: #"^(- \[ \] |- |• |☐ |\d+\. )"#, options: .regularExpression)
+            let prefix = marker.map { String(line[$0]) } ?? ""
+            let body = String(line.dropFirst(prefix.count))
+            guard !body.isEmpty else { return line }
+            let (masked, restore) = Self.maskOrdinals(body)
+            var out = normalizer.normalizeSentence(masked)
+            for (placeholder, word) in restore { out = out.replacingOccurrences(of: placeholder, with: word) }
+            return prefix + out
+        }.joined(separator: "\n")
+    }
+
+    static let months: Set<String> = ["january", "february", "march", "april", "may", "june", "july", "august",
+                                      "september", "october", "november", "december"]
+    static let ordinalWords: Set<String> = ["first", "second", "third", "firstly", "secondly", "thirdly", "fourth",
+                                            "fifth", "last", "next"]
+
+    static func maskOrdinals(_ text: String) -> (String, [(String, String)]) {
+        var words = text.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
+        var restore: [(String, String)] = []
+        for i in words.indices {
+            let bare = words[i].lowercased().filter(\.isLetter)
+            guard ordinalWords.contains(bare) else { continue }
+            let prev = i > 0 ? words[i - 1].lowercased().filter(\.isLetter) : ""
+            let next = i + 1 < words.count ? words[i + 1].lowercased().filter(\.isLetter) : ""
+            let afterOf = i + 2 < words.count ? words[i + 2].lowercased().filter(\.isLetter) : ""
+            // A date — "January first", "the first of May" — is left for ITN to write as "January 1".
+            if months.contains(prev) || (next == "of" && months.contains(afterOf)) { continue }
+            let placeholder = "evooordinal\(restore.count)x"
+            let letters = words[i].filter(\.isLetter)
+            restore.append((placeholder, letters))
+            words[i] = words[i].replacingOccurrences(of: letters, with: placeholder)
+        }
+        return (words.joined(separator: " "), restore)
     }
 
     /// Runs a tiny inference so the first real dictation doesn't pay for CoreML/Metal warm-up.

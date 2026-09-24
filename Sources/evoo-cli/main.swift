@@ -7,7 +7,7 @@ import Foundation
 // Dev tool for measuring Evoo's pipeline without the GUI.
 //
 //   evoo-cli bench [--lang english] [--engine parakeet|whisper] [--llm] [--vocab "Divya,Rahul"] file.wav …   audio → text, with timings
-//   evoo-cli post "text" …                                                           rules + number formatting only
+//   evoo-cli post [--style markdown|plain|singleLine] "text" …                       rules + formatting only
 //   evoo-cli refine [--lang …] [--model qwen3_1_7b|qwen3_4b] "text" …                 LLM refinement only
 //
 // Make test audio with macOS text-to-speech:
@@ -33,6 +33,7 @@ let model = option("--model").flatMap(RefinerModel.init(rawValue:)) ?? .qwen3_1_
 let engineID = option("--engine").flatMap(ASREngineID.init(rawValue:)) ?? EnginePreference.automatic.resolve(for: language)
 let useLLM = flag("--llm")
 let vocabulary = option("--vocab")?.split(separator: ",").map(String.init) ?? []
+let style = option("--style").flatMap(OutputStyle.init(rawValue:)) ?? .markdown
 let refiner = LlamaRefiner()
 let pipeline = DictationPipeline(refiner: refiner)
 pipeline.dictionary = PersonalDictionary(vocabulary)
@@ -68,7 +69,7 @@ case "bench":
     for path in inputs {
         let samples = try converter.resampleAudioFile(path: path)
         let out = try await pipeline.run(samples: samples, engine: engine, language: language,
-                                         llm: useLLM ? .whenNeeded : .off)
+                                         style: style, llm: useLLM ? .whenNeeded : .off)
         let audio = String(format: "%.1f", Double(samples.count) / 16000)
         print("\n\(URL(fileURLWithPath: path).lastPathComponent) (\(audio) s audio)")
         print("  raw: \(out.raw)\n  out: \(out.text)\n  \(out.summary)")
@@ -78,7 +79,7 @@ case "bench":
 case "post":
     for input in inputs {
         let t0 = clock.now
-        let r = pipeline.postProcess(input, language: language)
+        let r = pipeline.postProcess(input, language: language, style: style)
         let us = (clock.now - t0).formatted(.units(allowed: [.microseconds]))
         print("in : \(input)\nout: \(r.text)\(r.unresolved ? "   [unresolved → LLM]" : "")  (\(us))\n")
     }

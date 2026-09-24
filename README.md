@@ -8,6 +8,9 @@ Hold `fn`, speak, release — clean text appears at your cursor in any app.
 - Works everywhere you can paste: Chrome, Slack, Gmail, Notion, VS Code, Cursor, Terminal, Office…
 - English, Hinglish and Hindi. Pluggable speech engines.
 - Personal dictionary for names and jargon (Divya, Aarav, Kubernetes).
+- Formats as you speak: "…buy tomorrow bread, eggs, milk" becomes a bulleted list; "first… second… third…"
+  becomes numbered steps; "new line", "new paragraph", emails. Markdown in Notion/editors/browsers, • bullets
+  elsewhere, and never a line break in Terminal (a pasted newline could run a command).
 - Apache-2.0. Every model it uses is open-weight and free.
 
 ## How it works
@@ -25,6 +28,7 @@ fn up   ─▶ SpeechEngine ─▶ number formatting ─▶ DictationRules ─�
 | Speech → text (Hindi, Hinglish) | Whisper large-v3 turbo via WhisperKit | MIT / MIT | Neural Engine + GPU |
 | Numbers ("four hundred ms" → "400 ms") | NeMo inverse text normalization (text-processing-rs) | Apache-2.0 | CPU, < 1 ms |
 | Self-corrections, fillers, stutters | `DictationRules` (built-in, deterministic) | Apache-2.0 | CPU, < 5 ms |
+| Lists, line breaks, emails | `DictationFormatter`: bullets, numbered steps, to-do checklists, "new line", "chandra at gmail.com" — styled per app | Apache-2.0 | CPU, < 1 ms |
 | Names & terms ("DeVeo" → "Divya") | `PersonalDictionary`: sound-alike match, never replaces real English words | Apache-2.0 | CPU, < 1 ms |
 | Hinglish romanization, tricky corrections | Qwen3 1.7B (Q4_K_M GGUF) via llama.cpp | Apache-2.0 / MIT | GPU (Metal), ~1 s |
 

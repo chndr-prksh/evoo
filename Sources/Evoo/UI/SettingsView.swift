@@ -38,6 +38,11 @@ struct SettingsView: View {
                 Picker("Language", selection: $settings.language) {
                     ForEach(DictationLanguage.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
+                Toggle("Format lists, line breaks and emails", isOn: $settings.formatText)
+                if settings.formatText {
+                    Text("Say “…buy bread, eggs, milk” for bullets, “first… second… third…” for steps, “new line” / “new paragraph” for breaks. Styled per app: Markdown in Notion, editors and browsers; • bullets in Mail, Notes and Slack; always one line in Terminal.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Picker("Microphone", selection: $settings.microphoneUID) {
                     Text("System default").tag(String?.none)
                     ForEach(microphones) { Text($0.name).tag(Optional($0.id)) }

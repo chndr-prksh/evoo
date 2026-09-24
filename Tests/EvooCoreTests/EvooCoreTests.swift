@@ -181,3 +181,53 @@ import Testing
         #expect(fix("Zorblat is here") == "Zorblat is here")
     }
 }
+
+@Suite struct FormatterTests {
+    func md(_ s: String) -> String { DictationFormatter.format(s, style: .markdown) }
+    func plain(_ s: String) -> String { DictationFormatter.format(s, style: .plain) }
+
+    @Test func shoppingList() {
+        #expect(md("I have a list of items that I want to buy tomorrow bread, egg, milk, avocado, apple, banana.")
+            == "I have a list of items that I want to buy tomorrow:\n- Bread\n- Egg\n- Milk\n- Avocado\n- Apple\n- Banana")
+        #expect(plain("We need three things: milk, eggs and bread.")
+            == "We need three things:\n• Milk\n• Eggs\n• Bread")
+    }
+
+    @Test func checklist() {
+        #expect(md("My to-do list for today call the bank, pay rent, book tickets.")
+            == "My to-do list for today:\n- [ ] Call the bank\n- [ ] Pay rent\n- [ ] Book tickets")
+    }
+
+    @Test func numberedList() {
+        #expect(md("To deploy, first run the tests, second build the app, third push to production.")
+            == "To deploy:\n1. Run the tests\n2. Build the app\n3. Push to production.")
+        #expect(md("Step one open settings. Step two click privacy.")
+            == "1. Open settings\n2. Click privacy.")
+    }
+
+    @Test func proseStaysProse() {
+        #expect(md("I met John, Mary, and Steve at the cafe yesterday.") == "I met John, Mary, and Steve at the cafe yesterday.")
+        #expect(md("At first I was unsure, but it worked.") == "At first I was unsure, but it worked.")
+        #expect(md("Please look at google.com for details.") == "Please look at google.com for details.")
+        #expect(md("Can you bring the charger, the cable, and the adapter?") == "Can you bring the charger, the cable, and the adapter?")
+        #expect(md("We need to talk, but not now, maybe later.") == "We need to talk, but not now, maybe later.")
+    }
+
+    @Test func spokenBreaks() {
+        #expect(plain("Hi team new line the build is green new paragraph thanks Chandra.")
+            == "Hi team\nThe build is green\n\nThanks Chandra.")
+    }
+
+    @Test func emails() {
+        #expect(plain("My email is chandra at gmail.com and the site is evoo.app.")
+            == "My email is chandra@gmail.com and the site is evoo.app.")
+    }
+
+    @Test func terminalsGetOneLine() {
+        #expect(DictationFormatter.format("I want to buy bread, eggs, milk new line done", style: .singleLine)
+            == "I want to buy bread, eggs, milk done")
+        #expect(OutputStyle.forApp("com.apple.Terminal") == .singleLine)
+        #expect(OutputStyle.forApp("notion.id") == .markdown)
+        #expect(OutputStyle.forApp("com.apple.mail") == .plain)
+    }
+}

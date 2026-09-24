@@ -225,7 +225,10 @@ final class DictationController: ObservableObject {
         }
         play("Pop")
         phase = .transcribing
-        processing = Task { await process(samples, seconds: seconds) }
+        // Style the text for the app that will receive it: Markdown, bullets, or a single line for terminals.
+        let targetApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let style: OutputStyle? = settings.formatText ? OutputStyle.forApp(targetApp) : nil
+        processing = Task { await process(samples, seconds: seconds, style: style) }
     }
 
     func cancel() {
@@ -241,7 +244,7 @@ final class DictationController: ObservableObject {
         handsFreeFromUI = false
     }
 
-    private func process(_ samples: [Float], seconds: Double) async {
+    private func process(_ samples: [Float], seconds: Double, style: OutputStyle?) async {
         let language = settings.language
         let engine = engines.engine(for: settings.resolvedEngine)
         do {
@@ -254,7 +257,7 @@ final class DictationController: ObservableObject {
             let willUseLLM = settings.refinementEnabled && refiner.isLoaded
             if willUseLLM, language != .english { phase = .refining }
             let out = try await pipeline.run(samples: samples, engine: engine, language: language,
-                                             llm: willUseLLM ? .whenNeeded : .off)
+                                             style: style, llm: willUseLLM ? .whenNeeded : .off)
             guard !Task.isCancelled else { return }
             guard !out.text.isEmpty else { return (phase = .idle) }
 
