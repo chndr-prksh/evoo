@@ -29,6 +29,7 @@ public enum DictationRules {
         tokens = removeStutters(tokens)
         tokens = collapseValueCorrections(tokens)
         tokens = collapseEchoNegations(tokens)
+        tokens = collapseRestatements(tokens)
         var unresolved = false
         tokens = applyCorrections(tokens, unresolved: &unresolved)
         return Result(text: render(tokens), unresolved: unresolved)
@@ -225,6 +226,42 @@ public enum DictationRules {
             t.removeSubrange(start ..< restStart)
             if start > 0 { t[start - 1].raw = t[start - 1].bare } // drop a comma left dangling
             i = start + 1
+        }
+        return t
+    }
+
+    static let intensifiers: Set<String> = ["very", "really", "so", "super", "extremely", "quite", "too", "pretty",
+                                            "totally", "absolutely", "completely", "much", "way"]
+    /// Words that may sit between a word and its restatement: "bad, not no bad, very bad".
+    static let restatementFillers: Set<String> = intensifiers.union(["not", "no", "i", "mean", "sorry", "actually",
+                                                                    "like", "or", "rather"])
+
+    /// A word said again with a sharper modifier replaces the first attempt:
+    ///   "It's still bad, very bad"               → "It's still very bad"
+    ///   "The dictation is still bad, not no bad, very bad" → "The dictation is still very bad"
+    static func collapseRestatements(_ input: [Token]) -> [Token] {
+        var t = input
+        var changed = true
+        while changed {
+            changed = false
+            for i in t.indices {
+                let w = t[i].norm
+                guard !w.isEmpty, !functionWords.contains(w), !restatementFillers.contains(w), !t[i].endsSentence
+                else { continue }
+                // The same word again within 5 words, with only fillers in between.
+                guard let j = (i + 1 ..< min(t.count, i + 6)).first(where: { t[$0].norm == w }),
+                      t[(i + 1) ..< j].allSatisfy({ restatementFillers.contains($0.norm) }), j > i + 1
+                else { continue }
+                // Keep the modifiers directly before the restated word ("very"), drop the rest.
+                var keepFrom = j
+                while keepFrom > i + 1, intensifiers.contains(t[keepFrom - 1].norm), !t[keepFrom - 1].endsClause {
+                    keepFrom -= 1
+                }
+                guard keepFrom < j || t[(i + 1) ..< j].contains(where: { !intensifiers.contains($0.norm) }) else { continue }
+                t.removeSubrange(i ..< keepFrom)
+                changed = true
+                break
+            }
         }
         return t
     }

@@ -183,6 +183,11 @@ import Testing
             ("I'm free tomorrow, not today.", "I'm free tomorrow, not today."),
             ("It's not bad, not bad at all.", "It's not bad at all."), // repeated phrase removed, like a stutter
             ("I do not know.", "I do not know."),
+            ("It's still bad very bad.", "It's still very bad."),
+            ("The dictation is still bad, not no bad, very bad.", "The dictation is still very bad."),
+            ("It was good, really good.", "It was really good."),
+            ("Bad news and bad weather.", "Bad news and bad weather."),
+            ("It is very, very good.", "It is very, very good."),
         ]
         for (input, expected) in cases {
             #expect(fix(input) == expected, "\(input)")
@@ -319,6 +324,9 @@ import Testing
         #expect(!names.contains("Hey"))
         #expect(!names.contains("Rose")) // a real word — too risky to force
         #expect(!names.contains("Type"))
+        // Capitalized ordinary words on screen are not names.
+        let shouting = ContextVocabulary.names(from: ["HELLO, HOW ARE YOU?"]) { known.union(["hello"]).contains($0) }
+        #expect(shouting.isEmpty)
     }
 
     @Test func screenNamesFixMisheardName() {

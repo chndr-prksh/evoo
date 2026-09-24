@@ -14,9 +14,9 @@ public enum ContextVocabulary {
                 let word = raw.trimmingCharacters(in: CharacterSet(charactersIn: "'-"))
                 guard word.count >= 3, word.count <= 24, let first = word.first, first.isUppercase,
                       word.allSatisfy({ $0.isLetter && $0.isASCII || $0 == "-" || $0 == "'" }) else { continue }
-                let lower = word.lowercased()
-                let isAcronymOrCamel = word.dropFirst().contains(where: \.isUppercase)
-                guard isAcronymOrCamel || !PersonalDictionary.isKnown(lower, isKnownWord) else { continue }
+                // Ordinary words never count, however they're capitalized on screen — "HOW ARE YOU?" in
+                // capitals must not turn every later "you" into "YOU".
+                guard !PersonalDictionary.isKnown(word.lowercased(), isKnownWord) else { continue }
                 if counts[word] == nil { order.append(word) }
                 counts[word, default: 0] += 1
             }

@@ -26,10 +26,13 @@ public final class ParakeetEngine: SpeechEngine {
         progress(1)
     }
 
-    public func transcribe(_ samples: [Float], language _: DictationLanguage) async throws -> String {
+    public func transcribe(_ samples: [Float], language: DictationLanguage) async throws -> String {
         guard let manager else { throw EngineError.notLoaded }
         var state = TdtDecoderState.make(decoderLayers: version.decoderLayers)
-        return try await manager.transcribe(samples, decoderState: &state).text
+        // v3 speaks 25 languages and can drift into Cyrillic on short phrases ("Ол кабс" for "All caps").
+        // Telling it the language restricts decoding to Latin-script tokens.
+        let hint: Language? = language == .english ? .english : nil
+        return try await manager.transcribe(samples, decoderState: &state, language: hint).text
     }
 
     public func unload() async {
