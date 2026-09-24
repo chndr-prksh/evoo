@@ -50,7 +50,7 @@ another Fn-based dictation app (e.g. Wispr Flow) at the same time — both will 
 Requires macOS 14+, Apple Silicon, and the Xcode Command Line Tools (full Xcode not required).
 
 ```bash
-swift test                  # unit tests (gesture state machine, prompt, cleaner)
+swift test                  # unit tests (gestures, correction rules, prompt, cleaner)
 scripts/bundle.sh           # builds build/Evoo.app
 open build/Evoo.app
 ```
@@ -84,9 +84,9 @@ Sources/EvooCore     Pure logic, fully unit-tested: Fn gesture state machine, la
                      refinement prompt + output guards, transcript cleanup, model catalog.
 Sources/EvooRefine   llama.cpp refiner (KV-cached prompt prefix) and verified model downloads.
 Sources/EvooSpeech   SpeechEngine protocol, Parakeet + Whisper engines, DictationPipeline (ASR → ITN → rules → LLM).
-Sources/Evoo         The menu-bar app: FnKeyMonitor, AudioRecorder, SpeechEngine (Parakeet/Whisper),
-                     TextInjector, DictationController, pill + settings UI, permissions.
-Sources/evoo-cli     Terminal tool for benchmarking refinement.
+Sources/Evoo         The menu-bar app: FnKeyMonitor, AudioRecorder, TextInjector, DictationController,
+                     pill + settings UI, permissions.
+Sources/evoo-cli     Terminal tool: bench (audio → text timings), post (rules only), refine (LLM only).
 ```
 
 Adding a speech engine = one type conforming to `SpeechEngine` (`load` / `transcribe` / `unload`) plus a case in
