@@ -26,6 +26,8 @@ final class DictationController: ObservableObject {
     /// Human-readable model status, e.g. "Downloading Whisper… 42%".
     @Published private(set) var modelStatus: String?
     @Published private(set) var refinerDownloadProgress: Double?
+    /// Result of the last learn-from-edits check, shown in Settings → Learning.
+    @Published private(set) var learningStatus: String?
 
     let settings = AppSettings.shared
     let permissions = Permissions()
@@ -63,6 +65,7 @@ final class DictationController: ObservableObject {
         gesture = HotkeyGesture(mode: AppSettings.shared.activationMode)
         hotkeys.onEvent = { [weak self] event in self?.handle(event) }
         editWatcher.onLessons = { [weak self] lessons, app in self?.learn(lessons, app: app) }
+        editWatcher.onStatus = { [weak self] status in self?.learningStatus = status }
         recorder.onLevel = { [weak self] level in
             Task { @MainActor in self?.push(level: level) }
         }
@@ -383,6 +386,16 @@ final class DictationController: ObservableObject {
     }
 
     #if DEBUG
+    /// Debug builds: type `text` as if it had been dictated (for end-to-end tests of pasting and learning).
+    /// Trigger: post the distributed notification "app.evoo.debug.dictate" with the text as its object.
+    func debugDictate(_ text: String) {
+        Task {
+            let app = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            await injector.insert(text, restoreClipboard: settings.restoreClipboard)
+            editWatcher.didInsert(text, app: app)
+        }
+    }
+
     /// Lets `--snapshot-pill` render every state without a microphone.
     func debugSet(phase: Phase, levels: [Float]? = nil) {
         self.phase = phase

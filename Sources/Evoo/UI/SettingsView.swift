@@ -125,6 +125,9 @@ struct SettingsView: View {
                 Toggle("Learn from my edits", isOn: $settings.learnFromEdits)
                 Text("When you fix something Evoo typed, it learns: corrected names join your dictionary, and habits like deleting the final full stop in chat apps are remembered per app. Only learned words and counts are kept — never your text.")
                     .font(.caption).foregroundStyle(.secondary)
+                if let status = controller.learningStatus {
+                    LabeledContent("Last check", value: status)
+                }
                 let learned = settings.habits.apps.filter { $0.value.dropsFinalPeriod || $0.value.lowercasesStart }
                 ForEach(learned.keys.sorted(), id: \.self) { app in
                     let h = learned[app]!
@@ -177,7 +180,6 @@ struct SettingsView: View {
     }
 
     private func appName(_ bundleID: String) -> String {
-        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
-            .map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") } ?? bundleID
+        EditWatcher.appName(bundleID)
     }
 }

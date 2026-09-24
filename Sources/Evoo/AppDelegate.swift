@@ -32,6 +32,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .store(in: &cancellables)
 
         controller.bootstrap()
+        #if DEBUG
+        DistributedNotificationCenter.default().addObserver(forName: .init("app.evoo.debug.dictate"), object: nil,
+                                                            queue: .main) { [weak self] note in
+            guard let text = note.object as? String else { return }
+            MainActor.assumeIsolated { self?.controller.debugDictate(text) }
+        }
+        #endif
         if !controller.permissions.allGranted { openSettings() }
     }
 
