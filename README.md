@@ -30,6 +30,7 @@ fn up   ─▶ SpeechEngine ─▶ number formatting ─▶ DictationRules ─�
 | Numbers ("four hundred ms" → "400 ms") | NeMo inverse text normalization (text-processing-rs) | Apache-2.0 | CPU, < 1 ms |
 | Self-corrections, fillers, stutters | `DictationRules` (built-in, deterministic) | Apache-2.0 | CPU, < 5 ms |
 | Lists, line breaks, emails | `DictationFormatter`: bullets, numbered steps, to-do checklists, "new line", "chandra at gmail.com" — styled per app | Apache-2.0 | CPU, < 1 ms |
+| Names on screen (context awareness) | `ScreenText` + `ContextVocabulary`: names in the focused window (chat header, recipients, text near the cursor) join the dictionary for that dictation — local, never stored | Apache-2.0 | Accessibility API, read while you speak |
 | Names & terms ("DeVeo" → "Divya") | `PersonalDictionary`: sound-alike match, never replaces real English words | Apache-2.0 | CPU, < 1 ms |
 | Hinglish romanization, tricky corrections | Qwen3 1.7B (Q4_K_M GGUF) via llama.cpp | Apache-2.0 / MIT | GPU (Metal), ~1 s |
 

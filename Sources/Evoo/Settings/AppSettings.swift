@@ -24,6 +24,8 @@ final class AppSettings: ObservableObject {
     @Published var formatText: Bool { didSet { save(formatText, "formatText") } }
     /// Parakeet 110M instead of 0.6B: about 2× faster, less accurate with names.
     @Published var fastestModel: Bool { didSet { save(fastestModel, "fastestModel") } }
+    /// Spell names seen on screen (chat header, recipients, text near the cursor) correctly.
+    @Published var useScreenContext: Bool { didSet { save(useScreenContext, "useScreenContext") } }
 
     private init() {
         func value<T: RawRepresentable>(_ key: String, _ fallback: T) -> T where T.RawValue == String {
@@ -49,6 +51,7 @@ final class AppSettings: ObservableObject {
         }
         formatText = bool("formatText", true)
         fastestModel = bool("fastestModel", false)
+        useScreenContext = bool("useScreenContext", true)
     }
 
     var resolvedEngine: ASREngineID { engine.resolve(for: language) }

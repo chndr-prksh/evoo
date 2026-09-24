@@ -284,3 +284,27 @@ import Testing
         #expect(OutputStyle.forApp("com.apple.mail") == .plain)
     }
 }
+
+@Suite struct ContextVocabularyTests {
+    let known: Set<String> = ["hey", "how", "are", "you", "the", "meeting", "today", "online", "last", "seen", "message", "type", "rose"]
+
+    @Test func harvestsNamesFromScreen() {
+        let screen = ["Divya", "online", "Hey Divya, how are you?", "Priyanka: the meeting is today", "Type a message",
+                      "Rose", "GitHub OKR"]
+        let names = ContextVocabulary.names(from: screen) { known.contains($0) }
+        #expect(names.first == "Divya") // most frequent
+        #expect(names.contains("Priyanka"))
+        #expect(names.contains("GitHub"))
+        #expect(names.contains("OKR"))
+        #expect(!names.contains("Hey"))
+        #expect(!names.contains("Rose")) // a real word — too risky to force
+        #expect(!names.contains("Type"))
+    }
+
+    @Test func screenNamesFixMisheardName() {
+        let names = ContextVocabulary.names(from: ["Divya", "online"]) { known.contains($0) }
+        let dict = PersonalDictionary(names)
+        let words: Set<String> = known.union(["deva", "take", "your", "name"])
+        #expect(dict.apply("take your name Deva.") { words.contains($0) } == "take your name Divya.")
+    }
+}

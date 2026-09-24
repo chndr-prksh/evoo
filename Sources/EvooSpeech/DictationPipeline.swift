@@ -44,6 +44,8 @@ public final class DictationPipeline {
         return Set(text.split(separator: "\n").map { $0.lowercased() })
     }()
 
+    public static func isKnownWord(_ word: String) -> Bool { knownWords.contains(word) }
+
     /// Loads the word list off the critical path (takes ~100 ms once).
     public static func preload() {
         DispatchQueue.global(qos: .utility).async { _ = knownWords.count }
@@ -71,12 +73,13 @@ public final class DictationPipeline {
     }
 
     /// Raw text → final text (rules, formatting, numbers, optional LLM).
+    /// `contextTerms`: names seen on screen for this dictation only (see `ContextVocabulary`).
     public func finish(raw: String, asrMs: Int, language: DictationLanguage, style: OutputStyle?,
-                       llm: LLMPolicy) async -> Output
+                       contextTerms: [String] = [], llm: LLMPolicy) async -> Output
     {
         let clock = ContinuousClock()
         var t = clock.now
-        let post = postProcess(raw, language: language, style: style)
+        let post = postProcess(raw, language: language, style: style, contextTerms: contextTerms)
         let postTime = clock.now - t
 
         var text = post.text
@@ -93,13 +96,15 @@ public final class DictationPipeline {
     }
 
     /// Everything after ASR except the LLM. Pure and fast. `style` nil = no list/line formatting.
-    public func postProcess(_ raw: String, language: DictationLanguage, style: OutputStyle? = .plain)
-        -> DictationRules.Result
+    public func postProcess(_ raw: String, language: DictationLanguage, style: OutputStyle? = .plain,
+                            contextTerms: [String] = []) -> DictationRules.Result
     {
         var text = TextCleaner.clean(raw)
         guard !text.isEmpty else { return .init(text: "", unresolved: false) }
-        if !dictionary.isEmpty {
-            text = dictionary.apply(text) { Self.knownWords.contains($0) } // "DeVeo" → "Divya"
+        // The user's dictionary first, then names on screen: "Deva" → "Divya".
+        let names = contextTerms.isEmpty ? dictionary : PersonalDictionary(dictionary.terms + contextTerms)
+        if !names.isEmpty {
+            text = names.apply(text) { Self.knownWords.contains($0) }
         }
         var result = DictationRules.apply(text) // corrections, fillers, stutters
         if let style {

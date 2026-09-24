@@ -39,6 +39,8 @@ final class DictationController: ObservableObject {
     private let injector = TextInjector()
     private let speculator = SpeculativeTranscriber()
     private var speculationLoop: Task<Void, Never>?
+    /// Names read from the screen while the user speaks; ready by the time fn goes up.
+    private var screenNames: Task<[String], Never>?
 
     private var gesture: HotkeyGesture
     private var gestureTimer: Task<Void, Never>?
@@ -235,6 +237,12 @@ final class DictationController: ObservableObject {
         phase = .recording
         levels = levels.map { _ in 0 }
         play("Tink")
+        // Read names on screen (chat header, recipients…) in the background while the user speaks.
+        screenNames = settings.useScreenContext && permissions.granted[.accessibility] == true
+            ? Task.detached(priority: .userInitiated) {
+                ContextVocabulary.names(from: ScreenText.capture(), isKnownWord: DictationPipeline.isKnownWord)
+            }
+            : nil
         // While fn is held, transcribe during pauses so the text is ready the moment fn goes up.
         speculator.reset()
         speculationLoop = Task { [weak self] in
@@ -311,8 +319,9 @@ final class DictationController: ObservableObject {
             // The LLM only runs for corrections the rules can't resolve, and for Hinglish (multilingual builds).
             let willUseLLM = Features.multilingual && settings.refinementEnabled && refiner.isLoaded
             if willUseLLM, language != .english { phase = .refining }
+            let names = await screenNames?.value ?? []
             let out = await pipeline.finish(raw: raw, asrMs: asrMs, language: language, style: style,
-                                            llm: willUseLLM ? .whenNeeded : .off)
+                                            contextTerms: names, llm: willUseLLM ? .whenNeeded : .off)
             // Cancelled, timed out, or superseded by a newer dictation: don't paste stale text.
             guard !Task.isCancelled, session == self.session else { return }
             guard !out.text.isEmpty else { return (phase = .idle) }
