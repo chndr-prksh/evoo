@@ -27,6 +27,7 @@ public enum DictationRules {
         tokens = removeFillers(tokens)
         tokens = removeStutters(tokens)
         tokens = collapseValueCorrections(tokens)
+        tokens = collapseEchoNegations(tokens)
         var unresolved = false
         tokens = applyCorrections(tokens, unresolved: &unresolved)
         return Result(text: render(tokens), unresolved: unresolved)
@@ -133,8 +134,7 @@ public enum DictationRules {
                 var k = j
                 while k < t.count, cueFiller.contains(t[k].norm) { k += 1 }
                 let gap = t[j ..< k].map(\.norm)
-                guard let next = valueGroup(in: t, at: k), valueClass(t[next.lowerBound]) == valueClass(t[first.lowerBound])
-                else { break }
+                guard let next = valueGroup(in: t, at: k), groupClass(t, next) == groupClass(t, first) else { break }
                 let replaces = gap.contains { replacingCues.contains($0) } || gap.contains("mean")
                 let negates = gap.contains("not")
                 let commaOnly = gap.isEmpty && t[last.upperBound - 1].endsClause
@@ -166,14 +166,60 @@ public enum DictationRules {
     static let replacingCues: Set<String> = ["no", "sorry", "actually", "wait", "rather", "correction", "make", "meant", "nahi"]
     static let cueFiller: Set<String> = replacingCues.union(["not", "i", "mean", "it", "that", "or", "oh"])
 
-    /// A run of tokens forming one value: "4 PM", "3:30", "five thirty", "Tuesday".
+    /// Multi-word dates: "day after tomorrow", "next week", "this Friday", "the weekend".
+    static let datePhrases: [[String]] = [
+        ["day", "after", "tomorrow"], ["day", "before", "yesterday"], ["the", "day", "after"],
+        ["next", "week"], ["this", "week"], ["next", "month"], ["this", "month"], ["next", "year"],
+        ["this", "weekend"], ["next", "weekend"], ["the", "weekend"], ["tomorrow", "morning"],
+        ["tomorrow", "evening"], ["tomorrow", "night"], ["tonight"], ["this", "evening"], ["this", "morning"],
+    ]
+    static let weekdayPrefixes: Set<String> = ["next", "this", "coming", "last"]
+
+    /// A run of tokens forming one value: "4 PM", "3:30", "five thirty", "Tuesday", "day after tomorrow".
     static func valueGroup(in t: [Token], at i: Int) -> Range<Int>? {
-        guard i < t.count, let cls = valueClass(t[i]) else { return nil }
+        guard i < t.count else { return nil }
+        if let phrase = datePhrases.filter({ matches($0, t, at: i) }).max(by: { $0.count < $1.count }) {
+            return i ..< i + phrase.count
+        }
+        if weekdayPrefixes.contains(t[i].norm), i + 1 < t.count, WordKind(t[i + 1].norm) == .weekday,
+           !t[i].endsClause
+        {
+            return i ..< i + 2 // "next Monday"
+        }
+        guard let cls = valueClass(t[i]) else { return nil }
         var end = i + 1
         // A group ends at punctuation or after AM/PM ("4 PM 5 PM" is two times).
         while end < t.count, !t[end - 1].endsClause, !t[end - 1].endsSentence,
               !["am", "pm"].contains(t[end - 1].norm), valueClass(t[end]) == cls { end += 1 }
         return i ..< end
+    }
+
+    static func groupClass(_ t: [Token], _ group: Range<Int>) -> Int? {
+        group.count > 1 && t[group].contains(where: { valueClass($0) == 1 || ["day", "week", "weekend", "month", "year", "morning", "evening", "night"].contains($0.norm) })
+            ? 1 : valueClass(t[group.lowerBound])
+    }
+
+    /// "…play tomorrow, not tomorrow, day after tomorrow" / "send it to John, not John, Mike":
+    /// the speaker repeats what they're taking back after "not", then says the replacement.
+    static func collapseEchoNegations(_ input: [Token]) -> [Token] {
+        var t = input
+        var i = 1
+        while i < t.count {
+            guard t[i].norm == "not", !t[i - 1].endsSentence else { i += 1; continue }
+            var echoed = 0
+            for k in stride(from: min(3, i), through: 1, by: -1) where i + k < t.count {
+                let before = t[(i - k) ..< i].map(\.norm), after = t[(i + 1) ... (i + k)].map(\.norm)
+                if before == after { echoed = k; break }
+            }
+            let restStart = i + 1 + echoed
+            // Needs a replacement after the echo, in the same sentence: "not tomorrow, <day after tomorrow>".
+            guard echoed > 0, restStart < t.count, !t[restStart - 1].endsSentence else { i += 1; continue }
+            let start = i - echoed
+            t.removeSubrange(start ..< restStart)
+            if start > 0 { t[start - 1].raw = t[start - 1].bare } // drop a comma left dangling
+            i = start + 1
+        }
+        return t
     }
 
     static func valueClass(_ token: Token) -> Int? {

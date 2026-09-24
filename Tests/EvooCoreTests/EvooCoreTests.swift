@@ -169,6 +169,26 @@ import Testing
         #expect(fix("Dinner at 8 p.m. Then drinks.") == "Dinner at 8 PM. Then drinks.")
     }
 
+    @Test func correctionPhrasings() {
+        let cases: [(String, String)] = [
+            ("I want to go to play tomorrow not tomorrow, day after tomorrow.", "I want to go to play day after tomorrow."),
+            ("I want to go to play tomorrow, not tomorrow, day after tomorrow.", "I want to go to play day after tomorrow."),
+            ("I want to go to play tomorrow, no, day after tomorrow.", "I want to go to play day after tomorrow."),
+            ("I want to go to play tomorrow, sorry, day after tomorrow.", "I want to go to play day after tomorrow."),
+            ("I want to go to play tomorrow, actually day after tomorrow.", "I want to go to play day after tomorrow."),
+            ("Let's meet next week, no, this Friday.", "Let's meet this Friday."),
+            ("Let's meet on Monday, not Monday, next Tuesday.", "Let's meet on next Tuesday."),
+            ("Send it to John, not John, Mike.", "Send it to Mike."),
+            ("Book the table for 6, not 6, 8 people.", "Book the table for 8 people."),
+            ("I'm free tomorrow, not today.", "I'm free tomorrow, not today."),
+            ("It's not bad, not bad at all.", "It's not bad at all."), // repeated phrase removed, like a stutter
+            ("I do not know.", "I do not know."),
+        ]
+        for (input, expected) in cases {
+            #expect(fix(input) == expected, "\(input)")
+        }
+    }
+
     @Test func asrSentenceBreaks() {
         #expect(fix("The meeting is at 3.30. Actually make it 4.") == "The meeting is at 4.")
         #expect(fix("I was thinking we could. We could push the launch.") == "I was thinking we could push the launch.")
