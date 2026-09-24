@@ -78,7 +78,9 @@ final class AudioRecorder {
         var sum: Float = 0
         for s in chunk { sum += s * s }
         let rms = chunk.isEmpty ? 0 : (sum / Float(chunk.count)).squareRoot()
-        onLevel?(min(1, rms * 12))
+        // Loudness in dB mapped to 0…1: room noise (≈ -50 dB) is flat, normal speech (-35…-20 dB) fills the bars.
+        let db = 20 * log10(max(rms, 1e-6))
+        onLevel?(min(1, max(0, (db + 50) / 30)))
     }
 
     enum RecorderError: LocalizedError {

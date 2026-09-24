@@ -28,7 +28,7 @@ struct PillView: View {
         switch look {
         case .idle: CGSize(width: 40, height: 8)
         case .hover: CGSize(width: Features.multilingual ? 124 : 56, height: 34)
-        case .recording: CGSize(width: 150, height: 34)
+        case .recording: CGSize(width: 176, height: 38)
         case .working: CGSize(width: 64, height: 34)
         case .message: CGSize(width: 320, height: 46)
         }
@@ -96,8 +96,9 @@ struct PillView: View {
         case .recording:
             HStack(spacing: 6) {
                 RoundButton(symbol: "xmark", help: "Cancel (esc)", action: controller.cancel)
+                RecordingDot()
                 Waveform(levels: controller.levels)
-                    .frame(width: 70, height: 20)
+                    .frame(width: 80, height: 28)
                 RoundButton(symbol: "checkmark", help: "Finish", filled: true, action: controller.stop)
             }
         case .working:
@@ -173,10 +174,23 @@ private struct Waveform: View {
             ForEach(levels.indices, id: \.self) { i in
                 Capsule()
                     .fill(.white)
-                    .frame(width: 2, height: max(2, CGFloat(levels[i]) * 20))
+                    .frame(width: 2.5, height: max(3, CGFloat(levels[i]) * 28))
             }
         }
         .animation(.linear(duration: 0.08), value: levels)
+    }
+}
+
+/// Pulsing red dot: unmistakable "recording" signal.
+private struct RecordingDot: View {
+    var body: some View {
+        TimelineView(.animation) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            Circle()
+                .fill(Color.red)
+                .frame(width: 7, height: 7)
+                .opacity(0.55 + 0.45 * (0.5 + 0.5 * sin(t * 5)))
+        }
     }
 }
 

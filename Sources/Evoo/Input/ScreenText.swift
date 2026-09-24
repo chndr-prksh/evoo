@@ -10,6 +10,8 @@ enum ScreenText {
         AXUIElementSetMessagingTimeout(system, 0.05)
         guard let app: AXUIElement = element(system, kAXFocusedApplicationAttribute) else { return [] }
         AXUIElementSetMessagingTimeout(app, 0.05)
+        var pid: pid_t = 0
+        if AXUIElementGetPid(app, &pid) == .success { enableWebAccessibility(for: pid) }
 
         var texts: [String] = []
         if let focused: AXUIElement = element(app, kAXFocusedUIElementAttribute), !isSecure(focused),
@@ -37,8 +39,21 @@ enum ScreenText {
         return texts
     }
 
+    /// Chrome, Dia, Arc, Brave, Edge and Electron apps keep web-page contents out of the accessibility tree
+    /// until an assistive app asks for it. This is the documented switch (the same one screen readers and
+    /// Wispr Flow use); without it, WhatsApp Web's message box and names are invisible to Evoo.
+    static func enableWebAccessibility(for pid: pid_t) {
+        guard !enabledPIDs.contains(pid) else { return }
+        enabledPIDs.insert(pid)
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+    }
+
+    nonisolated(unsafe) private static var enabledPIDs: Set<pid_t> = []
+
     /// The text field that has keyboard focus, unless it's a password field.
     static func focusedField() -> AXUIElement? {
+        if let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier { enableWebAccessibility(for: pid) }
         let system = AXUIElementCreateSystemWide()
         AXUIElementSetMessagingTimeout(system, 0.1)
         guard let field = element(system, kAXFocusedUIElementAttribute), !isSecure(field) else { return nil }
