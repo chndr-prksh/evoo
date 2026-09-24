@@ -42,4 +42,43 @@ public enum AudioStats {
         }
         return peak < threshold
     }
+
+    /// The part of the clip that contains speech, padded a little so soft word edges survive.
+    /// People hold fn before they start and after they finish; the model shouldn't pay for that silence.
+    /// Returns nil when there's no speech at all.
+    public static func speechRange(_ samples: [Float], sampleRate: Int = 16_000, threshold: Float = 0.008,
+                                   leadPad: Double = 0.15, tailPad: Double = 0.25) -> Range<Int>?
+    {
+        let frame = sampleRate / 50 // 20 ms
+        guard samples.count >= frame else { return nil }
+        var first: Int?
+        var last = 0
+        var i = 0
+        while i + frame <= samples.count {
+            if rms(Array(samples[i ..< i + frame])) >= threshold {
+                if first == nil { first = i }
+                last = i + frame
+            }
+            i += frame
+        }
+        guard let first else { return nil }
+        let start = max(0, first - Int(leadPad * Double(sampleRate)))
+        let end = min(samples.count, last + Int(tailPad * Double(sampleRate)))
+        return start ..< end
+    }
+
+    /// True when the last `seconds` of the clip are silent — the speaker has paused.
+    public static func endsInPause(_ samples: [Float], seconds: Double = 0.3, sampleRate: Int = 16_000,
+                                   threshold: Float = 0.008) -> Bool
+    {
+        let n = Int(seconds * Double(sampleRate))
+        guard samples.count > n else { return false }
+        let frame = sampleRate / 50
+        var i = samples.count - n
+        while i + frame <= samples.count {
+            if rms(Array(samples[i ..< i + frame])) >= threshold { return false }
+            i += frame
+        }
+        return true
+    }
 }

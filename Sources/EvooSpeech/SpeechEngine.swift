@@ -1,4 +1,5 @@
 import EvooCore
+import FluidAudio
 import Foundation
 
 /// A local speech-to-text model. The rest of Evoo only talks to this protocol.
@@ -20,8 +21,22 @@ public protocol SpeechEngine: AnyObject {
 public final class SpeechEngines {
     private var engines: [ASREngineID: SpeechEngine] = [:]
     private var loads: [ASREngineID: Task<Void, Error>] = [:]
+    /// `.v3` (0.6B, accurate) or `.tdtCtc110m` (110M, ~2× faster, weaker on names).
+    public private(set) var parakeetVersion: AsrModelVersion
 
-    public init() {}
+    public init(parakeetVersion: AsrModelVersion = .v3) {
+        self.parakeetVersion = parakeetVersion
+    }
+
+    /// Switches the English model. Dictation reports "preparing" until the caller has prepared the new one.
+    public func setParakeetVersion(_ version: AsrModelVersion) {
+        guard version != parakeetVersion else { return }
+        parakeetVersion = version
+        if let old = engines[.parakeet], loads[.parakeet] == nil {
+            engines[.parakeet] = nil
+            Task { await old.unload() }
+        }
+    }
 
     /// The engine if it's loaded and can transcribe right now.
     public func ready(_ id: ASREngineID) -> SpeechEngine? {
@@ -35,7 +50,7 @@ public final class SpeechEngines {
     public func prepare(_ id: ASREngineID) async throws {
         if ready(id) != nil { return }
         if let inFlight = loads[id] { return try await inFlight.value }
-        let engine = engines[id] ?? Self.make(id)
+        let engine = engines[id] ?? make(id)
         engines[id] = engine
         let task = Task { @MainActor in
             defer { self.loads[id] = nil }
@@ -54,9 +69,9 @@ public final class SpeechEngines {
         }
     }
 
-    static func make(_ id: ASREngineID) -> SpeechEngine {
+    func make(_ id: ASREngineID) -> SpeechEngine {
         switch id {
-        case .parakeet: ParakeetEngine()
+        case .parakeet: ParakeetEngine(version: parakeetVersion)
         case .whisper: WhisperEngine()
         }
     }

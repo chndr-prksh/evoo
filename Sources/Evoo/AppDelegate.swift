@@ -53,18 +53,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(repaste)
         menu.addItem(.separator())
 
-        let languages = NSMenu()
-        for language in DictationLanguage.allCases {
-            let entry = item(language.title, #selector(selectLanguage(_:)))
-            entry.representedObject = language.rawValue
-            entry.state = settings.language == language ? .on : .off
-            languages.addItem(entry)
-        }
-        menu.addItem(withTitle: "Language", action: nil, keyEquivalent: "").submenu = languages
+        if Features.multilingual {
+            let languages = NSMenu()
+            for language in DictationLanguage.allCases {
+                let entry = item(language.title, #selector(selectLanguage(_:)))
+                entry.representedObject = language.rawValue
+                entry.state = settings.language == language ? .on : .off
+                languages.addItem(entry)
+            }
+            menu.addItem(withTitle: "Language", action: nil, keyEquivalent: "").submenu = languages
 
-        let refine = item("Use Local AI When Needed", #selector(toggleRefinement))
-        refine.state = settings.refinementEnabled ? .on : .off
-        menu.addItem(refine)
+            let refine = item("Use Local AI When Needed", #selector(toggleRefinement))
+            refine.state = settings.refinementEnabled ? .on : .off
+            menu.addItem(refine)
+        }
         let pillItem = item("Show Floating Pill", #selector(togglePill))
         pillItem.state = settings.showPill ? .on : .off
         menu.addItem(pillItem)

@@ -22,6 +22,8 @@ final class AppSettings: ObservableObject {
     @Published var personalWords: [String] { didSet { save(personalWords, "personalWords") } }
     /// Lists, spoken line breaks and emails, styled per app (Markdown, bullets, or one line in terminals).
     @Published var formatText: Bool { didSet { save(formatText, "formatText") } }
+    /// Parakeet 110M instead of 0.6B: about 2× faster, less accurate with names.
+    @Published var fastestModel: Bool { didSet { save(fastestModel, "fastestModel") } }
 
     private init() {
         func value<T: RawRepresentable>(_ key: String, _ fallback: T) -> T where T.RawValue == String {
@@ -40,7 +42,13 @@ final class AppSettings: ObservableObject {
         playSounds = bool("playSounds", true)
         restoreClipboard = bool("restoreClipboard", true)
         personalWords = UserDefaults.standard.stringArray(forKey: "personalWords") ?? []
+        if !Features.multilingual {
+            language = .english
+            engine = .automatic
+            refinementEnabled = false
+        }
         formatText = bool("formatText", true)
+        fastestModel = bool("fastestModel", false)
     }
 
     var resolvedEngine: ASREngineID { engine.resolve(for: language) }

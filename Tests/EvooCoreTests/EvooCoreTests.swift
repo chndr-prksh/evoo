@@ -71,6 +71,18 @@ import Testing
         #expect(TextCleaner.clean("hello   [Music]  world") == "hello world")
     }
 
+    @Test func speechRangeTrimsSilence() {
+        let silence = [Float](repeating: 0, count: 16000) // 1 s
+        let tone = (0 ..< 16000).map { Float(sin(Double($0) * 0.1)) * 0.2 }
+        let clip = silence + tone + silence + silence
+        let r = AudioStats.speechRange(clip)!
+        #expect(r.lowerBound == 16000 - 2400) // 150 ms lead pad
+        #expect(r.upperBound == 32000 + 4000) // 250 ms tail pad
+        #expect(AudioStats.speechRange(silence) == nil)
+        #expect(AudioStats.endsInPause(clip))
+        #expect(!AudioStats.endsInPause(silence + tone))
+    }
+
     @Test func silenceDetection() {
         #expect(AudioStats.isLikelySilent([Float](repeating: 0.001, count: 16000)))
         let tone = (0 ..< 16000).map { Float(sin(Double($0) * 0.1)) * 0.2 }

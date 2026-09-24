@@ -60,7 +60,9 @@ func loadRefiner() async throws {
 
 switch command {
 case "bench":
-    let engine: SpeechEngine = engineID == .parakeet ? ParakeetEngine() : WhisperEngine()
+    let versions: [String: AsrModelVersion] = ["v2": .v2, "v3": .v3, "110m": .tdtCtc110m]
+    let version = option("--parakeet").flatMap { versions[$0] } ?? .v3
+    let engine: SpeechEngine = engineID == .parakeet ? ParakeetEngine(version: version) : WhisperEngine()
     let loadTime = try await clock.measure { try await engine.load { _ in } }
     await DictationPipeline.warmUp(engine)
     print("loaded \(engineID.rawValue) in \(loadTime)" + (vocabulary.isEmpty ? "" : ", vocabulary: \(vocabulary)"))
@@ -75,6 +77,31 @@ case "bench":
         print("  raw: \(out.raw)\n  out: \(out.text)\n  \(out.summary)")
     }
     await engine.unload()
+
+case "hold":
+    // Replays each clip in real time as if fn were held, with a pause before release, and measures
+    // fn-up → final text with speculative transcription (what the app does).
+    let versions: [String: AsrModelVersion] = ["v2": .v2, "v3": .v3, "110m": .tdtCtc110m]
+    let engine = ParakeetEngine(version: option("--parakeet").flatMap { versions[$0] } ?? .v3)
+    try await engine.load { _ in }
+    await DictationPipeline.warmUp(engine)
+    let pause = Double(option("--pause") ?? "0.5") ?? 0.5
+    let converter = AudioConverter()
+    for path in inputs {
+        let clip = try converter.resampleAudioFile(path: path) + [Float](repeating: 0, count: Int(pause * 16000))
+        let speculator = await SpeculativeTranscriber()
+        var recorded: [Float] = []
+        for start in stride(from: 0, to: clip.count, by: 1600) { // 100 ms of audio per tick
+            recorded += clip[start ..< min(start + 1600, clip.count)]
+            await speculator.consider(recorded, engine: engine)
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        let released = clock.now
+        let (raw, reused) = try await speculator.transcript(for: recorded, engine: engine)
+        let out = await pipeline.finish(raw: raw, asrMs: 0, language: .english, style: style, llm: .off)
+        let ms = (clock.now - released).formatted(.units(allowed: [.milliseconds]))
+        print("\(URL(fileURLWithPath: path).lastPathComponent): fn up → text \(ms)\(reused ? "  (ready early)" : "")  \(out.text.prefix(60))")
+    }
 
 case "post":
     for input in inputs {

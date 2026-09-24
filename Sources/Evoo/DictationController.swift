@@ -3,6 +3,7 @@ import Combine
 import EvooCore
 import EvooRefine
 import EvooSpeech
+import FluidAudio
 import os
 
 /// Owns the dictation lifecycle:
@@ -32,10 +33,12 @@ final class DictationController: ObservableObject {
     private let log = Logger(subsystem: "app.evoo", category: "dictation")
     private let hotkeys = FnKeyMonitor()
     private let recorder = AudioRecorder()
-    private let engines = SpeechEngines()
+    private let engines = SpeechEngines(parakeetVersion: AppSettings.shared.fastestModel ? .tdtCtc110m : .v3)
     private let refiner = LlamaRefiner()
     private lazy var pipeline = DictationPipeline(refiner: refiner)
     private let injector = TextInjector()
+    private let speculator = SpeculativeTranscriber()
+    private var speculationLoop: Task<Void, Never>?
 
     private var gesture: HotkeyGesture
     private var gestureTimer: Task<Void, Never>?
@@ -65,6 +68,12 @@ final class DictationController: ObservableObject {
         settings.$language.combineLatest(settings.$engine).dropFirst()
             .debounce(for: .milliseconds(200), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.prepareSpeechModel() }
+            .store(in: &cancellables)
+        settings.$fastestModel.dropFirst()
+            .sink { [weak self] fastest in
+                self?.engines.setParakeetVersion(fastest ? .tdtCtc110m : .v3)
+                self?.prepareSpeechModel()
+            }
             .store(in: &cancellables)
         settings.$personalWords.dropFirst()
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
@@ -123,7 +132,7 @@ final class DictationController: ObservableObject {
     }
 
     func prepareRefiner() {
-        guard settings.refinementEnabled else { return refiner.unload() }
+        guard Features.multilingual, settings.refinementEnabled else { return refiner.unload() }
         let model = settings.refinerModel
         guard ModelDownloader.isInstalled(model) else { return }
         Task {
@@ -226,6 +235,16 @@ final class DictationController: ObservableObject {
         phase = .recording
         levels = levels.map { _ in 0 }
         play("Tink")
+        // While fn is held, transcribe during pauses so the text is ready the moment fn goes up.
+        speculator.reset()
+        speculationLoop = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(100))
+                guard let self, self.phase == .recording,
+                      let engine = self.engines.ready(self.settings.resolvedEngine) else { continue }
+                self.speculator.consider(self.recorder.snapshot(), engine: engine)
+            }
+        }
         maxDurationTimer = Task {
             try? await Task.sleep(for: .seconds(Self.maxRecordingSeconds))
             if !Task.isCancelled, phase == .recording { stop() }
@@ -234,6 +253,7 @@ final class DictationController: ObservableObject {
 
     func stop() {
         guard phase == .recording else { return }
+        let releasedAt = ContinuousClock.now
         endRecordingSession()
         let samples = recorder.stop()
         let seconds = Double(samples.count) / AudioRecorder.sampleRate
@@ -248,7 +268,9 @@ final class DictationController: ObservableObject {
         let style: OutputStyle? = settings.formatText ? OutputStyle.forApp(targetApp) : nil
         session += 1
         let current = session
-        processing = Task { await process(samples, seconds: seconds, style: style, session: current) }
+        processing = Task {
+            await process(samples, seconds: seconds, style: style, session: current, releasedAt: releasedAt)
+        }
         // Safety net: never stay stuck in "transcribing".
         watchdog?.cancel()
         watchdog = Task {
@@ -270,28 +292,36 @@ final class DictationController: ObservableObject {
 
     private func endRecordingSession() {
         maxDurationTimer?.cancel()
+        speculationLoop?.cancel()
         gesture.reset()
         handsFreeFromUI = false
     }
 
-    private func process(_ samples: [Float], seconds: Double, style: OutputStyle?, session: Int) async {
+    private func process(_ samples: [Float], seconds: Double, style: OutputStyle?, session: Int,
+                         releasedAt: ContinuousClock.Instant) async
+    {
         let language = settings.language
         guard let engine = engines.ready(settings.resolvedEngine) else {
             return show("Speech model isn't ready yet — try again shortly")
         }
         do {
-            // The LLM only runs for corrections the rules can't resolve, and for Hinglish/Hindi.
-            let willUseLLM = settings.refinementEnabled && refiner.isLoaded
+            let asrStart = ContinuousClock.now
+            let (raw, reused) = try await speculator.transcript(for: samples, engine: engine)
+            let asrMs = (ContinuousClock.now - asrStart).ms
+            // The LLM only runs for corrections the rules can't resolve, and for Hinglish (multilingual builds).
+            let willUseLLM = Features.multilingual && settings.refinementEnabled && refiner.isLoaded
             if willUseLLM, language != .english { phase = .refining }
-            let out = try await pipeline.run(samples: samples, engine: engine, language: language,
-                                             style: style, llm: willUseLLM ? .whenNeeded : .off)
+            let out = await pipeline.finish(raw: raw, asrMs: asrMs, language: language, style: style,
+                                            llm: willUseLLM ? .whenNeeded : .off)
             // Cancelled, timed out, or superseded by a newer dictation: don't paste stale text.
             guard !Task.isCancelled, session == self.session else { return }
             guard !out.text.isEmpty else { return (phase = .idle) }
 
             await injector.insert(out.text, restoreClipboard: settings.restoreClipboard)
             lastText = out.text
+            let totalMs = (ContinuousClock.now - releasedAt).ms
             lastTimings = String(format: "%.1fs audio · ", seconds) + out.summary
+                + " · fn up → pasted \(totalMs) ms" + (reused ? " (ready early)" : "")
             log.info("\(self.lastTimings ?? "", privacy: .public)")
             phase = .idle
         } catch {
@@ -339,4 +369,8 @@ final class DictationController: ObservableObject {
         guard settings.playSounds else { return }
         NSSound(named: NSSound.Name(name))?.play()
     }
+}
+
+private extension Duration {
+    var ms: Int { Int(components.seconds * 1000 + components.attoseconds / 1_000_000_000_000_000) }
 }

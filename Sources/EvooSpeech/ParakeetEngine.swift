@@ -5,7 +5,11 @@ import Foundation
 /// NVIDIA Parakeet TDT 0.6B v3 (CC-BY-4.0) on CoreML / Neural Engine via FluidAudio (Apache-2.0).
 /// Fastest option; English + 24 other European languages.
 public final class ParakeetEngine: SpeechEngine {
-    public init() {}
+    public let version: AsrModelVersion
+
+    public init(version: AsrModelVersion = .v3) {
+        self.version = version
+    }
 
     public let id = ASREngineID.parakeet
     private var manager: AsrManager?
@@ -15,7 +19,7 @@ public final class ParakeetEngine: SpeechEngine {
     public func load(progress: @escaping @Sendable (Double) -> Void) async throws {
         guard manager == nil else { return }
         progress(0)
-        let models = try await AsrModels.downloadAndLoad(to: ModelPaths.parakeet, version: .v3)
+        let models = try await AsrModels.downloadAndLoad(to: ModelPaths.parakeet, version: version)
         let manager = AsrManager()
         try await manager.loadModels(models)
         self.manager = manager
@@ -24,7 +28,7 @@ public final class ParakeetEngine: SpeechEngine {
 
     public func transcribe(_ samples: [Float], language _: DictationLanguage) async throws -> String {
         guard let manager else { throw EngineError.notLoaded }
-        var state = TdtDecoderState.make()
+        var state = TdtDecoderState.make(decoderLayers: version.decoderLayers)
         return try await manager.transcribe(samples, decoderState: &state).text
     }
 

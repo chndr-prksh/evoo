@@ -35,9 +35,16 @@ struct SettingsView: View {
                 Picker("Fn key", selection: $settings.activationMode) {
                     ForEach(ActivationMode.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
-                Picker("Language", selection: $settings.language) {
-                    ForEach(DictationLanguage.allCases, id: \.self) { Text($0.title).tag($0) }
+                if Features.multilingual {
+                    Picker("Language", selection: $settings.language) {
+                        ForEach(DictationLanguage.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
                 }
+                Toggle("Fastest speech model", isOn: $settings.fastestModel)
+                Text(settings.fastestModel
+                    ? "Parakeet 110M: about 2× faster, but less accurate with names and casing."
+                    : "Parakeet 0.6B: most accurate. Text is usually ready the instant you release fn.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Toggle("Format lists, line breaks and emails", isOn: $settings.formatText)
                 if settings.formatText {
                     Text("Say “…buy bread, eggs, milk” for bullets, “first… second… third…” for steps, “new line” / “new paragraph” for breaks. Styled per app: Markdown in Notion, editors and browsers; • bullets in Mail, Notes and Slack; always one line in Terminal.")
@@ -46,16 +53,6 @@ struct SettingsView: View {
                 Picker("Microphone", selection: $settings.microphoneUID) {
                     Text("System default").tag(String?.none)
                     ForEach(microphones) { Text($0.name).tag(Optional($0.id)) }
-                }
-            }
-
-            Section("Speech model") {
-                Picker("Engine", selection: $settings.engine) {
-                    ForEach(EnginePreference.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
-                LabeledContent("In use", value: settings.resolvedEngine.title)
-                if let status = controller.modelStatus {
-                    Text(status).font(.caption).foregroundStyle(.secondary)
                 }
             }
 
@@ -83,24 +80,41 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Local AI (optional)") {
-                Text("Corrections, fillers and numbers are handled instantly by built-in rules. The local AI only runs for Hinglish/Hindi and for corrections the rules can't resolve, and adds about 1 s when it does.")
-                    .font(.caption).foregroundStyle(.secondary)
-                Toggle("Use local AI when needed", isOn: $settings.refinementEnabled)
-                Picker("Model", selection: $settings.refinerModel) {
-                    ForEach(RefinerModel.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
-                .disabled(!settings.refinementEnabled)
-                if let progress = controller.refinerDownloadProgress {
-                    ProgressView(value: progress) { Text("Downloading \(Int(progress * 100))%") }
-                } else if !controller.refinerInstalled {
-                    HStack {
-                        Text("Not downloaded yet").foregroundStyle(.secondary)
-                        Spacer()
-                        Button("Download") { controller.downloadRefiner() }
+            if Features.multilingual {
+                Section("Speech model") {
+                    Picker("Engine", selection: $settings.engine) {
+                        ForEach(EnginePreference.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
-                } else {
-                    Label("Installed", systemImage: "checkmark").foregroundStyle(.secondary)
+                    LabeledContent("In use", value: settings.resolvedEngine.title)
+                    if let status = controller.modelStatus {
+                        Text(status).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("Local AI (optional)") {
+                    Text("Corrections, fillers and numbers are handled instantly by built-in rules. The local AI only runs for Hinglish/Hindi and for corrections the rules can't resolve, and adds about 1 s when it does.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Toggle("Use local AI when needed", isOn: $settings.refinementEnabled)
+                    Picker("Model", selection: $settings.refinerModel) {
+                        ForEach(RefinerModel.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    .disabled(!settings.refinementEnabled)
+                    if let progress = controller.refinerDownloadProgress {
+                        ProgressView(value: progress) { Text("Downloading \(Int(progress * 100))%") }
+                    } else if !controller.refinerInstalled {
+                        HStack {
+                            Text("Not downloaded yet").foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Download") { controller.downloadRefiner() }
+                        }
+                    } else {
+                        Label("Installed", systemImage: "checkmark").foregroundStyle(.secondary)
+                    }
+                }
+
+            } else if let status = controller.modelStatus {
+                Section("Speech model") {
+                    Text(status).font(.caption).foregroundStyle(.secondary)
                 }
             }
 

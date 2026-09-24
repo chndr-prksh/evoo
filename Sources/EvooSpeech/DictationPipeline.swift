@@ -57,11 +57,25 @@ public final class DictationPipeline {
                     style: OutputStyle? = .plain, llm: LLMPolicy) async throws -> Output
     {
         let clock = ContinuousClock()
-        var t = clock.now
-        let raw = try await engine.transcribe(samples, language: language)
-        let asr = clock.now - t
+        let t = clock.now
+        let raw = try await Self.transcribe(samples, engine: engine, language: language)
+        return await finish(raw: raw, asrMs: (clock.now - t).ms, language: language, style: style, llm: llm)
+    }
 
-        t = clock.now
+    /// Speech → raw text, skipping the silence before and after the speech.
+    public static func transcribe(_ samples: [Float], engine: SpeechEngine, language: DictationLanguage)
+        async throws -> String
+    {
+        guard let speech = AudioStats.speechRange(samples) else { return "" }
+        return try await engine.transcribe(Array(samples[speech]), language: language)
+    }
+
+    /// Raw text → final text (rules, formatting, numbers, optional LLM).
+    public func finish(raw: String, asrMs: Int, language: DictationLanguage, style: OutputStyle?,
+                       llm: LLMPolicy) async -> Output
+    {
+        let clock = ContinuousClock()
+        var t = clock.now
         let post = postProcess(raw, language: language, style: style)
         let postTime = clock.now - t
 
@@ -75,7 +89,7 @@ public final class DictationPipeline {
             refineTime = clock.now - t
             usedLLM = true
         }
-        return Output(text: text, raw: raw, asrMs: asr.ms, postMs: postTime.ms, refineMs: refineTime.ms, usedLLM: usedLLM)
+        return Output(text: text, raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: refineTime.ms, usedLLM: usedLLM)
     }
 
     /// Everything after ASR except the LLM. Pure and fast. `style` nil = no list/line formatting.

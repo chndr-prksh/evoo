@@ -39,11 +39,17 @@ final class AudioRecorder {
         isRecording = true
     }
 
+    /// Everything recorded so far, while still recording (for speculative transcription).
+    func snapshot() -> [Float] {
+        lock.withLock { samples }
+    }
+
     /// Stops capture and returns everything recorded since `start`.
     func stop() -> [Float] {
         guard isRecording else { return [] }
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+        engine.prepare() // pre-allocate so the next fn press starts capturing sooner
         isRecording = false
         return lock.withLock { samples }
     }

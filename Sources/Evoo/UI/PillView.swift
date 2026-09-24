@@ -27,7 +27,7 @@ struct PillView: View {
     private var size: CGSize {
         switch look {
         case .idle: CGSize(width: 40, height: 8)
-        case .hover: CGSize(width: 124, height: 34)
+        case .hover: CGSize(width: Features.multilingual ? 124 : 56, height: 34)
         case .recording: CGSize(width: 150, height: 34)
         case .working: CGSize(width: 64, height: 34)
         case .message: CGSize(width: 320, height: 46)
@@ -73,8 +73,10 @@ struct PillView: View {
             EmptyView()
         case .hover:
             HStack(spacing: 2) {
-                RoundButton(symbol: "globe", help: "Language: \(settings.language.title)",
-                            action: model.showLanguageMenu)
+                if Features.multilingual {
+                    RoundButton(symbol: "globe", help: "Language: \(settings.language.title)",
+                                action: model.showLanguageMenu)
+                }
                 Button(action: controller.toggleFromUI) {
                     Image(systemName: "mic.fill")
                         .font(.system(size: 12, weight: .semibold))
@@ -84,10 +86,12 @@ struct PillView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Start hands-free dictation")
-                Text(settings.language.badge)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.65))
-                    .frame(width: 34)
+                if Features.multilingual {
+                    Text(settings.language.badge)
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.65))
+                        .frame(width: 34)
+                }
             }
         case .recording:
             HStack(spacing: 6) {

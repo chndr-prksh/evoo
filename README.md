@@ -6,7 +6,8 @@ Hold `fn`, speak, release — clean text appears at your cursor in any app.
 - 100% local: speech recognition and text cleanup run on-device. No accounts, no cloud, no API keys.
 - Understands what you *meant*: "let's meet tomorrow, no, day after tomorrow" → **"Let's meet day after tomorrow."**
 - Works everywhere you can paste: Chrome, Slack, Gmail, Notion, VS Code, Cursor, Terminal, Office…
-- English, Hinglish and Hindi. Pluggable speech engines.
+- English (Hindi/Hinglish are built but switched off for now — `Features.multilingual`). Pluggable speech engines.
+- Speculative transcription: Evoo starts transcribing when you pause, so text is usually ready the instant fn goes up.
 - Personal dictionary for names and jargon (Divya, Aarav, Kubernetes).
 - Formats as you speak: "…buy tomorrow bread, eggs, milk" becomes a bulleted list; "first… second… third…"
   becomes numbered steps; "new line", "new paragraph", emails. Markdown in Notion/editors/browsers, • bullets
@@ -105,7 +106,8 @@ Measured on an 8 GB M1 (under memory pressure):
 
 | Case | Result |
 |---|---|
-| English, fn release → text ready (real audio, 2–4 s clips) | ✅ **101–130 ms** (ASR ~110 ms + rules < 5 ms) |
+| English, fn up → text ready, with a natural pause (≥ 0.35 s) before release | ✅ **1–15 ms** — transcribed speculatively while fn is held |
+| English, fn up → text ready, releasing immediately after speaking | ✅ **121–139 ms** (Parakeet 0.6B); ~40–70 ms with the optional 110M model |
 | Self-corrections, fillers, stutters, numbers | ✅ rules, covered by unit tests |
 | LLM path (unresolved corrections, Hinglish) | ~1–4 s on 8 GB M1 — opt-in, only when needed |
 | Qwen3 4B | No better on the English set and 3–5× slower on 8 GB; meant for 16 GB+ Macs |
