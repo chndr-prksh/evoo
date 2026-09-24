@@ -83,6 +83,14 @@ import Testing
         #expect(!AudioStats.endsInPause(silence + tone))
     }
 
+    @Test func timesReadNaturally() {
+        #expect(TextCleaner.tidyTimes("at 04:00 P.M., 05:00 p.m..") == "at 4 PM, 5 PM.")
+        #expect(TextCleaner.tidyTimes("at 04:30 p.m.") == "at 4:30 PM.")
+        #expect(TextCleaner.tidyTimes("Dinner at 08:00 p.m. Then drinks.") == "Dinner at 8 PM. Then drinks.")
+        #expect(TextCleaner.tidyTimes("at 9 a.m. sharp") == "at 9 AM sharp")
+        #expect(TextCleaner.tidyTimes("Wait... ok") == "Wait... ok")
+    }
+
     @Test func silenceDetection() {
         #expect(AudioStats.isLikelySilent([Float](repeating: 0.001, count: 16000)))
         let tone = (0 ..< 16000).map { Float(sin(Double($0) * 0.1)) * 0.2 }
@@ -148,6 +156,17 @@ import Testing
         #expect(fix("Um, so we could, we could push the launch.") == "So we could push the launch.")
         #expect(fix("I think uh we should ship.") == "I think we should ship.")
         #expect(fix("The the build is green.") == "The build is green.")
+    }
+
+    @Test func valueChains() {
+        #expect(fix("Hey, I'm planning to go out tomorrow at 4 not 4 PM, 5 PM.") == "Hey, I'm planning to go out tomorrow at 5 PM.")
+        #expect(fix("Hey, I'm planning to go out tomorrow at 4, not 4 p.m. 5 p.m.") == "Hey, I'm planning to go out tomorrow at 5 PM.")
+        #expect(fix("Let's meet on Monday, sorry, Tuesday.") == "Let's meet on Tuesday.")
+        #expect(fix("Call me at 5, not 4.") == "Call me at 5, not 4.")
+        #expect(fix("I'm going tomorrow, not today.") == "I'm going tomorrow, not today.")
+        #expect(fix("Pick 3, 4, 5 of them.") == "Pick 3, 4, 5 of them.")
+        #expect(fix("It starts at 6 p.m.") == "It starts at 6 PM.")
+        #expect(fix("Dinner at 8 p.m. Then drinks.") == "Dinner at 8 PM. Then drinks.")
     }
 
     @Test func asrSentenceBreaks() {

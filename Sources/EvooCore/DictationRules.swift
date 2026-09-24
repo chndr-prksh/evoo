@@ -23,9 +23,10 @@ public enum DictationRules {
     }
 
     public static func apply(_ input: String) -> Result {
-        var tokens = input.split(whereSeparator: \.isWhitespace).map { Token(String($0)) }
+        var tokens = normalizeMeridiem(input).split(whereSeparator: \.isWhitespace).map { Token(String($0)) }
         tokens = removeFillers(tokens)
         tokens = removeStutters(tokens)
+        tokens = collapseValueCorrections(tokens)
         var unresolved = false
         tokens = applyCorrections(tokens, unresolved: &unresolved)
         return Result(text: render(tokens), unresolved: unresolved)
@@ -99,6 +100,89 @@ public enum DictationRules {
 
     /// Words that are legitimately doubled in normal speech ("I know that that is…", "had had").
     static let legitDoubles: Set<String> = ["that", "had", "is", "very", "really", "bye", "no", "ha"]
+
+    // MARK: - a.m. / p.m.
+
+    /// "4 p.m." → "4 PM" so the dots aren't mistaken for sentence ends ("at 4 p.m. 5 p.m.").
+    static func normalizeMeridiem(_ text: String) -> String {
+        // At the end, or before a new sentence, the dot doubles as the full stop.
+        var out = text.replacingOccurrences(of: #"(?i)\b([ap])\.\s?m\.(?=\s*$|\s+[A-Z])"#, with: "$1M.",
+                                            options: .regularExpression)
+        out = out.replacingOccurrences(of: #"(?i)\b([ap])\.\s?m\.?"#, with: "$1M", options: .regularExpression)
+        return out.replacingOccurrences(of: "aM", with: "AM").replacingOccurrences(of: "pM", with: "PM")
+    }
+
+    // MARK: - Value corrections
+
+    /// Chains of times/numbers or days joined by correction words; the last value that survives wins.
+    ///   "at 4, not 4 PM, 5 PM"        → "at 5 PM"   (not = reject the next value; a bare restatement replaces)
+    ///   "on Monday, sorry, Tuesday"   → "on Tuesday"
+    ///   "at 5, not 4"                 → unchanged   (nothing was corrected, just ruled out)
+    static func collapseValueCorrections(_ input: [Token]) -> [Token] {
+        var t = input
+        var i = 0
+        while i < t.count {
+            guard let first = valueGroup(in: t, at: i) else { i += 1; continue }
+            var kept = first
+            var last = first
+            var corrected = false
+            var awaitingRestatement = false
+            var j = first.upperBound
+            while j < t.count {
+                // The words between two values must all be correction words (or nothing but a comma).
+                var k = j
+                while k < t.count, cueFiller.contains(t[k].norm) { k += 1 }
+                let gap = t[j ..< k].map(\.norm)
+                guard let next = valueGroup(in: t, at: k), valueClass(t[next.lowerBound]) == valueClass(t[first.lowerBound])
+                else { break }
+                let replaces = gap.contains { replacingCues.contains($0) } || gap.contains("mean")
+                let negates = gap.contains("not")
+                let commaOnly = gap.isEmpty && t[last.upperBound - 1].endsClause
+                if negates, !replaces {
+                    awaitingRestatement = true // "not 4 PM" — that value is rejected
+                } else if replaces || (gap.isEmpty && awaitingRestatement) || (commaOnly && corrected) {
+                    kept = next
+                    corrected = true
+                    awaitingRestatement = false
+                } else { break }
+                last = next
+                j = next.upperBound
+            }
+            if corrected {
+                var replacement = Array(t[kept])
+                let tail = t[last.upperBound - 1].trailingPunctuation
+                if let end = replacement.indices.last {
+                    replacement[end].raw = replacement[end].bare + (tail.contains(where: { ".?!".contains($0) }) ? String(tail.last!) : "")
+                }
+                t.replaceSubrange(first.lowerBound ..< last.upperBound, with: replacement)
+                i = first.lowerBound + replacement.count
+            } else {
+                i = first.upperBound
+            }
+        }
+        return t
+    }
+
+    static let replacingCues: Set<String> = ["no", "sorry", "actually", "wait", "rather", "correction", "make", "meant", "nahi"]
+    static let cueFiller: Set<String> = replacingCues.union(["not", "i", "mean", "it", "that", "or", "oh"])
+
+    /// A run of tokens forming one value: "4 PM", "3:30", "five thirty", "Tuesday".
+    static func valueGroup(in t: [Token], at i: Int) -> Range<Int>? {
+        guard i < t.count, let cls = valueClass(t[i]) else { return nil }
+        var end = i + 1
+        // A group ends at punctuation or after AM/PM ("4 PM 5 PM" is two times).
+        while end < t.count, !t[end - 1].endsClause, !t[end - 1].endsSentence,
+              !["am", "pm"].contains(t[end - 1].norm), valueClass(t[end]) == cls { end += 1 }
+        return i ..< end
+    }
+
+    static func valueClass(_ token: Token) -> Int? {
+        switch WordKind(token.norm) {
+        case .number: 0
+        case .weekday, .relativeDay, .month: 1
+        case nil: token.norm == "oclock" ? 0 : nil
+        }
+    }
 
     // MARK: - Self-corrections
 

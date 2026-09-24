@@ -21,6 +21,26 @@ public enum TextCleaner {
     }
 }
 
+extension TextCleaner {
+    /// Writes times the way people type them, after number formatting:
+    /// "04:00 P.M." → "4 PM", "04:30 p.m." → "4:30 PM", and drops the doubled full stop in "p.m..".
+    public static func tidyTimes(_ text: String) -> String {
+        var out = text
+        // "p.m." (both dots) or "PM" — never swallow a full stop that follows "PM".
+        let meridiem = #"\s?([AaPp])(?:\.\s?[Mm]\.|\s?[Mm]\b)"#
+        // "8 p.m. Then…": the second dot also ends the sentence.
+        out = out.replacingOccurrences(of: #"([AaPp])\.\s?[Mm]\.(?=\s+[A-Z])"#, with: "$1M.", options: .regularExpression)
+        out = out.replacingOccurrences(of: #"\b0?(\d{1,2}):00"# + meridiem, with: "$1 $2M", options: .regularExpression)
+        out = out.replacingOccurrences(of: #"\b0?(\d{1,2}):(\d{2})"# + meridiem, with: "$1:$2 $3M", options: .regularExpression)
+        out = out.replacingOccurrences(of: #"\b(\d{1,2})"# + meridiem, with: "$1 $2M", options: .regularExpression)
+        out = out.replacingOccurrences(of: "aM", with: "AM").replacingOccurrences(of: "pM", with: "PM")
+        out = out.replacingOccurrences(of: #"(?<!\.)\.\.(?!\.)"#, with: ".", options: .regularExpression)
+        // A sentence-final "p.m." was also the full stop: keep one.
+        if text.hasSuffix("."), let last = out.last, !".?!".contains(last) { out += "." }
+        return out
+    }
+}
+
 public enum AudioStats {
     /// Root-mean-square level of the clip.
     public static func rms(_ samples: [Float]) -> Float {

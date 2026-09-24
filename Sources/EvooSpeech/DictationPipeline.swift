@@ -122,7 +122,7 @@ public final class DictationPipeline {
             let (masked, restore) = Self.maskOrdinals(body)
             var out = normalizer.normalizeSentence(masked)
             for (placeholder, word) in restore { out = out.replacingOccurrences(of: placeholder, with: word) }
-            return prefix + out
+            return prefix + TextCleaner.tidyTimes(out)
         }.joined(separator: "\n")
     }
 
