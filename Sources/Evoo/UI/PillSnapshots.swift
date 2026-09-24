@@ -16,7 +16,7 @@ enum PillSnapshots {
             ("2-hover", .idle, true),
             ("3-recording", .recording, false),
             ("4-working", .transcribing, false),
-            ("5-message", .message("Allow microphone access for Evoo"), false),
+            ("5-message", .message("Hindi/Hinglish model is still preparing (first time only) — try again shortly"), false),
         ]
         for (name, phase, hovering) in states {
             controller.debugSet(phase: phase, levels: wave)

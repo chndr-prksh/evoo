@@ -68,7 +68,7 @@ public final class DictationPipeline {
         var text = post.text
         var refineTime: Duration = .zero
         var usedLLM = false
-        let needsLLM = post.unresolved || language != .english
+        let needsLLM = post.unresolved || language == .hinglish // Hinglish needs romanizing
         if llm == .whenNeeded, needsLLM, !text.isEmpty, refiner.isLoaded {
             t = clock.now
             text = (try? await refiner.refine(text, language: language)) ?? text

@@ -41,12 +41,16 @@ final class DictationController: ObservableObject {
     private var gestureTimer: Task<Void, Never>?
     private var processing: Task<Void, Never>?
     private var maxDurationTimer: Task<Void, Never>?
+    private var watchdog: Task<Void, Never>?
+    /// Increments per dictation, so late results from an abandoned one are ignored.
+    private var session = 0
     private var messageTimer: Task<Void, Never>?
     private var handsFreeFromUI = false
     private var cancellables: Set<AnyCancellable> = []
 
     private static let maxRecordingSeconds: Double = 300
     private static let minRecordingSeconds: Double = 0.3
+    private static let processingTimeoutSeconds: Double = 20
 
     init() {
         gesture = HotkeyGesture(mode: AppSettings.shared.activationMode)
@@ -90,18 +94,25 @@ final class DictationController: ObservableObject {
         }
     }
 
+    /// Loads the model for the current language in the background. Never blocks dictation, and keeps
+    /// the English model (Parakeet, small and fast) loaded so switching back is instant.
     func prepareSpeechModel() {
-        let engine = engines.engine(for: settings.resolvedEngine)
-        guard !engine.isLoaded else { return }
-        let name = engine.id == .parakeet ? "Parakeet" : "Whisper"
-        modelStatus = "Loading \(name)… (first run downloads it)"
+        let id = settings.resolvedEngine
+        guard engines.ready(id) == nil else {
+            modelStatus = nil
+            engines.unload(except: [id, .parakeet])
+            return
+        }
+        modelStatus = id == .whisper
+            ? "Preparing the Hindi/Hinglish model — the first time takes a few minutes. English keeps working."
+            : "Preparing the English model…"
         Task {
             do {
-                try await engine.load { _ in }
-                await DictationPipeline.warmUp(engine) // first dictation shouldn't pay CoreML warm-up
-                modelStatus = nil
+                try await engines.prepare(id)
+                if settings.resolvedEngine == id { modelStatus = nil }
+                engines.unload(except: [settings.resolvedEngine, .parakeet])
             } catch {
-                modelStatus = "\(name) failed: \(error.localizedDescription)"
+                modelStatus = "Speech model failed to load: \(error.localizedDescription)"
                 log.error("ASR load failed: \(error.localizedDescription)")
             }
         }
@@ -194,6 +205,13 @@ final class DictationController: ObservableObject {
 
     func start() {
         guard phase == .idle || isMessage else { return }
+        // Don't record if the model for this language isn't ready — say so instead of hanging.
+        guard engines.ready(settings.resolvedEngine) != nil else {
+            gesture.reset()
+            prepareSpeechModel()
+            let what = settings.resolvedEngine == .whisper ? "Hindi/Hinglish" : "English"
+            return show("\(what) model is still preparing (first time only) — try again shortly")
+        }
         permissions.refresh()
         guard permissions.granted[.microphone] == true else {
             permissions.request(.microphone)
@@ -228,13 +246,25 @@ final class DictationController: ObservableObject {
         // Style the text for the app that will receive it: Markdown, bullets, or a single line for terminals.
         let targetApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         let style: OutputStyle? = settings.formatText ? OutputStyle.forApp(targetApp) : nil
-        processing = Task { await process(samples, seconds: seconds, style: style) }
+        session += 1
+        let current = session
+        processing = Task { await process(samples, seconds: seconds, style: style, session: current) }
+        // Safety net: never stay stuck in "transcribing".
+        watchdog?.cancel()
+        watchdog = Task {
+            try? await Task.sleep(for: .seconds(Self.processingTimeoutSeconds))
+            guard !Task.isCancelled, session == current, phase == .transcribing || phase == .refining else { return }
+            processing?.cancel()
+            show("That took too long — please try again")
+        }
     }
 
     func cancel() {
         endRecordingSession()
         _ = recorder.stop()
         processing?.cancel()
+        watchdog?.cancel()
+        session += 1
         phase = .idle
     }
 
@@ -244,21 +274,19 @@ final class DictationController: ObservableObject {
         handsFreeFromUI = false
     }
 
-    private func process(_ samples: [Float], seconds: Double, style: OutputStyle?) async {
+    private func process(_ samples: [Float], seconds: Double, style: OutputStyle?, session: Int) async {
         let language = settings.language
-        let engine = engines.engine(for: settings.resolvedEngine)
+        guard let engine = engines.ready(settings.resolvedEngine) else {
+            return show("Speech model isn't ready yet — try again shortly")
+        }
         do {
-            if !engine.isLoaded {
-                modelStatus = "Loading speech model…"
-                try await engine.load { _ in }
-                modelStatus = nil
-            }
             // The LLM only runs for corrections the rules can't resolve, and for Hinglish/Hindi.
             let willUseLLM = settings.refinementEnabled && refiner.isLoaded
             if willUseLLM, language != .english { phase = .refining }
             let out = try await pipeline.run(samples: samples, engine: engine, language: language,
                                              style: style, llm: willUseLLM ? .whenNeeded : .off)
-            guard !Task.isCancelled else { return }
+            // Cancelled, timed out, or superseded by a newer dictation: don't paste stale text.
+            guard !Task.isCancelled, session == self.session else { return }
             guard !out.text.isEmpty else { return (phase = .idle) }
 
             await injector.insert(out.text, restoreClipboard: settings.restoreClipboard)
@@ -267,8 +295,10 @@ final class DictationController: ObservableObject {
             log.info("\(self.lastTimings ?? "", privacy: .public)")
             phase = .idle
         } catch {
+            guard session == self.session else { return }
             show(error.localizedDescription)
         }
+        watchdog?.cancel()
     }
 
     func repasteLast() {

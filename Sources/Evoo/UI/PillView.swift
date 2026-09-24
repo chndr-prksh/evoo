@@ -30,7 +30,7 @@ struct PillView: View {
         case .hover: CGSize(width: 124, height: 34)
         case .recording: CGSize(width: 150, height: 34)
         case .working: CGSize(width: 64, height: 34)
-        case .message: CGSize(width: 280, height: 34)
+        case .message: CGSize(width: 320, height: 46)
         }
     }
 
@@ -102,9 +102,9 @@ struct PillView: View {
             Text(text)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.white)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .padding(.horizontal, 14)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
         }
     }
 }
