@@ -58,10 +58,10 @@ open build/Evoo.app
 First launch downloads the speech model (~0.5 GB). Download the refinement model from Settings (1.1 GB).
 Models live in `~/Library/Application Support/Evoo/Models` and are pinned + SHA-256 verified.
 
-**Keep permissions across rebuilds:** ad-hoc signed builds get a new identity each time, so macOS forgets
-granted permissions. Create a self-signed code-signing certificate named "Evoo Dev" in Keychain Access
-(Certificate Assistant › Create a Certificate › Code Signing) and build with
-`EVOO_SIGN_IDENTITY="Evoo Dev" scripts/bundle.sh`.
+**Permissions across rebuilds:** dev builds are ad-hoc signed with a designated requirement pinned to the
+bundle ID, so macOS keeps Microphone / Input Monitoring / Accessibility across rebuilds. If permissions ever
+look granted but Fn or pasting doesn't work (stale entries from older builds), quit Evoo and run
+`tccutil reset All app.evoo.Evoo`, then relaunch and grant again.
 
 ### Benchmark without the app
 

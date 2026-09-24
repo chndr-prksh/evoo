@@ -26,8 +26,16 @@ install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/Mac
 
 # Sign inside-out. Hardened runtime only with a real identity: it rejects ad-hoc-signed frameworks.
 SIGN_OPTS=(--force --sign "$IDENTITY" --timestamp=none)
-[ "$IDENTITY" != "-" ] && SIGN_OPTS+=(--options runtime)
+APP_OPTS=()
+if [ "$IDENTITY" = "-" ]; then
+  # Ad-hoc builds get a new code hash every time, so macOS would forget Microphone / Input Monitoring /
+  # Accessibility after each rebuild. Pin the designated requirement to the bundle ID instead, so
+  # permissions survive rebuilds. (Dev builds only — releases are signed with a real identity.)
+  APP_OPTS+=(--requirements '=designated => identifier "app.evoo.Evoo"')
+else
+  SIGN_OPTS+=(--options runtime)
+fi
 codesign "${SIGN_OPTS[@]}" "$APP/Contents/Frameworks/llama.framework"
-codesign "${SIGN_OPTS[@]}" "$APP"
+codesign "${SIGN_OPTS[@]}" "${APP_OPTS[@]}" "$APP"
 
 echo "Built $APP (signed: $IDENTITY)"
