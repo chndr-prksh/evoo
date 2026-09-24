@@ -154,3 +154,30 @@ import Testing
         #expect(r.text == "I love you, I mean it.")
     }
 }
+
+@Suite struct PersonalDictionaryTests {
+    let known: Set<String> = ["hi", "how", "are", "you", "the", "river", "was", "calm", "rave", "walk",
+                              "tell", "that", "and", "will", "review", "call", "ask", "to", "join", "with", "iphone"]
+    let dict = PersonalDictionary(["Divya", "Aarav", "Kavya", "iPhone", "Kubernetes"])
+
+    func fix(_ s: String) -> String { dict.apply(s) { known.contains($0) } }
+
+    @Test func fixesMisheardNames() {
+        #expect(fix("Hi DeVeo, how are you?") == "Hi Divya, how are you?")
+        #expect(fix("Can you ask Rav to join?") == "Can you ask Aarav to join?")
+        #expect(fix("Tell Cavya that") == "Tell Kavya that")
+    }
+
+    @Test func neverTouchesRealWords() {
+        #expect(fix("The river was calm by the rave.") == "The river was calm by the rave.")
+        #expect(fix("I walked with you.") == "I walked with you.")
+    }
+
+    @Test func normalizesCasing() {
+        #expect(fix("my iphone and kubernetes") == "my iPhone and Kubernetes")
+    }
+
+    @Test func ignoresUnrelatedUnknownWords() {
+        #expect(fix("Zorblat is here") == "Zorblat is here")
+    }
+}

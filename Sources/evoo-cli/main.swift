@@ -6,7 +6,7 @@ import Foundation
 
 // Dev tool for measuring Evoo's pipeline without the GUI.
 //
-//   evoo-cli bench [--lang english] [--engine parakeet|whisper] [--llm] file.wav …   audio → text, with timings
+//   evoo-cli bench [--lang english] [--engine parakeet|whisper] [--llm] [--vocab "Divya,Rahul"] file.wav …   audio → text, with timings
 //   evoo-cli post "text" …                                                           rules + number formatting only
 //   evoo-cli refine [--lang …] [--model qwen3_1_7b|qwen3_4b] "text" …                 LLM refinement only
 //
@@ -32,8 +32,10 @@ let language = option("--lang").flatMap(DictationLanguage.init(rawValue:)) ?? .e
 let model = option("--model").flatMap(RefinerModel.init(rawValue:)) ?? .qwen3_1_7b
 let engineID = option("--engine").flatMap(ASREngineID.init(rawValue:)) ?? EnginePreference.automatic.resolve(for: language)
 let useLLM = flag("--llm")
+let vocabulary = option("--vocab")?.split(separator: ",").map(String.init) ?? []
 let refiner = LlamaRefiner()
 let pipeline = DictationPipeline(refiner: refiner)
+pipeline.dictionary = PersonalDictionary(vocabulary)
 let clock = ContinuousClock()
 
 // Inputs from arguments, or one per line on stdin.
@@ -60,7 +62,7 @@ case "bench":
     let engine: SpeechEngine = engineID == .parakeet ? ParakeetEngine() : WhisperEngine()
     let loadTime = try await clock.measure { try await engine.load { _ in } }
     await DictationPipeline.warmUp(engine)
-    print("loaded \(engineID.rawValue) in \(loadTime)")
+    print("loaded \(engineID.rawValue) in \(loadTime)" + (vocabulary.isEmpty ? "" : ", vocabulary: \(vocabulary)"))
     if useLLM { try await loadRefiner() }
     let converter = AudioConverter()
     for path in inputs {

@@ -5,7 +5,7 @@ import Foundation
 
 /// Audio → final text, with per-stage timings. Shared by the app and `evoo-cli`.
 ///
-///   ASR ─▶ TextCleaner ─▶ number formatting (NeMo ITN) ─▶ DictationRules ─▶ LLM (only if still needed)
+///   ASR ─▶ TextCleaner ─▶ personal dictionary ─▶ number formatting (NeMo ITN) ─▶ DictationRules ─▶ LLM (only if needed)
 ///
 /// The first four stages are fast (ASR ≈ 100–300 ms, the rest < 5 ms). The LLM costs ~1 s on an 8 GB M1,
 /// so it only runs when the rules flag an unresolved correction, or for Hinglish/Hindi.
@@ -34,6 +34,19 @@ public final class DictationPipeline {
 
     private let refiner: LlamaRefiner
     private let normalizer = TextNormalizer.shared
+    /// Names and terms to spell right ("Divya"). Set from the user's settings.
+    public var dictionary = PersonalDictionary([])
+
+    /// macOS's built-in English word list, used so real words are never "corrected" into names.
+    private static let knownWords: Set<String> = {
+        guard let text = try? String(contentsOfFile: "/usr/share/dict/words", encoding: .utf8) else { return [] }
+        return Set(text.split(separator: "\n").map { $0.lowercased() })
+    }()
+
+    /// Loads the word list off the critical path (takes ~100 ms once).
+    public static func preload() {
+        DispatchQueue.global(qos: .utility).async { _ = knownWords.count }
+    }
 
     public init(refiner: LlamaRefiner) {
         self.refiner = refiner
@@ -68,6 +81,9 @@ public final class DictationPipeline {
     public func postProcess(_ raw: String, language: DictationLanguage) -> DictationRules.Result {
         var text = TextCleaner.clean(raw)
         guard !text.isEmpty else { return .init(text: "", unresolved: false) }
+        if !dictionary.isEmpty {
+            text = dictionary.apply(text) { Self.knownWords.contains($0) } // "DeVeo" → "Divya"
+        }
         if language == .english {
             text = normalizer.normalizeSentence(text) // "four hundred ms" → "400 ms"
         }

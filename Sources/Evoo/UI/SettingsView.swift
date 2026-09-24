@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var microphones = AudioDevices.inputs()
     @State private var loginError: String?
+    @State private var newWord = ""
 
     var body: some View {
         Form {
@@ -50,6 +51,30 @@ struct SettingsView: View {
                 LabeledContent("In use", value: settings.resolvedEngine.title)
                 if let status = controller.modelStatus {
                     Text(status).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Personal dictionary") {
+                Text("Names and terms Evoo should always spell right, e.g. Divya, Aarav, Kubernetes. Misheard words that sound like them are corrected; real English words are never changed.")
+                    .font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    TextField("Add a word or name", text: $newWord)
+                        .onSubmit(addWord)
+                    Button("Add", action: addWord)
+                        .disabled(newWord.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                ForEach(settings.personalWords, id: \.self) { word in
+                    HStack {
+                        Text(word)
+                        Spacer()
+                        Button {
+                            settings.personalWords.removeAll { $0 == word }
+                        } label: {
+                            Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Remove")
+                    }
                 }
             }
 
@@ -104,5 +129,12 @@ struct SettingsView: View {
             permissions.refresh()
             controller.startHotkeysIfPossible()
         }
+    }
+
+    private func addWord() {
+        let word = newWord.trimmingCharacters(in: .whitespaces)
+        guard !word.isEmpty, !settings.personalWords.contains(word) else { return }
+        settings.personalWords.append(word)
+        newWord = ""
     }
 }

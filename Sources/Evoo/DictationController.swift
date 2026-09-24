@@ -62,6 +62,10 @@ final class DictationController: ObservableObject {
             .debounce(for: .milliseconds(200), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.prepareSpeechModel() }
             .store(in: &cancellables)
+        settings.$personalWords.dropFirst()
+            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .sink { [weak self] _ in self?.applyVocabulary() }
+            .store(in: &cancellables)
         settings.$refinerModel.combineLatest(settings.$refinementEnabled, settings.$language).dropFirst()
             .debounce(for: .milliseconds(200), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.prepareRefiner() }
@@ -71,6 +75,8 @@ final class DictationController: ObservableObject {
     // MARK: - Startup
 
     func bootstrap() {
+        DictationPipeline.preload()
+        applyVocabulary()
         permissions.refresh()
         startHotkeysIfPossible()
         prepareSpeechModel()
@@ -99,6 +105,10 @@ final class DictationController: ObservableObject {
                 log.error("ASR load failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    func applyVocabulary() {
+        pipeline.dictionary = PersonalDictionary(settings.personalWords)
     }
 
     func prepareRefiner() {

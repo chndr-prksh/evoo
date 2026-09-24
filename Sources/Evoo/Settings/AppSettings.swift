@@ -18,6 +18,8 @@ final class AppSettings: ObservableObject {
     @Published var showPill: Bool { didSet { save(showPill, "showPill") } }
     @Published var playSounds: Bool { didSet { save(playSounds, "playSounds") } }
     @Published var restoreClipboard: Bool { didSet { save(restoreClipboard, "restoreClipboard") } }
+    /// Names and terms to recognize correctly ("Divya", "Kubernetes").
+    @Published var personalWords: [String] { didSet { save(personalWords, "personalWords") } }
 
     private init() {
         func value<T: RawRepresentable>(_ key: String, _ fallback: T) -> T where T.RawValue == String {
@@ -35,6 +37,7 @@ final class AppSettings: ObservableObject {
         showPill = bool("showPill", true)
         playSounds = bool("playSounds", true)
         restoreClipboard = bool("restoreClipboard", true)
+        personalWords = UserDefaults.standard.stringArray(forKey: "personalWords") ?? []
     }
 
     var resolvedEngine: ASREngineID { engine.resolve(for: language) }
