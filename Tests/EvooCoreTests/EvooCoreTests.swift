@@ -208,6 +208,21 @@ import Testing
         #expect(fix("my iphone and kubernetes") == "my iPhone and Kubernetes")
     }
 
+    @Test func multiWordTerms() {
+        let d = PersonalDictionary(["Wispr Flow", "Divya"])
+        let known: Set<String> = ["faster", "than", "whisper", "flow", "the", "river", "is", "not", "accurate"]
+        func f(_ s: String) -> String { d.apply(s) { known.contains($0) } }
+        #expect(f("Faster than whisperflow, but not accurate.") == "Faster than Wispr Flow, but not accurate.")
+        #expect(f("Faster than whisper flow.") == "Faster than Wispr Flow.")
+        #expect(f("The river flow is not accurate.") == "The river flow is not accurate.")
+        #expect(f("your name Deva.") == "your name Divya.")
+        let withDeva = PersonalDictionary(["Divya"])
+        let dict: Set<String> = ["deva", "your", "name", "a", "is", "god"]
+        #expect(withDeva.apply("take your name Deva.") { dict.contains($0) } == "take your name Divya.") // heard as a name
+        #expect(withDeva.apply("a deva is a god.") { dict.contains($0) } == "a deva is a god.") // real word, lowercase
+        #expect(withDeva.apply("Deva is a god.") { dict.contains($0) } == "Deva is a god.") // sentence start: unknown
+    }
+
     @Test func ignoresUnrelatedUnknownWords() {
         #expect(fix("Zorblat is here") == "Zorblat is here")
     }
@@ -222,6 +237,13 @@ import Testing
             == "I have a list of items that I want to buy tomorrow:\n- Bread\n- Egg\n- Milk\n- Avocado\n- Apple\n- Banana")
         #expect(plain("We need three things: milk, eggs and bread.")
             == "We need three things:\n• Milk\n• Eggs\n• Bread")
+    }
+
+    @Test func listAfterSentenceBreak() {
+        #expect(plain("E.g., I will try to create a list. Avocado, egg, banana, milk, water.")
+            == "E.g., I will try to create a list:\n• Avocado\n• Egg\n• Banana\n• Milk\n• Water")
+        #expect(plain("Avocado, egg, banana and milk.") == "• Avocado\n• Egg\n• Banana\n• Milk")
+        #expect(plain("I like red, blue and green.") == "I like red, blue and green.")
     }
 
     @Test func checklist() {

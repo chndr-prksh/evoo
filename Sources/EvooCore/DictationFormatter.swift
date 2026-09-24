@@ -114,15 +114,48 @@ public enum DictationFormatter {
         // Work on the sentence that holds the enumeration; keep sentences around it.
         let sentences = splitSentences(line)
         for (index, sentence) in sentences.enumerated() {
-            guard let list = parseEnumeration(sentence) else { continue }
+            var introStart = index
+            var list = parseEnumeration(sentence)
+            if list == nil, let items = bareEnumeration(sentence) {
+                // ASR often ends the sentence before the items: "…create a list. Avocado, egg, banana, milk."
+                if index > 0, hasTrigger(sentences[index - 1]) {
+                    let intro = sentences[index - 1].trimmingCharacters(in: CharacterSet(charactersIn: " .:"))
+                    list = Enumeration(intro: intro, items: items)
+                    introStart = index - 1
+                } else if items.count >= 4 {
+                    list = Enumeration(intro: "", items: items) // "Avocado, egg, banana, milk."
+                }
+            }
+            guard let list else { continue }
             let marker = checklistTriggers.contains(where: list.intro.lowercased().contains) ? style.checkbox : style.bullet
             let body = list.items.map { marker + capitalizeFirst($0) }.joined(separator: "\n")
             let intro = list.intro.isEmpty ? "" : list.intro + ":\n"
-            let before = sentences[..<index].joined(separator: " ")
+            let before = sentences[..<introStart].joined(separator: " ")
             let after = sentences[(index + 1)...].joined(separator: " ")
             return [before, intro + body, after].filter { !$0.isEmpty }.joined(separator: "\n")
         }
         return nil
+    }
+
+    /// A sentence that is nothing but short items: "Avocado, egg, banana, milk and water."
+    static func bareEnumeration(_ sentence: String) -> [String]? {
+        var s = sentence.trimmingCharacters(in: .whitespaces)
+        if s.hasSuffix("?") { return nil }
+        if let last = s.last, ".!".contains(last) { s.removeLast() }
+        var items = s.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        if let lastItem = items.last, let r = lastItem.range(of: #"^(and|or) |\s(and|or)\s"#, options: .regularExpression) {
+            let before = lastItem[..<r.lowerBound].trimmingCharacters(in: .whitespaces)
+            let after = lastItem[r.upperBound...].trimmingCharacters(in: .whitespaces)
+            items.removeLast()
+            items += [before, after].filter { !$0.isEmpty }
+        }
+        guard items.count >= 3, items.allSatisfy({ !$0.isEmpty && wordCount($0) <= 3 }) else { return nil }
+        return items
+    }
+
+    static func hasTrigger(_ text: String) -> Bool {
+        let lower = " " + text.lowercased().filter { $0.isLetter || $0 == " " || $0 == "-" } + " "
+        return listTriggers.contains { lower.contains(" \($0) ") }
     }
 
     struct Enumeration {
