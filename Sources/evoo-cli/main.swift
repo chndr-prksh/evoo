@@ -1,17 +1,20 @@
 import EvooCore
 import EvooRefine
+import EvooSpeech
+import FluidAudio
 import Foundation
 
-// Usage:
-//   swift run -c release evoo-cli refine [--lang english|hinglish|hindi] [--model qwen3_1_7b|qwen3_4b] "text" ...
-//   swift run -c release evoo-cli refine --lang english < samples.txt      (one transcript per line)
+// Dev tool for measuring Evoo's pipeline without the GUI.
+//
+//   evoo-cli bench [--lang english] [--engine parakeet|whisper] [--llm] file.wav …   audio → text, with timings
+//   evoo-cli post "text" …                                                           rules + number formatting only
+//   evoo-cli refine [--lang …] [--model qwen3_1_7b|qwen3_4b] "text" …                 LLM refinement only
+//
+// Make test audio with macOS text-to-speech:
+//   say -o /tmp/a.wav --data-format=LEI16@16000 "let's meet tomorrow, no, day after tomorrow"
 
 var args = Array(CommandLine.arguments.dropFirst())
-guard args.first == "refine" else {
-    print("usage: evoo-cli refine [--lang english|hinglish|hindi] [--model qwen3_1_7b|qwen3_4b] [text…]")
-    exit(2)
-}
-args.removeFirst()
+let command = args.isEmpty ? "" : args.removeFirst()
 
 func option(_ name: String) -> String? {
     guard let i = args.firstIndex(of: name), i + 1 < args.count else { return nil }
@@ -19,29 +22,76 @@ func option(_ name: String) -> String? {
     return args[i + 1]
 }
 
+func flag(_ name: String) -> Bool {
+    guard let i = args.firstIndex(of: name) else { return false }
+    args.remove(at: i)
+    return true
+}
+
 let language = option("--lang").flatMap(DictationLanguage.init(rawValue:)) ?? .english
 let model = option("--model").flatMap(RefinerModel.init(rawValue:)) ?? .qwen3_1_7b
-var inputs = args
-if inputs.isEmpty {
-    while let line = readLine() {
-        if !line.trimmingCharacters(in: .whitespaces).isEmpty { inputs.append(line) }
-    }
-}
-
-guard ModelDownloader.isInstalled(model) else {
-    print("Model missing: \(ModelPaths.refiner(model).path)\nDownload it from Evoo Settings first.")
-    exit(1)
-}
-
+let engineID = option("--engine").flatMap(ASREngineID.init(rawValue:)) ?? EnginePreference.automatic.resolve(for: language)
+let useLLM = flag("--llm")
 let refiner = LlamaRefiner()
+let pipeline = DictationPipeline(refiner: refiner)
 let clock = ContinuousClock()
-let loadTime = try await clock.measure { try await refiner.load(model, language: language) }
-print("loaded \(model.rawValue) in \(loadTime)\n")
 
-for input in inputs {
-    var output = ""
-    let t = try await clock.measure { output = try await refiner.refine(input, language: language) }
-    print("in : \(input)\nout: \(output)\n    (\(t.formatted(.units(allowed: [.milliseconds]))))\n")
+// Inputs from arguments, or one per line on stdin.
+var inputs: [String] {
+    if !args.isEmpty { return args }
+    var lines: [String] = []
+    while let line = readLine() {
+        if !line.trimmingCharacters(in: .whitespaces).isEmpty { lines.append(line) }
+    }
+    return lines
+}
+
+func loadRefiner() async throws {
+    guard ModelDownloader.isInstalled(model) else {
+        print("Model missing: \(ModelPaths.refiner(model).path) — download it from Evoo Settings first.")
+        exit(1)
+    }
+    let t = try await clock.measure { try await refiner.load(model, language: language) }
+    print("loaded \(model.rawValue) in \(t)\n")
+}
+
+switch command {
+case "bench":
+    let engine: SpeechEngine = engineID == .parakeet ? ParakeetEngine() : WhisperEngine()
+    let loadTime = try await clock.measure { try await engine.load { _ in } }
+    await DictationPipeline.warmUp(engine)
+    print("loaded \(engineID.rawValue) in \(loadTime)")
+    if useLLM { try await loadRefiner() }
+    let converter = AudioConverter()
+    for path in inputs {
+        let samples = try converter.resampleAudioFile(path: path)
+        let out = try await pipeline.run(samples: samples, engine: engine, language: language,
+                                         llm: useLLM ? .whenNeeded : .off)
+        let audio = String(format: "%.1f", Double(samples.count) / 16000)
+        print("\n\(URL(fileURLWithPath: path).lastPathComponent) (\(audio) s audio)")
+        print("  raw: \(out.raw)\n  out: \(out.text)\n  \(out.summary)")
+    }
+    await engine.unload()
+
+case "post":
+    for input in inputs {
+        let t0 = clock.now
+        let r = pipeline.postProcess(input, language: language)
+        let us = (clock.now - t0).formatted(.units(allowed: [.microseconds]))
+        print("in : \(input)\nout: \(r.text)\(r.unresolved ? "   [unresolved → LLM]" : "")  (\(us))\n")
+    }
+
+case "refine":
+    try await loadRefiner()
+    for input in inputs {
+        var output = ""
+        let t = try await clock.measure { output = try await refiner.refine(input, language: language) }
+        print("in : \(input)\nout: \(output)\n    (\(t.formatted(.units(allowed: [.milliseconds]))))\n")
+    }
+
+default:
+    print("usage: evoo-cli bench|post|refine [options] …  (see Sources/evoo-cli/main.swift)")
+    exit(2)
 }
 
 refiner.unload() // free Metal buffers before exit

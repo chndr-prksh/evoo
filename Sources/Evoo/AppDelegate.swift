@@ -62,7 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         menu.addItem(withTitle: "Language", action: nil, keyEquivalent: "").submenu = languages
 
-        let refine = item("Refine with Local AI", #selector(toggleRefinement))
+        let refine = item("Use Local AI When Needed", #selector(toggleRefinement))
         refine.state = settings.refinementEnabled ? .on : .off
         menu.addItem(refine)
         let pillItem = item("Show Floating Pill", #selector(togglePill))

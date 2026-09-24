@@ -25,9 +25,9 @@ let package = Package(
         .target(name: "EvooCore"),
         // Local LLM refinement (llama.cpp) + verified model downloads.
         .target(name: "EvooRefine", dependencies: ["EvooCore", "llama"]),
-        // Menu-bar app.
-        .executableTarget(
-            name: "Evoo",
+        // Speech engines (Parakeet, Whisper), number formatting, and the post-processing pipeline.
+        .target(
+            name: "EvooSpeech",
             dependencies: [
                 "EvooCore",
                 "EvooRefine",
@@ -35,8 +35,17 @@ let package = Package(
                 .product(name: "FluidAudio", package: "FluidAudio"),
             ]
         ),
-        // Dev tool: benchmark refinement from the terminal.
-        .executableTarget(name: "evoo-cli", dependencies: ["EvooCore", "EvooRefine"]),
+        // Menu-bar app.
+        .executableTarget(
+            name: "Evoo",
+            dependencies: [
+                "EvooCore",
+                "EvooRefine",
+                "EvooSpeech",
+            ]
+        ),
+        // Dev tool: benchmark the pipeline from the terminal.
+        .executableTarget(name: "evoo-cli", dependencies: ["EvooCore", "EvooRefine", "EvooSpeech"]),
         .testTarget(name: "EvooCoreTests", dependencies: ["EvooCore"]),
     ]
 )

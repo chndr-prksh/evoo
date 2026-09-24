@@ -110,3 +110,47 @@ import Testing
         #expect(EnginePreference.parakeet.resolve(for: .hindi) == .whisper) // Parakeet has no Hindi
     }
 }
+
+@Suite struct DictationRulesTests {
+    func fix(_ s: String) -> String { DictationRules.apply(s).text }
+
+    @Test func selfCorrections() {
+        #expect(fix("Let's meet tomorrow, no, day after tomorrow.") == "Let's meet day after tomorrow.")
+        #expect(fix("Send the invoice to Rahul, sorry, to Priya by Friday.") == "Send the invoice to Priya by Friday.")
+        #expect(fix("The meeting is at 3:30 actually make it 4.") == "The meeting is at 4.")
+        #expect(fix("Ship it on Friday, actually make that Monday.") == "Ship it on Monday.")
+        #expect(fix("Call John, sorry, Mike.") == "Call Mike.")
+        #expect(fix("I'll call you at 6, no wait, 7:30.") == "I'll call you at 7:30.")
+        #expect(fix("Send the deck, no, the report.") == "Send the report.")
+    }
+
+    @Test func leavesNormalSpeechAlone() {
+        #expect(fix("There is no milk in the fridge.") == "There is no milk in the fridge.")
+        #expect(fix("No, I don't think so.") == "No, I don't think so.")
+        #expect(fix("I actually like this design.") == "I actually like this design.")
+        #expect(fix("We can make it work.") == "We can make it work.")
+        #expect(fix("I know that that is hard.") == "I know that that is hard.")
+    }
+
+    @Test func fillersAndStutters() {
+        #expect(fix("Um, so we could, we could push the launch.") == "So we could push the launch.")
+        #expect(fix("I think uh we should ship.") == "I think we should ship.")
+        #expect(fix("The the build is green.") == "The build is green.")
+    }
+
+    @Test func asrSentenceBreaks() {
+        #expect(fix("The meeting is at 3.30. Actually make it 4.") == "The meeting is at 4.")
+        #expect(fix("I was thinking we could. We could push the launch.") == "I was thinking we could push the launch.")
+        #expect(fix("Let's meet tomorrow or no, day after tomorrow.") == "Let's meet day after tomorrow.")
+    }
+
+    @Test func scratchThat() {
+        #expect(fix("I love pizza. Scratch that. I love pasta.") == "I love pasta.")
+    }
+
+    @Test func ambiguousCorrectionIsFlagged() {
+        let r = DictationRules.apply("I love you, I mean it.")
+        #expect(r.unresolved)
+        #expect(r.text == "I love you, I mean it.")
+    }
+}

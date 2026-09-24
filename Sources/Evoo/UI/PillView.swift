@@ -1,150 +1,162 @@
 import EvooCore
 import SwiftUI
 
-/// The always-on dictation pill.
-///  idle      → a slim bar; hover to reveal language + mic controls and the Fn hint
-///  recording → live waveform with cancel / finish
-///  working   → animated dots while the local models run
+/// The always-on dictation pill: one capsule that morphs between states.
+///   idle       slim bar
+///   hover      language · mic · language badge, with a "Hold fn" hint above
+///   recording  cancel · live waveform · finish
+///   working    animated dots
 struct PillView: View {
     @ObservedObject var controller: DictationController
     @ObservedObject var settings: AppSettings
-    @State private var hovering = false
+    @ObservedObject var model: PillModel
+
+    private enum Look: Hashable {
+        case idle, hover, recording, working, message(String)
+    }
+
+    private var look: Look {
+        switch controller.phase {
+        case .idle: model.hovering ? .hover : .idle
+        case .recording: .recording
+        case .transcribing, .refining: .working
+        case let .message(text): .message(text)
+        }
+    }
+
+    private var size: CGSize {
+        switch look {
+        case .idle: CGSize(width: 40, height: 8)
+        case .hover: CGSize(width: 124, height: 34)
+        case .recording: CGSize(width: 150, height: 34)
+        case .working: CGSize(width: 64, height: 34)
+        case .message: CGSize(width: 280, height: 34)
+        }
+    }
+
+    private let spring = Animation.spring(response: 0.32, dampingFraction: 0.82)
 
     var body: some View {
-        VStack(spacing: 6) {
-            if hovering, controller.phase == .idle {
-                hint
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+        VStack(spacing: 8) {
+            if look == .hover {
+                Hint(mode: settings.activationMode)
+                    .transition(.opacity.combined(with: .offset(y: 4)))
             }
-            pill
+            capsule
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 4)
-        .padding(.bottom, 2)
-        .fixedSize()
-        .animation(.spring(response: 0.28, dampingFraction: 0.85), value: hovering)
-        .animation(.spring(response: 0.28, dampingFraction: 0.85), value: controller.phase)
-        .onHover { hovering = $0 }
+        .padding(.bottom, 4)
+        .animation(spring, value: look)
     }
 
-    @ViewBuilder private var pill: some View {
-        Group {
-            switch controller.phase {
-            case .idle where hovering: expanded
-            case .idle: collapsed
-            case .recording: recording
-            case .transcribing, .refining: working
-            case let .message(text): message(text)
-            }
+    private var capsule: some View {
+        ZStack {
+            Capsule(style: .continuous)
+                .fill(.black.opacity(look == .idle ? 0.55 : 0.9))
+            Capsule(style: .continuous)
+                .strokeBorder(.white.opacity(look == .idle ? 0.35 : 0.16), lineWidth: 1)
+            content
+                .transition(.opacity)
+                .id(look) // cross-fade content when the state changes
         }
-        .background(Capsule().fill(Color.black.opacity(0.88)))
-        .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
-        .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
+        .frame(width: size.width, height: size.height)
+        .shadow(color: .black.opacity(look == .idle ? 0 : 0.3), radius: 8, y: 3)
+        .background(GeometryReader { proxy in
+            Color.clear
+                .onAppear { model.pillRect = proxy.frame(in: .global) }
+                .onChange(of: proxy.frame(in: .global)) { _, rect in model.pillRect = rect }
+        })
     }
 
-    // MARK: States
-
-    private var collapsed: some View {
-        Capsule()
-            .fill(Color.white.opacity(0.35))
-            .frame(width: 28, height: 3)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-    }
-
-    private var expanded: some View {
-        HStack(spacing: 4) {
-            Menu {
-                Picker("Language", selection: $settings.language) {
-                    ForEach(DictationLanguage.allCases, id: \.self) { Text($0.title).tag($0) }
+    @ViewBuilder private var content: some View {
+        switch look {
+        case .idle:
+            EmptyView()
+        case .hover:
+            HStack(spacing: 2) {
+                RoundButton(symbol: "globe", help: "Language: \(settings.language.title)",
+                            action: model.showLanguageMenu)
+                Button(action: controller.toggleFromUI) {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.black)
+                        .frame(width: 40, height: 26)
+                        .background(Capsule().fill(.white))
                 }
-                .pickerStyle(.inline)
-            } label: {
-                Image(systemName: "globe")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: 30, height: 30)
-                    .contentShape(Circle())
+                .buttonStyle(.plain)
+                .help("Start hands-free dictation")
+                Text(settings.language.badge)
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.65))
+                    .frame(width: 34)
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("Language: \(settings.language.title)")
-
-            Button(action: controller.toggleFromUI) {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 30)
-                    .background(Capsule().fill(Color.white.opacity(0.14)))
+        case .recording:
+            HStack(spacing: 6) {
+                RoundButton(symbol: "xmark", help: "Cancel (esc)", action: controller.cancel)
+                Waveform(levels: controller.levels)
+                    .frame(width: 70, height: 20)
+                RoundButton(symbol: "checkmark", help: "Finish", filled: true, action: controller.stop)
             }
-            .buttonStyle(.plain)
-            .help("Start hands-free dictation")
-
-            Text(settings.language == .english ? "EN" : settings.language == .hinglish ? "HI·EN" : "HI")
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.6))
-                .padding(.horizontal, 6)
-        }
-        .padding(4)
-    }
-
-    private var recording: some View {
-        HStack(spacing: 8) {
-            iconButton("xmark", help: "Cancel (Esc)", action: controller.cancel)
-            Waveform(levels: controller.levels)
-                .frame(width: 84, height: 22)
-            iconButton("checkmark", help: "Finish", tint: .white, action: controller.stop)
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-    }
-
-    private var working: some View {
-        HStack(spacing: 6) {
+        case .working:
             WorkingDots()
-            Text(controller.phase == .refining ? "Polishing" : "Transcribing")
+        case let .message(text):
+            Text(text)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.75))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .padding(.horizontal, 14)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
     }
+}
 
-    private func message(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(.white)
-            .lineLimit(2)
-            .frame(maxWidth: 280)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-    }
+private struct Hint: View {
+    let mode: ActivationMode
 
-    private var hint: some View {
+    var body: some View {
         HStack(spacing: 4) {
-            Text("Hold")
-            Text("fn").fontWeight(.bold)
-            Text("to dictate")
+            switch mode {
+            case .toggle:
+                Text("Double-tap"); Key(); Text("to dictate")
+            default:
+                Text("Hold"); Key(); Text("to dictate")
+            }
         }
-        .font(.system(size: 12))
+        .font(.system(size: 11.5, weight: .medium))
         .foregroundStyle(.white)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(Capsule().fill(Color.black.opacity(0.88)))
+        .background(Capsule(style: .continuous).fill(.black.opacity(0.9)))
+        .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.16), lineWidth: 1))
     }
 
-    private func iconButton(_ symbol: String, help: String, tint: Color = .white.opacity(0.7),
-                            action: @escaping () -> Void) -> some View
-    {
+    private struct Key: View {
+        var body: some View {
+            Text("fn")
+                .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(RoundedRectangle(cornerRadius: 4).fill(.white.opacity(0.2)))
+        }
+    }
+}
+
+private struct RoundButton: View {
+    let symbol: String
+    let help: String
+    var filled = false
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(tint)
-                .frame(width: 24, height: 24)
-                .background(Circle().fill(Color.white.opacity(0.12)))
+                .foregroundStyle(filled ? .black : .white.opacity(hovering ? 1 : 0.75))
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(filled ? .white : .white.opacity(hovering ? 0.22 : 0.1)))
         }
         .buttonStyle(.plain)
+        .onHover { hovering = $0 }
         .help(help)
     }
 }
@@ -153,11 +165,11 @@ private struct Waveform: View {
     let levels: [Float]
 
     var body: some View {
-        HStack(alignment: .center, spacing: 2.5) {
+        HStack(alignment: .center, spacing: 2) {
             ForEach(levels.indices, id: \.self) { i in
                 Capsule()
-                    .fill(Color.white)
-                    .frame(width: 2.5, height: max(3, CGFloat(levels[i]) * 22))
+                    .fill(.white)
+                    .frame(width: 2, height: max(2, CGFloat(levels[i]) * 20))
             }
         }
         .animation(.linear(duration: 0.08), value: levels)
@@ -168,14 +180,24 @@ private struct WorkingDots: View {
     var body: some View {
         TimelineView(.animation) { context in
             let t = context.date.timeIntervalSinceReferenceDate
-            HStack(spacing: 3) {
+            HStack(spacing: 4) {
                 ForEach(0 ..< 3) { i in
                     Circle()
-                        .fill(Color.white)
-                        .frame(width: 4, height: 4)
-                        .opacity(0.35 + 0.65 * max(0, sin(t * 6 - Double(i) * 0.7)))
+                        .fill(.white)
+                        .frame(width: 5, height: 5)
+                        .opacity(0.3 + 0.7 * max(0, sin(t * 7 - Double(i) * 0.8)))
                 }
             }
+        }
+    }
+}
+
+extension DictationLanguage {
+    var badge: String {
+        switch self {
+        case .english: "EN"
+        case .hinglish: "HI·EN"
+        case .hindi: "HI"
         }
     }
 }

@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import EvooCore
 import EvooRefine
+import EvooSpeech
 import os
 
 /// Owns the dictation lifecycle:
@@ -33,11 +34,12 @@ final class DictationController: ObservableObject {
     private let recorder = AudioRecorder()
     private let engines = SpeechEngines()
     private let refiner = LlamaRefiner()
+    private lazy var pipeline = DictationPipeline(refiner: refiner)
     private let injector = TextInjector()
 
     private var gesture: HotkeyGesture
     private var gestureTimer: Task<Void, Never>?
-    private var pipeline: Task<Void, Never>?
+    private var processing: Task<Void, Never>?
     private var maxDurationTimer: Task<Void, Never>?
     private var messageTimer: Task<Void, Never>?
     private var handsFreeFromUI = false
@@ -90,6 +92,7 @@ final class DictationController: ObservableObject {
         Task {
             do {
                 try await engine.load { _ in }
+                await DictationPipeline.warmUp(engine) // first dictation shouldn't pay CoreML warm-up
                 modelStatus = nil
             } catch {
                 modelStatus = "\(name) failed: \(error.localizedDescription)"
@@ -212,13 +215,13 @@ final class DictationController: ObservableObject {
         }
         play("Pop")
         phase = .transcribing
-        pipeline = Task { await process(samples, seconds: seconds) }
+        processing = Task { await process(samples, seconds: seconds) }
     }
 
     func cancel() {
         endRecordingSession()
         _ = recorder.stop()
-        pipeline?.cancel()
+        processing?.cancel()
         phase = .idle
     }
 
@@ -231,38 +234,23 @@ final class DictationController: ObservableObject {
     private func process(_ samples: [Float], seconds: Double) async {
         let language = settings.language
         let engine = engines.engine(for: settings.resolvedEngine)
-        let clock = ContinuousClock()
         do {
             if !engine.isLoaded {
                 modelStatus = "Loading speech model…"
                 try await engine.load { _ in }
                 modelStatus = nil
             }
-            var t0 = clock.now
-            let raw = try await engine.transcribe(samples, language: language)
-            let asrTime = clock.now - t0
+            // The LLM only runs for corrections the rules can't resolve, and for Hinglish/Hindi.
+            let willUseLLM = settings.refinementEnabled && refiner.isLoaded
+            if willUseLLM, language != .english { phase = .refining }
+            let out = try await pipeline.run(samples: samples, engine: engine, language: language,
+                                             llm: willUseLLM ? .whenNeeded : .off)
             guard !Task.isCancelled else { return }
+            guard !out.text.isEmpty else { return (phase = .idle) }
 
-            var text = TextCleaner.clean(raw)
-            guard !text.isEmpty else { return (phase = .idle) }
-
-            var refineTime: Duration = .zero
-            if settings.refinementEnabled, refiner.isLoaded, RefinePrompt.needsRefinement(text, language: language) {
-                phase = .refining
-                t0 = clock.now
-                do {
-                    text = try await refiner.refine(text, language: language)
-                } catch {
-                    log.error("Refine failed, using raw transcript: \(error.localizedDescription)")
-                }
-                refineTime = clock.now - t0
-            }
-            guard !Task.isCancelled else { return }
-
-            await injector.insert(text, restoreClipboard: settings.restoreClipboard)
-            lastText = text
-            lastTimings = String(format: "%.1fs audio · ASR %dms · refine %dms", seconds,
-                                 asrTime.milliseconds, refineTime.milliseconds)
+            await injector.insert(out.text, restoreClipboard: settings.restoreClipboard)
+            lastText = out.text
+            lastTimings = String(format: "%.1fs audio · ", seconds) + out.summary
             log.info("\(self.lastTimings ?? "", privacy: .public)")
             phase = .idle
         } catch {
@@ -274,6 +262,14 @@ final class DictationController: ObservableObject {
         guard let lastText else { return }
         Task { await injector.insert(lastText, restoreClipboard: settings.restoreClipboard) }
     }
+
+    #if DEBUG
+    /// Lets `--snapshot-pill` render every state without a microphone.
+    func debugSet(phase: Phase, levels: [Float]? = nil) {
+        self.phase = phase
+        if let levels { self.levels = levels }
+    }
+    #endif
 
     // MARK: - Helpers
 
@@ -300,8 +296,4 @@ final class DictationController: ObservableObject {
         guard settings.playSounds else { return }
         NSSound(named: NSSound.Name(name))?.play()
     }
-}
-
-private extension Duration {
-    var milliseconds: Int { Int(components.seconds * 1000 + components.attoseconds / 1_000_000_000_000_000) }
 }

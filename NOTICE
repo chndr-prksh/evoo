@@ -11,6 +11,9 @@ Speech recognition
 - OpenAI Whisper large-v3 turbo — MIT — https://github.com/openai/whisper
   (CoreML conversion by Argmax, argmaxinc/whisperkit-coreml)
 
+Text processing
+- NeMo inverse text normalization (text-processing-rs, FluidInference) — Apache-2.0
+
 Text refinement
 - Qwen3 1.7B / Qwen3 4B Instruct 2507 (Alibaba Qwen) — Apache-2.0 — https://huggingface.co/Qwen
   (GGUF quantization by Unsloth)

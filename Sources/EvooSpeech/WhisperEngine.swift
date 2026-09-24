@@ -4,13 +4,15 @@ import WhisperKit
 
 /// OpenAI Whisper large-v3 turbo (MIT) on CoreML via WhisperKit (MIT).
 /// Multilingual — used for Hindi / Hinglish.
-final class WhisperEngine: SpeechEngine {
-    let id = ASREngineID.whisper
+public final class WhisperEngine: SpeechEngine {
+    public init() {}
+
+    public let id = ASREngineID.whisper
     private var pipe: WhisperKit?
 
-    var isLoaded: Bool { pipe != nil }
+    public var isLoaded: Bool { pipe != nil }
 
-    func load(progress: @escaping @Sendable (Double) -> Void) async throws {
+    public func load(progress: @escaping @Sendable (Double) -> Void) async throws {
         guard pipe == nil else { return }
         try FileManager.default.createDirectory(at: ModelPaths.whisper, withIntermediateDirectories: true)
         progress(0)
@@ -27,7 +29,7 @@ final class WhisperEngine: SpeechEngine {
         progress(1)
     }
 
-    func transcribe(_ samples: [Float], language: DictationLanguage) async throws -> String {
+    public func transcribe(_ samples: [Float], language: DictationLanguage) async throws -> String {
         guard let pipe else { throw EngineError.notLoaded }
         let options = DecodingOptions(
             task: .transcribe,
@@ -42,13 +44,13 @@ final class WhisperEngine: SpeechEngine {
         return results.map(\.text).joined(separator: " ")
     }
 
-    func unload() async {
+    public func unload() async {
         await pipe?.unloadModels()
         pipe = nil
     }
 }
 
-enum EngineError: LocalizedError {
+public enum EngineError: LocalizedError {
     case notLoaded
-    var errorDescription: String? { "Speech model is not loaded yet." }
+    public var errorDescription: String? { "Speech model is not loaded yet." }
 }

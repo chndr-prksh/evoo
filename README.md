@@ -13,19 +13,22 @@ Hold `fn`, speak, release — clean text appears at your cursor in any app.
 
 ```
 fn down ─▶ AudioRecorder (16 kHz mono)
-fn up   ─▶ SpeechEngine ──▶ TextCleaner ──▶ LlamaRefiner ──▶ TextInjector ─▶ ⌘V at cursor
-            Parakeet / Whisper   rules         Qwen3 (local)    clipboard, restored after
-            (CoreML, on-device)
+fn up   ─▶ SpeechEngine ─▶ number formatting ─▶ DictationRules ─▶ [LLM, only if needed] ─▶ ⌘V at cursor
+           Parakeet/Whisper   NeMo ITN            corrections,       Qwen3 via llama.cpp
+           ~110 ms            "four hundred"→400  fillers, stutters  Hinglish / unresolved
 ```
 
 | Stage | Model / library | License | Where it runs |
 |---|---|---|---|
 | Speech → text (English) | Parakeet TDT 0.6B v3 via FluidAudio | CC-BY-4.0 / Apache-2.0 | Neural Engine |
 | Speech → text (Hindi, Hinglish) | Whisper large-v3 turbo via WhisperKit | MIT / MIT | Neural Engine + GPU |
-| Refinement (self-corrections, fillers, punctuation) | Qwen3 1.7B (Q4_K_M GGUF) via llama.cpp | Apache-2.0 / MIT | GPU (Metal) |
+| Numbers ("four hundred ms" → "400 ms") | NeMo inverse text normalization (text-processing-rs) | Apache-2.0 | CPU, < 1 ms |
+| Self-corrections, fillers, stutters | `DictationRules` (built-in, deterministic) | Apache-2.0 | CPU, < 5 ms |
+| Hinglish romanization, tricky corrections | Qwen3 1.7B (Q4_K_M GGUF) via llama.cpp | Apache-2.0 / MIT | GPU (Metal), ~1 s |
 
-Clean English dictation with no fillers or corrections skips the LLM entirely (ASR already punctuates),
-so most dictations paste immediately. The LLM runs only when there is something to fix.
+English dictation never waits for an LLM: the rules handle "tomorrow, no, day after tomorrow",
+"to Rahul, sorry, to Priya", "3:30, actually make it 4", "um", "we could we could" and "scratch that".
+The LLM only runs when a correction cue can't be resolved by rules, or for Hinglish/Hindi.
 
 ## Using it
 
@@ -60,13 +63,17 @@ granted permissions. Create a self-signed code-signing certificate named "Evoo D
 (Certificate Assistant › Create a Certificate › Code Signing) and build with
 `EVOO_SIGN_IDENTITY="Evoo Dev" scripts/bundle.sh`.
 
-### Benchmark refinement without the app
+### Benchmark without the app
 
 ```bash
 swift build -c release --product evoo-cli
-.build/release/evoo-cli refine "let's meet tomorrow, no, day after tomorrow"
-.build/release/evoo-cli refine --lang hinglish --model qwen3_4b "कल मिलते हैं no sorry परसों"
+say -o /tmp/a.wav --data-format=LEI16@16000 "let's meet tomorrow, no, day after tomorrow"
+.build/release/evoo-cli bench /tmp/a.wav                  # audio → text with per-stage timings
+.build/release/evoo-cli post "send it to rahul, sorry, to priya"   # rules + numbers only
+.build/release/evoo-cli refine --lang hinglish "कल मिलते हैं no sorry परसों"   # LLM only
 ```
+
+Debug builds can render every pill state to PNGs: `.build/debug/Evoo --snapshot-pill /tmp/pill`.
 
 Set `EVOO_LLAMA_LOG=1` to see llama.cpp's logs.
 
@@ -76,6 +83,7 @@ Set `EVOO_LLAMA_LOG=1` to see llama.cpp's logs.
 Sources/EvooCore     Pure logic, fully unit-tested: Fn gesture state machine, languages & engine routing,
                      refinement prompt + output guards, transcript cleanup, model catalog.
 Sources/EvooRefine   llama.cpp refiner (KV-cached prompt prefix) and verified model downloads.
+Sources/EvooSpeech   SpeechEngine protocol, Parakeet + Whisper engines, DictationPipeline (ASR → ITN → rules → LLM).
 Sources/Evoo         The menu-bar app: FnKeyMonitor, AudioRecorder, SpeechEngine (Parakeet/Whisper),
                      TextInjector, DictationController, pill + settings UI, permissions.
 Sources/evoo-cli     Terminal tool for benchmarking refinement.
@@ -91,8 +99,9 @@ Measured on an 8 GB M1 (under memory pressure):
 
 | Case | Result |
 |---|---|
-| Self-corrections, fillers, questions left as questions | ✅ correct on the test set |
-| Refinement latency, English | ~1–2 s when the LLM runs; ~0 s on the fast path |
+| English, fn release → text ready (real audio, 2–4 s clips) | ✅ **101–130 ms** (ASR ~110 ms + rules < 5 ms) |
+| Self-corrections, fillers, stutters, numbers | ✅ rules, covered by unit tests |
+| LLM path (unresolved corrections, Hinglish) | ~1–4 s on 8 GB M1 — opt-in, only when needed |
 | Qwen3 4B | No better on the English set and 3–5× slower on 8 GB; meant for 16 GB+ Macs |
 | Hinglish | ⚠️ Mixed. Whisper outputs Devanagari and the 1.7B model sometimes translates or misses corrections when romanizing. Needs a better model — top roadmap item |
 

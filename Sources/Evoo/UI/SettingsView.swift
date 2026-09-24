@@ -53,8 +53,10 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Refinement (local LLM)") {
-                Toggle("Clean up and apply self-corrections", isOn: $settings.refinementEnabled)
+            Section("Local AI (optional)") {
+                Text("Corrections, fillers and numbers are handled instantly by built-in rules. The local AI only runs for Hinglish/Hindi and for corrections the rules can't resolve, and adds about 1 s when it does.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Toggle("Use local AI when needed", isOn: $settings.refinementEnabled)
                 Picker("Model", selection: $settings.refinerModel) {
                     ForEach(RefinerModel.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
