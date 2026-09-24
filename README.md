@@ -30,6 +30,8 @@ fn up   ─▶ SpeechEngine ─▶ number formatting ─▶ DictationRules ─�
 | Numbers ("four hundred ms" → "400 ms") | NeMo inverse text normalization (text-processing-rs) | Apache-2.0 | CPU, < 1 ms |
 | Self-corrections, fillers, stutters | `DictationRules` (built-in, deterministic) | Apache-2.0 | CPU, < 5 ms |
 | Lists, line breaks, emails | `DictationFormatter`: bullets, numbered steps, to-do checklists, "new line", "chandra at gmail.com" — styled per app | Apache-2.0 | CPU, < 1 ms |
+| Voice commands | `DictationCommands`: "capitalize each word …", "all caps …", "lowercase …", "quote … end quote", "… press enter", "undo that" | Apache-2.0 | CPU, < 1 ms |
+| Learning from edits | `EditWatcher` + `EditLearner`: names you correct join the dictionary; per-app habits (no final full stop, lowercase start) after 2 edits — counts only, never text | Apache-2.0 | Accessibility API |
 | Names on screen (context awareness) | `ScreenText` + `ContextVocabulary`: names in the focused window (chat header, recipients, text near the cursor) join the dictionary for that dictation — local, never stored | Apache-2.0 | Accessibility API, read while you speak |
 | Names & terms ("DeVeo" → "Divya") | `PersonalDictionary`: sound-alike match, never replaces real English words | Apache-2.0 | CPU, < 1 ms |
 | Hinglish romanization, tricky corrections | Qwen3 1.7B (Q4_K_M GGUF) via llama.cpp | Apache-2.0 / MIT | GPU (Metal), ~1 s |
@@ -109,7 +111,8 @@ Measured on an 8 GB M1 (under memory pressure):
 |---|---|
 | English, fn up → text ready, with a natural pause (≥ 0.35 s) before release | ✅ **1–15 ms** — transcribed speculatively while fn is held |
 | English, fn up → text ready, releasing immediately after speaking | ✅ **121–139 ms** (Parakeet 0.6B); ~40–70 ms with the optional 110M model |
-| Self-corrections, fillers, stutters, numbers | ✅ rules, covered by unit tests |
+| Self-corrections (`Benchmarks/corrections.tsv`, 83 cases) | ✅ 83/83 · holdout of 30 unseen phrasings: 28/30, no false corrections |
+| Local LLM for corrections (Qwen3 0.6B / 1.7B, deletion-only) | ❌ evaluated and rejected: 48–65/83 and 100–900 ms slower than rules (`evoo-cli corpus --llm`) |
 | LLM path (unresolved corrections, Hinglish) | ~1–4 s on 8 GB M1 — opt-in, only when needed |
 | Qwen3 4B | No better on the English set and 3–5× slower on 8 GB; meant for 16 GB+ Macs |
 | Hinglish | ⚠️ Mixed. Whisper outputs Devanagari and the 1.7B model sometimes translates or misses corrections when romanizing. Needs a better model — top roadmap item |

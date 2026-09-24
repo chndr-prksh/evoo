@@ -18,6 +18,8 @@ public final class DictationPipeline {
         public var postMs: Int
         public var refineMs: Int
         public var usedLLM: Bool
+        /// A spoken command to carry out: press Return after pasting, or undo the last dictation.
+        public var action: DictationCommands.Action? = nil
 
         public var totalMs: Int { asrMs + postMs + refineMs }
 
@@ -90,6 +92,9 @@ public final class DictationPipeline {
         var text = post.text
         var refineTime: Duration = .zero
         var usedLLM = false
+        if post.action == .undo {
+            return Output(text: "", raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: 0, usedLLM: false, action: .undo)
+        }
         if llm == .corrections, refiner.isLoaded, CorrectionPrompt.hasCue(raw) {
             t = clock.now
             if let corrected = await correctWithLLM(raw, language: language, style: style, contextTerms: contextTerms) {
@@ -104,7 +109,8 @@ public final class DictationPipeline {
             refineTime = clock.now - t
             usedLLM = true
         }
-        return Output(text: text, raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: refineTime.ms, usedLLM: usedLLM)
+        return Output(text: text, raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: refineTime.ms, usedLLM: usedLLM,
+                      action: post.action)
     }
 
     /// LLM deletions on the cleaned transcript, then the usual rules/formatting on the result.
@@ -118,11 +124,19 @@ public final class DictationPipeline {
     }
 
     /// Everything after ASR except the LLM. Pure and fast. `style` nil = no list/line formatting.
+    public struct Processed: Sendable {
+        public var text: String
+        public var unresolved: Bool
+        public var action: DictationCommands.Action?
+    }
+
     public func postProcess(_ raw: String, language: DictationLanguage, style: OutputStyle? = .plain,
-                            contextTerms: [String] = []) -> DictationRules.Result
+                            contextTerms: [String] = []) -> Processed
     {
-        var text = TextCleaner.clean(raw)
-        guard !text.isEmpty else { return .init(text: "", unresolved: false) }
+        // Spoken commands first ("capitalize each word, …", "… press enter", "undo that").
+        let command = DictationCommands.parse(TextCleaner.clean(raw))
+        var text = command.text
+        guard !text.isEmpty else { return .init(text: "", unresolved: false, action: command.action) }
         // The user's dictionary first, then names on screen: "Deva" → "Divya".
         let names = contextTerms.isEmpty ? dictionary : PersonalDictionary(dictionary.terms + contextTerms)
         if !names.isEmpty {
@@ -135,7 +149,8 @@ public final class DictationPipeline {
         if language == .english {
             result.text = formatNumbers(result.text) // "four hundred ms" → "400 ms"
         }
-        return result
+        return Processed(text: DictationCommands.applyCasing(command.casing, to: result.text),
+                         unresolved: result.unresolved, action: command.action)
     }
 
     /// Runs NeMo ITN line by line, leaving list markers alone and keeping ordinals used as words

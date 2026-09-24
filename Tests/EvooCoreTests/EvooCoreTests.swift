@@ -349,3 +349,64 @@ import Testing
         #expect(CorrectionPrompt.apply([9], to: "short text") == nil) // out of range
     }
 }
+
+@Suite struct CommandTests {
+    func run(_ s: String) -> (String, DictationCommands.Action?) {
+        let p = DictationCommands.parse(s)
+        return (DictationCommands.applyCasing(p.casing, to: p.text), p.action)
+    }
+
+    @Test func casing() {
+        #expect(run("Capitalize each word, the lord of the rings.").0 == "The Lord Of The Rings.")
+        #expect(run("capitalise every word my name is divya").0 == "My Name Is Divya")
+        #expect(run("Title case: project kickoff notes").0 == "Project Kickoff Notes")
+        #expect(run("All caps, urgent please read.").0 == "URGENT PLEASE READ.")
+        #expect(run("Lowercase, Hello World.").0 == "hello world.")
+    }
+
+    @Test func quotesAndActions() {
+        #expect(run("He said quote I'll be there end quote.").0 == "He said \"I'll be there\".")
+        let (text, action) = run("See you soon, press enter.")
+        #expect(text == "See you soon")
+        #expect(action == .pressEnter)
+        #expect(run("Undo that.").1 == .undo)
+        #expect(run("Delete that").1 == .undo)
+    }
+
+    @Test func ordinarySpeechIsUntouched() {
+        #expect(run("I love capital cities.").0 == "I love capital cities.")
+        #expect(run("Don't delete that file.").1 == nil)
+        #expect(run("Press enter when you're ready to continue the setup.").1 == nil)
+        #expect(run("The quote was too expensive.").0 == "The quote was too expensive.")
+    }
+}
+
+@Suite struct LearningTests {
+    @Test func learnsCorrectedName() {
+        let l = EditLearner.lessons(inserted: "Hi Deva, how are you?", edited: "Hi Divya, how are you?")
+        #expect(l.contains(.word(heard: "Deva", meant: "Divya")))
+    }
+
+    @Test func learnsHabitsAndIgnoresAddedText() {
+        let l = EditLearner.lessons(inserted: "Sounds good, see you at 5.", edited: "sounds good, see you at 5 😀 bring snacks")
+        #expect(l.contains(.finalPeriod(dropped: true)))
+        #expect(l.contains(.firstLetter(lowered: true)))
+        #expect(!l.contains { if case .word = $0 { true } else { false } })
+    }
+
+    @Test func ignoresRewrites() {
+        #expect(EditLearner.lessons(inserted: "Let's meet tomorrow at 5.", edited: "Actually can we do Friday instead").isEmpty)
+    }
+
+    @Test func habitsKickInAfterRepeatedEdits() {
+        var habits = LearnedHabits()
+        let app = "net.whatsapp.WhatsApp"
+        habits.record([.finalPeriod(dropped: true)], app: app)
+        #expect(habits.adapt("See you soon.", app: app) { _ in false } == "See you soon.") // once isn't a habit
+        habits.record([.finalPeriod(dropped: true), .firstLetter(lowered: true)], app: app)
+        habits.record([.firstLetter(lowered: true)], app: app)
+        #expect(habits.adapt("See you soon.", app: app) { _ in false } == "see you soon")
+        #expect(habits.adapt("Divya is here.", app: app) { $0 == "Divya" } == "Divya is here") // names stay capitalized
+        #expect(habits.adapt("See you soon.", app: "com.apple.mail") { _ in false } == "See you soon.") // per app
+    }
+}

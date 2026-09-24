@@ -5,11 +5,12 @@ import EvooCore
 /// Requires Input Monitoring permission. Never swallows events.
 final class FnKeyMonitor {
     enum Event {
-        case fnDown, fnUp, otherKey, escape
+        case fnDown, fnUp, otherKey, escape, returnKey
     }
 
     private static let fnKeyCode: Int64 = 63 // kVK_Function
     private static let escapeKeyCode: Int64 = 53 // kVK_Escape
+    private static let returnKeyCodes: Set<Int64> = [36, 76] // kVK_Return, kVK_ANSI_KeypadEnter
 
     var onEvent: ((Event) -> Void)?
 
@@ -73,6 +74,8 @@ final class FnKeyMonitor {
             let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
             if keyCode == Self.escapeKeyCode {
                 onEvent?(.escape)
+            } else if Self.returnKeyCodes.contains(keyCode), !fnIsDown {
+                onEvent?(.returnKey)
             } else if fnIsDown {
                 onEvent?(.otherKey) // Fn+arrow, Fn+F-key, …
             }

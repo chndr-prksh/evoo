@@ -121,6 +121,22 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Learning") {
+                Toggle("Learn from my edits", isOn: $settings.learnFromEdits)
+                Text("When you fix something Evoo typed, it learns: corrected names join your dictionary, and habits like deleting the final full stop in chat apps are remembered per app. Only learned words and counts are kept — never your text.")
+                    .font(.caption).foregroundStyle(.secondary)
+                let learned = settings.habits.apps.filter { $0.value.dropsFinalPeriod || $0.value.lowercasesStart }
+                ForEach(learned.keys.sorted(), id: \.self) { app in
+                    let h = learned[app]!
+                    LabeledContent(appName(app), value: [h.dropsFinalPeriod ? "no final full stop" : nil,
+                                                         h.lowercasesStart ? "lowercase start" : nil]
+                            .compactMap { $0 }.joined(separator: ", "))
+                }
+                if !settings.habits.apps.isEmpty {
+                    Button("Reset learned habits") { settings.habits = LearnedHabits() }
+                }
+            }
+
             Section("General") {
                 Toggle("Show floating pill", isOn: $settings.showPill)
                 Toggle("Play sounds", isOn: $settings.playSounds)
@@ -158,5 +174,10 @@ struct SettingsView: View {
         guard !word.isEmpty, !settings.personalWords.contains(word) else { return }
         settings.personalWords.append(word)
         newWord = ""
+    }
+
+    private func appName(_ bundleID: String) -> String {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+            .map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") } ?? bundleID
     }
 }

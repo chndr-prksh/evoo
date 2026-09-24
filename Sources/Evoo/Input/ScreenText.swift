@@ -37,6 +37,18 @@ enum ScreenText {
         return texts
     }
 
+    /// The text field that has keyboard focus, unless it's a password field.
+    static func focusedField() -> AXUIElement? {
+        let system = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(system, 0.1)
+        guard let field = element(system, kAXFocusedUIElementAttribute), !isSecure(field) else { return nil }
+        return field
+    }
+
+    static func value(of field: AXUIElement) -> String? {
+        attribute(field, kAXValueAttribute)
+    }
+
     private static func isSecure(_ el: AXUIElement) -> Bool {
         (attribute(el, kAXSubroleAttribute) as String?) == kAXSecureTextFieldSubrole
     }

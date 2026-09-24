@@ -26,6 +26,11 @@ final class AppSettings: ObservableObject {
     @Published var fastestModel: Bool { didSet { save(fastestModel, "fastestModel") } }
     /// Spell names seen on screen (chat header, recipients, text near the cursor) correctly.
     @Published var useScreenContext: Bool { didSet { save(useScreenContext, "useScreenContext") } }
+    /// Learn names and per-app habits from how the user edits dictated text.
+    @Published var learnFromEdits: Bool { didSet { save(learnFromEdits, "learnFromEdits") } }
+    @Published var habits: LearnedHabits {
+        didSet { defaults.set(try? JSONEncoder().encode(habits), forKey: "habits") }
+    }
 
     private init() {
         func value<T: RawRepresentable>(_ key: String, _ fallback: T) -> T where T.RawValue == String {
@@ -52,6 +57,9 @@ final class AppSettings: ObservableObject {
         formatText = bool("formatText", true)
         fastestModel = bool("fastestModel", false)
         useScreenContext = bool("useScreenContext", true)
+        learnFromEdits = bool("learnFromEdits", true)
+        habits = UserDefaults.standard.data(forKey: "habits")
+            .flatMap { try? JSONDecoder().decode(LearnedHabits.self, from: $0) } ?? LearnedHabits()
     }
 
     var resolvedEngine: ASREngineID { engine.resolve(for: language) }

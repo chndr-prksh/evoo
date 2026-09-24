@@ -32,6 +32,27 @@ final class TextInjector {
         if !saved.isEmpty { pasteboard.writeObjects(saved) }
     }
 
+    /// ⌘Z — "undo that".
+    func undo() {
+        postKey(CGKeyCode(kVK_ANSI_Z), flags: .maskCommand)
+    }
+
+    /// Return — "press enter" (sends the message in chat apps).
+    func pressReturn() async {
+        try? await Task.sleep(for: .milliseconds(60)) // let the paste land first
+        postKey(CGKeyCode(kVK_Return), flags: [])
+    }
+
+    private func postKey(_ key: CGKeyCode, flags: CGEventFlags) {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        let down = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true)
+        let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false)
+        down?.flags = flags
+        up?.flags = flags
+        down?.post(tap: .cghidEventTap)
+        up?.post(tap: .cghidEventTap)
+    }
+
     private func postPaste() {
         let source = CGEventSource(stateID: .combinedSessionState)
         let v = CGKeyCode(kVK_ANSI_V)

@@ -37,10 +37,12 @@ final class DictationController: ObservableObject {
     private let refiner = LlamaRefiner()
     private lazy var pipeline = DictationPipeline(refiner: refiner)
     private let injector = TextInjector()
+    private let editWatcher = EditWatcher()
     private let speculator = SpeculativeTranscriber()
     private var speculationLoop: Task<Void, Never>?
     /// Names read from the screen while the user speaks; ready by the time fn goes up.
     private var screenNames: Task<[String], Never>?
+    private var targetApp: String?
 
     private var gesture: HotkeyGesture
     private var gestureTimer: Task<Void, Never>?
@@ -60,6 +62,7 @@ final class DictationController: ObservableObject {
     init() {
         gesture = HotkeyGesture(mode: AppSettings.shared.activationMode)
         hotkeys.onEvent = { [weak self] event in self?.handle(event) }
+        editWatcher.onLessons = { [weak self] lessons, app in self?.learn(lessons, app: app) }
         recorder.onLevel = { [weak self] level in
             Task { @MainActor in self?.push(level: level) }
         }
@@ -172,6 +175,8 @@ final class DictationController: ObservableObject {
         case .escape:
             if phase == .recording { cancel() }
             return
+        case .returnKey:
+            return editWatcher.observe() // "send" — see what the user changed before it's gone
         case .fnDown where handsFreeFromUI && phase == .recording:
             return stop()
         case .fnDown: apply(gesture.handle(.fnDown(at: now)))
@@ -216,6 +221,7 @@ final class DictationController: ObservableObject {
 
     func start() {
         guard phase == .idle || isMessage else { return }
+        editWatcher.observe()
         // Don't record if the model for this language isn't ready — say so instead of hanging.
         guard engines.ready(settings.resolvedEngine) != nil else {
             gesture.reset()
@@ -273,6 +279,7 @@ final class DictationController: ObservableObject {
         phase = .transcribing
         // Style the text for the app that will receive it: Markdown, bullets, or a single line for terminals.
         let targetApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        self.targetApp = targetApp
         let style: OutputStyle? = settings.formatText ? OutputStyle.forApp(targetApp) : nil
         session += 1
         let current = session
@@ -324,10 +331,22 @@ final class DictationController: ObservableObject {
                                             contextTerms: names, llm: willUseLLM ? .whenNeeded : .off)
             // Cancelled, timed out, or superseded by a newer dictation: don't paste stale text.
             guard !Task.isCancelled, session == self.session else { return }
+            if out.action == .undo {
+                injector.undo()
+                return (phase = .idle)
+            }
             guard !out.text.isEmpty else { return (phase = .idle) }
 
-            await injector.insert(out.text, restoreClipboard: settings.restoreClipboard)
-            lastText = out.text
+            // Habits learned from the user's edits in this app (e.g. no final full stop in WhatsApp).
+            let text = settings.learnFromEdits
+                ? settings.habits.adapt(out.text, app: targetApp) { [personal = settings.personalWords] word in
+                    personal.contains(word) || !DictationPipeline.isKnownWord(word.lowercased())
+                }
+                : out.text
+            await injector.insert(text, restoreClipboard: settings.restoreClipboard)
+            if settings.learnFromEdits, out.action != .pressEnter { editWatcher.didInsert(text, app: targetApp) }
+            if out.action == .pressEnter { await injector.pressReturn() }
+            lastText = text
             let totalMs = (ContinuousClock.now - releasedAt).ms
             lastTimings = String(format: "%.1fs audio · ", seconds) + out.summary
                 + " · fn up → pasted \(totalMs) ms" + (reused ? " (ready early)" : "")
@@ -338,6 +357,24 @@ final class DictationController: ObservableObject {
             show(error.localizedDescription)
         }
         watchdog?.cancel()
+    }
+
+    /// Applies what the user's edits taught us: new names go into the personal dictionary,
+    /// habits are counted per app.
+    private func learn(_ lessons: [EditLearner.Lesson], app: String) {
+        guard settings.learnFromEdits else { return }
+        var learned: [String] = []
+        for case let .word(heard, meant) in lessons {
+            // Only names and unusual words — not ordinary typo fixes like "there" → "their".
+            let isName = meant.first?.isUppercase == true || !DictationPipeline.isKnownWord(meant.lowercased())
+            guard isName, meant.count >= 2, heard != meant, !settings.personalWords.contains(meant) else { continue }
+            settings.personalWords.append(meant)
+            learned.append(meant)
+        }
+        settings.habits.record(lessons, app: app)
+        if !learned.isEmpty, phase == .idle || isMessage {
+            show("Learned “\(learned.joined(separator: "”, “"))”")
+        }
     }
 
     func repasteLast() {
