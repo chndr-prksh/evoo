@@ -103,6 +103,44 @@ case "hold":
         print("\(URL(fileURLWithPath: path).lastPathComponent): fn up → text \(ms)\(reused ? "  (ready early)" : "")  \(out.text.prefix(60))")
     }
 
+case "corpus":
+    // Scores self-correction handling on a TSV of "input<TAB>expected" (Benchmarks/corrections.tsv).
+    let quiet = flag("--quiet")
+    let fallbackOnly = flag("--fallback") // LLM only when the rules left a correction word untouched
+    let path = inputs.first ?? "Benchmarks/corrections.tsv"
+    let cases = try String(contentsOfFile: path, encoding: .utf8).split(separator: "\n")
+        .filter { !$0.hasPrefix("#") && $0.contains("\t") }
+        .map { line -> (String, String) in
+            let parts = line.split(separator: "\t", maxSplits: 1).map(String.init)
+            return (parts[0], parts[1])
+        }
+    func loose(_ s: String) -> String { s.lowercased().filter { $0.isLetter || $0.isNumber || $0 == " " || $0 == ":" } }
+    var exact = 0, close = 0
+    var worst = Duration.zero, total = Duration.zero
+    if useLLM { try await loadRefiner() }
+    var llmRuns = 0, llmAccepted = 0
+    for (input, expected) in cases {
+        let t0 = clock.now
+        var out = pipeline.postProcess(input, language: .english, style: nil).text
+        let rulesActed = TextCleaner.clean(input).lowercased().filter(\.isLetter) != out.lowercased().filter(\.isLetter)
+        if useLLM, CorrectionPrompt.hasCue(input), !(fallbackOnly && rulesActed) {
+            llmRuns += 1
+            if let corrected = await pipeline.correctWithLLM(input, language: .english, style: nil) {
+                out = corrected
+                llmAccepted += 1
+            }
+        }
+        let dt = clock.now - t0
+        total += dt; worst = max(worst, dt)
+        if out == expected { exact += 1 }
+        if loose(out) == loose(expected) { close += 1 } else if !quiet {
+            print("✘ \(input)\n    got:  \(out)\n    want: \(expected)")
+        }
+    }
+    let n = cases.count
+    let mode = useLLM ? "rules + \(model.rawValue)\(fallbackOnly ? " as fallback" : "") (ran on \(llmRuns), accepted \(llmAccepted))" : "rules"
+    print("\n\(mode): \(close)/\(n) correct (\(exact) exact incl. punctuation) · avg \((total / n).formatted(.units(allowed: [.microseconds]))), worst \(worst.formatted(.units(allowed: [.milliseconds])))")
+
 case "post":
     for input in inputs {
         let t0 = clock.now

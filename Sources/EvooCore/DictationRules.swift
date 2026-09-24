@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 
 /// Deterministic dictation cleanup that runs in microseconds, so most dictations never need the LLM:
 ///  • filler words:     "um so we should ship"               → "so we should ship"
@@ -169,6 +170,7 @@ public enum DictationRules {
     /// Multi-word dates: "day after tomorrow", "next week", "this Friday", "the weekend".
     static let datePhrases: [[String]] = [
         ["day", "after", "tomorrow"], ["day", "before", "yesterday"], ["the", "day", "after"],
+        ["the", "week", "after"], ["the", "week", "after", "next"],
         ["next", "week"], ["this", "week"], ["next", "month"], ["this", "month"], ["next", "year"],
         ["this", "weekend"], ["next", "weekend"], ["the", "weekend"], ["tomorrow", "morning"],
         ["tomorrow", "evening"], ["tomorrow", "night"], ["tonight"], ["this", "evening"], ["this", "morning"],
@@ -211,10 +213,15 @@ public enum DictationRules {
                 let before = t[(i - k) ..< i].map(\.norm), after = t[(i + 1) ... (i + k)].map(\.norm)
                 if before == after { echoed = k; break }
             }
+            var start = i - echoed
+            // Partial echo: "2 laptops, not 2, 3 laptops" repeats only the first word of what's taken back.
+            if echoed == 0, i + 1 < t.count, let j = (max(0, i - 3) ..< i).last(where: { t[$0].norm == t[i + 1].norm }) {
+                echoed = 1
+                start = j
+            }
             let restStart = i + 1 + echoed
             // Needs a replacement after the echo, in the same sentence: "not tomorrow, <day after tomorrow>".
             guard echoed > 0, restStart < t.count, !t[restStart - 1].endsSentence else { i += 1; continue }
-            let start = i - echoed
             t.removeSubrange(start ..< restStart)
             if start > 0 { t[start - 1].raw = t[start - 1].bare } // drop a comma left dangling
             i = start + 1
@@ -266,16 +273,34 @@ public enum DictationRules {
                 searchFrom = start
                 continue
             }
-            guard !prefix.isEmpty, !repair.isEmpty,
-                  let s = reparandumStart(prefix: prefix, repair: repair)
-            else {
+            guard !prefix.isEmpty, !repair.isEmpty, let plan = plan(prefix: prefix, repair: repair) else {
                 unresolved = true
                 searchFrom = cue.end
                 continue
             }
-            var fixed = Array(prefix[..<s]) + repair
-            if s == 0, let first = fixed.first { fixed[0].raw = capitalized(first.raw) }
-            if s > 0 { fixed[s - 1].raw = fixed[s - 1].bare } // drop the comma that led into the cue
+            var fixed: [Token]
+            switch plan {
+            case let .truncate(s, unit):
+                var body = repair
+                if !unit.isEmpty, var last = body.popLast() {
+                    // "5." + ["boxes"] → "5 boxes."
+                    let end = last.trailingPunctuation
+                    last.raw = last.bare
+                    body += [last] + unit.map { Token($0) }
+                    body[body.count - 1].raw += end
+                }
+                fixed = Array(prefix[..<s]) + body
+                if s == 0, let first = fixed.first { fixed[0].raw = capitalized(first.raw) }
+                if s > 0 { fixed[s - 1].raw = fixed[s - 1].bare } // drop the comma that led into the cue
+            case let .swap(i):
+                fixed = prefix
+                let tail = fixed[i].trailingPunctuation
+                fixed.replaceSubrange(i ... i, with: repair.map { Token($0.bare) })
+                fixed[i + repair.count - 1].raw += tail
+                // The sentence's end moves from the repair to the (unchanged) prefix.
+                let end = repair.last?.trailingPunctuation ?? ""
+                fixed[fixed.count - 1].raw = fixed[fixed.count - 1].bare + end
+            }
             tokens.replaceSubrange(sentenceStart ..< repairEnd, with: fixed)
             searchFrom = sentenceStart
         }
@@ -328,30 +353,80 @@ public enum DictationRules {
         return true
     }
 
-    /// Index in `prefix` where the part being corrected begins, or nil if unclear.
-    static func reparandumStart(prefix: [Token], repair: [Token]) -> Int? {
+    /// How to apply a correction to the words before the cue.
+    enum Plan: Equatable {
+        /// Drop everything from `at` and continue with the repair; `unit` words said after the old
+        /// value are kept ("Order 3 boxes, actually 5" → "Order 5 boxes").
+        case truncate(at: Int, unit: [String] = [])
+        /// Replace the word at `index` in place ("CC Tom on the email, I mean Tim" → "CC Tim on the email").
+        case swap(index: Int)
+    }
+
+    static let determiners: Set<String> = ["a", "an", "the", "this", "that", "my", "your", "our", "their", "his",
+                                           "her", "next", "last"]
+    static let functionWords: Set<String> = ["him", "her", "it", "them", "me", "you", "us", "the", "a", "an", "to",
+                                             "of", "in", "on", "at", "for", "and", "or", "is", "was"]
+    /// A sentence that stops on one of these was abandoned mid-thought ("I think we should, actually…").
+    static let danglingEnds: Set<String> = ["should", "could", "would", "will", "can", "might", "must", "to", "the",
+                                            "a", "an", "and", "but", "or", "so", "gonna", "wanna", "we", "i", "just"]
+
+    static func plan(prefix: [Token], repair: [Token]) -> Plan? {
         let head = repair[0].norm
         // 1. The repair restarts from a word already said: "to Rahul, sorry, to Priya".
-        if let i = prefix.lastIndex(where: { $0.norm == head }) { return i }
-        // 2. Same kind of word: numbers/times, weekdays, months, relative days.
+        if let i = prefix.lastIndex(where: { $0.norm == head }) { return .truncate(at: i) }
+        // 2. Same kind of value: numbers/times, weekdays, months, relative days.
         if let kind = WordKind(head) {
             var end = prefix.count
             while end > 0, WordKind(prefix[end - 1].norm) != kind { end -= 1 }
             if end > 0 {
                 var start = end - 1
                 while start > 0, WordKind(prefix[start - 1].norm) == kind { start -= 1 }
-                return start
+                // A bare new value keeps the old value's unit: "3 boxes, actually 5" → "5 boxes".
+                let bareValue = repair.allSatisfy { WordKind($0.norm) == kind }
+                let unit = bareValue ? prefix[end...].map(\.bare).filter { !$0.isEmpty } : []
+                return .truncate(at: start, unit: unit.count <= 2 ? unit : [])
             }
         }
-        // 3. The repair ends on a word already said: "meet tomorrow, no, day after tomorrow".
-        if let lastWord = repair.last?.norm, let i = prefix.lastIndex(where: { $0.norm == lastWord }) {
-            return i
+        // 3. Restart from an article: "a 7 out of 10, actually an 8", "next week, no, the week after".
+        if determiners.contains(head), let i = prefix.lastIndex(where: { determiners.contains($0.norm) }) {
+            return .truncate(at: i)
         }
-        // 4. A short repair that is a name replaces the same number of trailing words: "call John, sorry, Mike".
-        if repair.count <= 2, prefix.count > repair.count, repair[0].bare.first?.isUppercase == true {
-            return prefix.count - repair.count
+        // 4. A new action replaces the old one: "Email him, no, call him" → "Call him".
+        if startsWithVerb(repair), startsWithVerb(prefix) || startsWithVerb(prefix, asInstruction: true) {
+            return .truncate(at: 0)
         }
+        // 5. The first attempt was abandoned mid-phrase: "I think we should, actually let's ship it".
+        if let last = prefix.last, danglingEnds.contains(last.norm) { return .truncate(at: 0) }
+        // 6. A name replaces a name: "CC Tom on the email, I mean Tim", "Call John, sorry, Mike".
+        if repair.count <= 2, repair.allSatisfy({ $0.bare.first?.isUppercase == true }),
+           let i = prefix.indices.dropFirst().last(where: {
+               prefix[$0].bare.first?.isUppercase == true && prefix[$0].norm != "i" && WordKind(prefix[$0].norm) == nil
+           })
+        {
+            return .swap(index: i)
+        }
+        // 7. The repair ends on a content word already said: "meet tomorrow, no, day after tomorrow".
+        if let lastWord = repair.last?.norm, !functionWords.contains(lastWord),
+           let i = prefix.lastIndex(where: { $0.norm == lastWord })
+        {
+            return .truncate(at: i)
+        }
+        // 8. A one-word repair replaces the last word: "Buy apples, no, oranges", "blue, actually green".
+        //    Never a pronoun: "I love you, I mean it" is not a correction.
+        if repair.count == 1, prefix.count > 1, !functionWords.contains(head) { return .truncate(at: prefix.count - 1) }
         return nil
+    }
+
+    /// Whether the phrase opens with a verb. `asInstruction` reads it after "to" ("to email him"),
+    /// which settles words like "email" that the tagger otherwise calls nouns.
+    static func startsWithVerb(_ tokens: [Token], asInstruction: Bool = false) -> Bool {
+        let phrase = tokens.prefix(4).map(\.bare).joined(separator: " ").lowercased()
+        guard !phrase.isEmpty, !functionWords.contains(tokens[0].norm) else { return false }
+        let text = asInstruction ? "to " + phrase : phrase
+        let tagger = NLTagger(tagSchemes: [.lexicalClass])
+        tagger.string = text
+        let first = asInstruction ? text.index(text.startIndex, offsetBy: 3) : text.startIndex
+        return tagger.tag(at: first, unit: .word, scheme: .lexicalClass).0 == .verb
     }
 
     enum WordKind: Equatable {
@@ -373,7 +448,7 @@ public enum DictationRules {
             "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
             "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
             "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety", "hundred", "thousand", "million",
-            "half", "quarter",
+            "half", "quarter", "noon", "midnight",
         ]
         static let weekdays: Set<String> = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
         static let months: Set<String> = [

@@ -31,6 +31,8 @@ public final class DictationPipeline {
         case off
         /// Only for unresolved corrections and non-English output.
         case whenNeeded
+        /// Deletion-only self-correction by a small LLM, only when a correction word is present.
+        case corrections
     }
 
     private let refiner: LlamaRefiner
@@ -48,7 +50,10 @@ public final class DictationPipeline {
 
     /// Loads the word list off the critical path (takes ~100 ms once).
     public static func preload() {
-        DispatchQueue.global(qos: .utility).async { _ = knownWords.count }
+        DispatchQueue.global(qos: .utility).async {
+            _ = knownWords.count
+            _ = DictationRules.apply("Email him, no, call him.") // loads Apple's language tagger (~300 ms once)
+        }
     }
 
     public init(refiner: LlamaRefiner) {
@@ -85,6 +90,13 @@ public final class DictationPipeline {
         var text = post.text
         var refineTime: Duration = .zero
         var usedLLM = false
+        if llm == .corrections, refiner.isLoaded, CorrectionPrompt.hasCue(raw) {
+            t = clock.now
+            if let corrected = await correctWithLLM(raw, language: language, style: style, contextTerms: contextTerms) {
+                text = corrected
+            }
+            return Output(text: text, raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: (clock.now - t).ms, usedLLM: true)
+        }
         let needsLLM = post.unresolved || language == .hinglish // Hinglish needs romanizing
         if llm == .whenNeeded, needsLLM, !text.isEmpty, refiner.isLoaded {
             t = clock.now
@@ -93,6 +105,16 @@ public final class DictationPipeline {
             usedLLM = true
         }
         return Output(text: text, raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: refineTime.ms, usedLLM: usedLLM)
+    }
+
+    /// LLM deletions on the cleaned transcript, then the usual rules/formatting on the result.
+    /// Returns nil if the model's answer wasn't a safe edit (the rule-based result stands).
+    public func correctWithLLM(_ raw: String, language: DictationLanguage, style: OutputStyle?,
+                               contextTerms: [String] = []) async -> String?
+    {
+        let cleaned = TextCleaner.clean(raw)
+        guard let edited = try? await refiner.correct(cleaned) else { return nil }
+        return postProcess(edited, language: language, style: style, contextTerms: contextTerms).text
     }
 
     /// Everything after ASR except the LLM. Pure and fast. `style` nil = no list/line formatting.
@@ -136,14 +158,22 @@ public final class DictationPipeline {
     static let ordinalWords: Set<String> = ["first", "second", "third", "firstly", "secondly", "thirdly", "fourth",
                                             "fifth", "last", "next"]
 
+    static let numberContext: Set<String> = [
+        "hundred", "thousand", "million", "billion", "twenty", "thirty", "forty", "fifty", "sixty", "seventy",
+        "eighty", "ninety", "point", "percent", "dollar", "dollars", "hour", "hours", "minute", "minutes", "day",
+        "days", "week", "weeks", "month", "months", "year", "years", "am", "pm", "oclock", "and", "number",
+    ]
+
     static func maskOrdinals(_ text: String) -> (String, [(String, String)]) {
         var words = text.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
         var restore: [(String, String)] = []
         for i in words.indices {
             let bare = words[i].lowercased().filter(\.isLetter)
-            guard ordinalWords.contains(bare) else { continue }
             let prev = i > 0 ? words[i - 1].lowercased().filter(\.isLetter) : ""
             let next = i + 1 < words.count ? words[i + 1].lowercased().filter(\.isLetter) : ""
+            // "Which one do you mean" must not become "Which 1"; "one hundred", "one hour" still convert.
+            let isPronounOne = bare == "one" && !numberContext.contains(prev) && !numberContext.contains(next)
+            guard ordinalWords.contains(bare) || isPronounOne else { continue }
             let afterOf = i + 2 < words.count ? words[i + 2].lowercased().filter(\.isLetter) : ""
             // A date — "January first", "the first of May" — is left for ITN to write as "January 1".
             if months.contains(prev) || (next == "of" && months.contains(afterOf)) { continue }

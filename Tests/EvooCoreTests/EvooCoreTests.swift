@@ -328,3 +328,24 @@ import Testing
         #expect(dict.apply("take your name Deva.") { words.contains($0) } == "take your name Divya.")
     }
 }
+
+@Suite struct CorrectionPromptTests {
+    @Test func parsesAnswers() {
+        #expect(CorrectionPrompt.parse("3-4") == [2, 3])
+        #expect(CorrectionPrompt.parse("2, 6-8") == [1, 5, 6, 7])
+        #expect(CorrectionPrompt.parse("none") == [])
+        #expect(CorrectionPrompt.parse("Sure! The answer is") == nil)
+    }
+
+    @Test func appliesDeletions() {
+        #expect(CorrectionPrompt.apply([2, 3], to: "Let's meet tomorrow, no, day after tomorrow.") == "Let's meet day after tomorrow.")
+        #expect(CorrectionPrompt.apply([0, 1, 2], to: "Email him, no, call him.") == "Call him.")
+        #expect(CorrectionPrompt.apply([0, 1, 2], to: "Ask Sarah, no, ask Emma to review it.") == "Ask Emma to review it.")
+    }
+
+    @Test func rejectsUnsafeEdits() {
+        #expect(CorrectionPrompt.apply([0, 1], to: "Call him now please.") == nil) // no cue deleted
+        #expect(CorrectionPrompt.apply([0, 1, 2, 3], to: "no no no no") == nil) // deletes everything
+        #expect(CorrectionPrompt.apply([9], to: "short text") == nil) // out of range
+    }
+}

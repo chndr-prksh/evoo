@@ -1,0 +1,92 @@
+# input<TAB>expected — self-corrections as a speech model transcribes them. Lines starting with # are ignored.
+# Dates
+I want to go to play tomorrow not tomorrow, day after tomorrow.	I want to go to play day after tomorrow.
+Let's meet tomorrow, no, day after tomorrow.	Let's meet day after tomorrow.
+Let's meet tomorrow. No, day after tomorrow.	Let's meet day after tomorrow.
+The launch is on Monday, sorry, Tuesday.	The launch is on Tuesday.
+The launch is on Monday. Actually, Tuesday.	The launch is on Tuesday.
+We fly out next week, no wait, the week after.	We fly out the week after.
+Can we do this Friday, I mean next Friday?	Can we do next Friday?
+The deadline is March 3rd, no, March 5th.	The deadline is March 5th.
+I'll be back on the 12th, sorry, the 14th.	I'll be back on the 14th.
+Let's do it today, no, tonight.	Let's do it tonight.
+Book it for the weekend, actually Monday morning.	Book it for Monday morning.
+She joins in June, no, July.	She joins in July.
+# Times
+Hey, I'm planning to go out tomorrow at 4 not 4 PM, 5 PM.	Hey, I'm planning to go out tomorrow at 5 PM.
+The meeting is at 3:30, actually make it 4.	The meeting is at 4.
+Call me at 6, no wait, 7:30.	Call me at 7:30.
+Dinner is at 8 PM, sorry, 8:30 PM.	Dinner is at 8:30 PM.
+The train leaves at 9 AM. No, 10 AM.	The train leaves at 10 AM.
+Let's start at noon, actually 1 PM.	Let's start at 1 PM.
+The call is at 5, I mean 5:30.	The call is at 5:30.
+Pick me up at 7, not 7, 7:15.	Pick me up at 7:15.
+# Numbers and amounts
+Book a table for 4, no, 6 people.	Book a table for 6 people.
+The budget is 500 dollars, sorry, 600 dollars.	The budget is 600 dollars.
+Order 3 boxes, actually make that 5.	Order 5 boxes.
+It costs 20 dollars, no, 25.	It costs 25 dollars.
+We need 2 laptops, not 2, 3 laptops.	We need 3 laptops.
+Set the timer for 10 minutes, no, 15 minutes.	Set the timer for 15 minutes.
+The room is on floor 4, sorry, floor 5.	The room is on floor 5.
+Give it a 7 out of 10, actually an 8.	Give it an 8.
+# Names and people
+Send the invoice to Rahul, sorry, to Priya by Friday.	Send the invoice to Priya by Friday.
+Send it to John, not John, Mike.	Send it to Mike.
+Call John, sorry, Mike.	Call Mike.
+Ask Sarah, no, ask Emma to review it.	Ask Emma to review it.
+CC Tom on the email, I mean Tim.	CC Tim on the email.
+Tell Alex, actually tell Sam, that the build is green.	Tell Sam that the build is green.
+Invite Ravi and Neha, no, Ravi and Pooja.	Invite Ravi and Pooja.
+The report goes to the CEO, sorry, the CFO.	The report goes to the CFO.
+# Places and things
+Let's meet at Starbucks, no, at the cafe next door.	Let's meet at the cafe next door.
+Ship it to London, sorry, Manchester.	Ship it to Manchester.
+Bring the red folder, no, the blue folder.	Bring the blue folder.
+Use the staging server, actually the production server.	Use the production server.
+Book a flight to Delhi, not Delhi, Mumbai.	Book a flight to Mumbai.
+Put it in the kitchen, I mean the living room.	Put it in the living room.
+Buy apples, no, oranges.	Buy oranges.
+Open the settings page, sorry, the profile page.	Open the profile page.
+# Verbs and actions
+Email him, no, call him.	Call him.
+I'll push the fix tonight, actually I'll push it tomorrow.	I'll push it tomorrow.
+Delete the file, sorry, rename the file.	Rename the file.
+Let's walk there, no, let's take a cab.	Let's take a cab.
+Approve the request, wait, reject it.	Reject it.
+# Restarts and phrasing
+I think we should, actually let's just ship it.	Let's just ship it.
+We could, we could push the launch to next week.	We could push the launch to next week.
+The the build is green.	The build is green.
+Um, so basically I was thinking we could push it.	So basically I was thinking we could push it.
+I love pizza. Scratch that. I love pasta.	I love pasta.
+Send the draft today. Scratch that, send it tomorrow.	Send it tomorrow.
+Let's go with option A, no, option B.	Let's go with option B.
+Make the button blue, actually green.	Make the button green.
+It's due Thursday, correction, Wednesday.	It's due Wednesday.
+Meet me at gate 12, or rather gate 14.	Meet me at gate 14.
+# Must stay unchanged
+There is no milk in the fridge.	There is no milk in the fridge.
+No, I don't think so.	No, I don't think so.
+I actually like this design.	I actually like this design.
+Sorry for the late reply.	Sorry for the late reply.
+I'm sorry, I can't make it today.	I'm sorry, I can't make it today.
+Wait for me at the station.	Wait for me at the station.
+I mean it, this is great work.	I mean it, this is great work.
+I do not know the answer.	I do not know the answer.
+I'm free tomorrow, not today.	I'm free tomorrow, not today.
+Call me at 5, not 4.	Call me at 5, not 4.
+We can make it work.	We can make it work.
+I know that that is hard.	I know that that is hard.
+Actually, that's a good point.	Actually, that's a good point.
+No problem, see you tomorrow.	No problem, see you tomorrow.
+Not now, maybe later.	Not now, maybe later.
+It's not about the money.	It's not about the money.
+He said no to the offer.	He said no to the offer.
+We need milk, eggs, and bread.	We need milk, eggs, and bread.
+Pick 3, 4, or 5 of them.	Pick 3, 4, or 5 of them.
+Which one do you mean, the red or the blue?	Which one do you mean, the red or the blue?
+It's Monday, not Tuesday, right?	It's Monday, not Tuesday, right?
+I'll wait, no rush.	I'll wait, no rush.
+Sorry, can you repeat that?	Sorry, can you repeat that?
+Make that call before 5.	Make that call before 5.

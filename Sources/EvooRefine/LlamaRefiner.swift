@@ -72,9 +72,23 @@ public final class LlamaRefiner: @unchecked Sendable {
         let raw = try await run { [self] in
             try primePrefix(RefinePrompt.prefix(language: language))
             let suffix = RefinePrompt.suffix(transcript: transcript, thinkBlock: loadedModel?.usesThinkBlock ?? true)
-            return try generate(suffix: suffix, transcript: transcript)
+            let budget = RefinePrompt.maxTokens(forInputTokens: tokenize(transcript, vocab: vocab!, addSpecial: false).count)
+            return try generate(suffix: suffix, maxTokens: budget)
         }
         return RefinePrompt.accept(refined: raw, input: transcript, language: language) ?? transcript
+    }
+
+    /// Self-correction as deletions (see `CorrectionPrompt`). Returns nil when the model's answer
+    /// isn't a safe edit, so the caller keeps the rule-based result.
+    public func correct(_ text: String) async throws -> String? {
+        let answer = try await run { [self] in
+            try primePrefix(CorrectionPrompt.prefix)
+            // The answer is a few numbers ("3-4", "none"), so a tiny budget keeps it fast.
+            return try generate(suffix: CorrectionPrompt.suffix(text, thinkBlock: loadedModel?.usesThinkBlock ?? true),
+                                maxTokens: 12)
+        }
+        guard let indices = CorrectionPrompt.parse(answer) else { return nil }
+        return CorrectionPrompt.apply(indices, to: text)
     }
 
     // MARK: - llama.cpp
@@ -94,19 +108,18 @@ public final class LlamaRefiner: @unchecked Sendable {
         cachedPrefix = tokens
     }
 
-    private func generate(suffix: String, transcript: String) throws -> String {
+    private func generate(suffix: String, maxTokens: Int) throws -> String {
         guard let context, let vocab, let sampler else { throw RefinerError.notLoaded }
         llama_sampler_reset(sampler)
 
         let tokens = tokenize(suffix, vocab: vocab, addSpecial: false)
         let room = Int(Self.contextSize) - cachedPrefix.count - tokens.count - 1
         guard !tokens.isEmpty, room > 32 else { throw RefinerError.inputTooLong }
-        let budget = RefinePrompt.maxTokens(forInputTokens: tokenize(transcript, vocab: vocab, addSpecial: false).count)
         try decode(tokens)
 
         var bytes: [UInt8] = []
         var piece = [CChar](repeating: 0, count: 256)
-        for _ in 0 ..< min(budget, room) {
+        for _ in 0 ..< min(maxTokens, room) {
             var token = llama_sampler_sample(sampler, context, -1)
             if llama_vocab_is_eog(vocab, token) { break }
             let n = llama_token_to_piece(vocab, token, &piece, Int32(piece.count), 0, false)
