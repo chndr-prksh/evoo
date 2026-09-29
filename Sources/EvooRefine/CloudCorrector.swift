@@ -98,6 +98,9 @@ public final class CloudCorrector: @unchecked Sendable {
             // Reasoning models spend tokens thinking first; keep it minimal and leave room for the answer.
             body["reasoning_effort"] = "low"
             body["max_tokens"] = 256
+        } else if model.lowercased().contains("qwen3") {
+            // Qwen3 can skip its thinking phase entirely — essential for a sub-300 ms answer.
+            body["reasoning_effort"] = "none"
         }
 
         var request = URLRequest(url: provider.baseURL.appendingPathComponent("chat/completions"))
