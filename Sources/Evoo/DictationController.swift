@@ -349,6 +349,7 @@ final class DictationController: ObservableObject {
             if await runMacCommand(raw) { return }
             if runAppCommand(raw) { return }
             if try await rewriteSelectionIfAsked(raw, selection: selectionAtStart, session: session) { return }
+            if try await composeIfAsked(raw, session: session) { return }
             // Smart cleanup (16 GB+): the local LLM polishes the dictation after the rules.
             // Otherwise the LLM only runs for Hinglish (multilingual builds).
             let policy: DictationPipeline.LLMPolicy = smartCleanupReady ? .polish
@@ -356,7 +357,7 @@ final class DictationController: ObservableObject {
             if policy != .off { phase = .refining }
             let names = await screenNames?.value ?? []
             let out = await pipeline.finish(raw: raw, asrMs: asrMs, language: language, style: style,
-                                            contextTerms: names, llm: policy)
+                                            contextTerms: names, tone: Tone.forApp(targetApp), llm: policy)
             // Cancelled, timed out, or superseded by a newer dictation: don't paste stale text.
             guard !Task.isCancelled, session == self.session else { return }
             if out.action == .undo {
@@ -470,6 +471,33 @@ final class DictationController: ObservableObject {
         return true
     }
 
+    /// 16 GB Macs: "reply saying …" writes a reply to what's on screen; "translate to X, …" translates what
+    /// you say. Returns true if it handled the dictation.
+    private func composeIfAsked(_ raw: String, session: Int) async throws -> Bool {
+        guard smartCleanupReady else { return false }
+        let said = TextCleaner.clean(raw)
+        var output: String?
+        if let intent = ReplyPrompt.replyIntent(said) {
+            phase = .refining
+            let screen = await Task.detached { ScreenText.capture().joined(separator: "\n") }.value
+            output = try await refiner.reply(screen: screen, intent: intent)
+        } else if let (language, text) = ReplyPrompt.translation(said) {
+            phase = .refining
+            output = try await refiner.rewrite(text, instruction: "Translate to \(language)")
+        } else {
+            return false
+        }
+        guard !Task.isCancelled, session == self.session else { return true }
+        guard let output else {
+            show("Couldn't write that — try again")
+            return true
+        }
+        await injector.insert(Self.spaced(output), restoreClipboard: settings.restoreClipboard)
+        lastText = output
+        phase = .idle
+        return true
+    }
+
     /// Rewrite by voice: text was selected and the dictation is an instruction ("make this formal").
     /// Returns true if it handled the dictation.
     private func rewriteSelectionIfAsked(_ raw: String, selection: String?, session: Int) async throws -> Bool {
@@ -534,6 +562,7 @@ final class DictationController: ObservableObject {
             if runAppCommand(text) { return }
             let selection = smartCleanupReady ? ScreenText.selectedText() : nil
             if (try? await rewriteSelectionIfAsked(text, selection: selection, session: session)) == true { return }
+            if (try? await composeIfAsked(text, session: session)) == true { return }
             // Same path as a real dictation after speech recognition: commands, edits, rules, formatting.
             let out = await pipeline.finish(raw: text, asrMs: 0, language: .english, style: OutputStyle.forApp(app),
                                             llm: smartCleanupReady ? .polish : .off)

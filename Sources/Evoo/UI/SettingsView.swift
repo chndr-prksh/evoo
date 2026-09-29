@@ -66,6 +66,13 @@ struct SettingsView: View {
             }
 
             Section("Personal dictionary") {
+                Menu("Add a vocabulary pack") {
+                    ForEach(VocabularyPacks.packs, id: \.name) { pack in
+                        Button("\(pack.name) (\(pack.terms.count) terms)") {
+                            settings.personalWords += pack.terms.filter { !settings.personalWords.contains($0) }
+                        }
+                    }
+                }
                 Toggle("Recognize names on screen", isOn: $settings.useScreenContext)
                 Text("While you dictate, Evoo reads names visible in the current window — a chat's contact, email recipients, the text you're replying to — so it spells them right. Read locally for that dictation only; never stored. Password fields are skipped.")
                     .font(.caption).foregroundStyle(.secondary)

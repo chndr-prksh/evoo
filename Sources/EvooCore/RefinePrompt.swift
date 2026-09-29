@@ -69,11 +69,12 @@ public enum RefinePrompt {
     ]
 
     /// Static part: system prompt and few-shot turns. Identical for every dictation in a language.
-    public static func prefix(language: DictationLanguage) -> String {
+    public static func prefix(language: DictationLanguage, tone: Tone = .neutral) -> String {
         var shots = examples
         if language == .hinglish { shots += hinglishExamples }
 
-        var p = "<|im_start|>system\n\(system)\n\n\(language.outputInstruction)<|im_end|>\n"
+        let toneLine = tone.instruction.isEmpty ? "" : "\n" + tone.instruction
+        var p = "<|im_start|>system\n\(system)\n\n\(language.outputInstruction)\(toneLine)<|im_end|>\n"
         for ex in shots {
             p += userTurn(ex.input)
             p += "<|im_start|>assistant\n\(ex.output)<|im_end|>\n"

@@ -614,3 +614,22 @@ import Testing
         #expect(Subtitles.srt(tokens) == "1\n00:00:00,000 --> 00:00:00,900\nHello there.\n\n2\n00:00:01,200 --> 00:00:01,900\nHow are you?\n")
     }
 }
+
+@Suite struct ComposeTests {
+    @Test func recognizesReplyAndTranslate() {
+        #expect(ReplyPrompt.replyIntent("Reply saying Thursday works but not before 3.") == "Thursday works but not before 3.")
+        #expect(ReplyPrompt.replyIntent("respond that I'll join late") == "I'll join late")
+        #expect(ReplyPrompt.replyIntent("write a reply telling them we accept") == "we accept")
+        #expect(ReplyPrompt.replyIntent("I replied to him yesterday.") == nil)
+        #expect(ReplyPrompt.translation("Translate to Hindi, see you tomorrow at the station.")?.language == "Hindi")
+        #expect(ReplyPrompt.translation("translate into French: good morning")?.text == "good morning")
+        #expect(ReplyPrompt.translation("We need to translate the docs.") == nil)
+    }
+
+    @Test func toneByApp() {
+        #expect(Tone.forApp("net.whatsapp.WhatsApp") == .casual)
+        #expect(Tone.forApp("com.apple.mail") == .professional)
+        #expect(Tone.forApp("com.apple.TextEdit") == .neutral)
+        #expect(RefinePrompt.prefix(language: .english, tone: .casual).contains("casual"))
+    }
+}

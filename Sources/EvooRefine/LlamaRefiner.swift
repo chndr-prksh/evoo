@@ -68,9 +68,9 @@ public final class LlamaRefiner: @unchecked Sendable {
         queue.sync { freeAll() }
     }
 
-    public func refine(_ transcript: String, language: DictationLanguage) async throws -> String {
+    public func refine(_ transcript: String, language: DictationLanguage, tone: Tone = .neutral) async throws -> String {
         let raw = try await run { [self] in
-            try primePrefix(RefinePrompt.prefix(language: language))
+            try primePrefix(RefinePrompt.prefix(language: language, tone: tone))
             let suffix = RefinePrompt.suffix(transcript: transcript, thinkBlock: loadedModel?.usesThinkBlock ?? true)
             let budget = RefinePrompt.maxTokens(forInputTokens: tokenize(transcript, vocab: vocab!, addSpecial: false).count)
             return try generate(suffix: suffix, maxTokens: budget)
@@ -89,6 +89,18 @@ public final class LlamaRefiner: @unchecked Sendable {
         }
         guard let indices = CorrectionPrompt.parse(answer) else { return nil }
         return CorrectionPrompt.apply(indices, to: text)
+    }
+
+    /// A reply to the conversation on screen, saying what the user asked ("reply saying Thursday works").
+    public func reply(screen: String, intent: String) async throws -> String? {
+        let raw = try await run { [self] in
+            try primePrefix(ReplyPrompt.prefix)
+            let suffix = ReplyPrompt.suffix(screen: String(screen.suffix(3_000)), intent: intent,
+                                            thinkBlock: loadedModel?.usesThinkBlock ?? true)
+            return try generate(suffix: suffix, maxTokens: 300)
+        }
+        let out = RewritePrompt.sanitize(raw)
+        return out.isEmpty ? nil : out
     }
 
     /// "Make this more formal" applied to selected text. Returns nil if the model produced nothing usable.

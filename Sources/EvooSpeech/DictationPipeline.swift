@@ -86,7 +86,7 @@ public final class DictationPipeline {
     /// Raw text → final text (rules, formatting, numbers, optional LLM).
     /// `contextTerms`: names seen on screen for this dictation only (see `ContextVocabulary`).
     public func finish(raw: String, asrMs: Int, language: DictationLanguage, style: OutputStyle?,
-                       contextTerms: [String] = [], llm: LLMPolicy) async -> Output
+                       contextTerms: [String] = [], tone: Tone = .neutral, llm: LLMPolicy) async -> Output
     {
         let clock = ContinuousClock()
         var t = clock.now
@@ -111,7 +111,7 @@ public final class DictationPipeline {
         }
         if llm == .polish, refiner.isLoaded, Self.worthPolishing(text) {
             t = clock.now
-            if let polished = try? await refiner.refine(text, language: language),
+            if let polished = try? await refiner.refine(text, language: language, tone: tone),
                !polished.contains("\n") || text.contains("\n") // keep Evoo's own list formatting per app
             {
                 text = polished
