@@ -36,14 +36,19 @@ enum PillSnapshots {
             ("3-recording", .recording, false),
             ("4-working", .transcribing, false),
             ("6-tip", .idle, false),
+            ("7-tip-long", .idle, false),
             ("5-message", .message("Hindi/Hinglish model is still preparing (first time only) — try again shortly"), false),
         ]
         for (name, phase, hovering) in states {
             controller.debugSet(phase: phase, levels: wave)
             model.hovering = hovering
-            if name == "6-tip" { model.present(Tips.all[1]) } else { model.dismissTip() }
+            switch name {
+            case "6-tip": model.present(Tips.all[1])
+            case "7-tip-long": model.present(Tips.all[4]) // longest phrase
+            default: model.dismissTip()
+            }
             let view = PillView(controller: controller, settings: controller.settings, model: model)
-                .frame(width: 440, height: 190, alignment: .bottom)
+                .frame(width: 440, height: 300, alignment: .bottom)
                 .background(Color(white: 0.93)) // light desktop behind, like a real wallpaper
             let renderer = ImageRenderer(content: view)
             renderer.scale = 2

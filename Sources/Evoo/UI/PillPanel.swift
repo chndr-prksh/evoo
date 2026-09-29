@@ -8,27 +8,42 @@ import SwiftUI
 final class PillModel: ObservableObject {
     static let shared = PillModel()
 
+    /// How long a tip stays on screen.
+    static let tipSeconds: Double = 10
+
     /// A feature tip shown above the pill (see `Tips`); fades after 10 s unless the pointer is on it.
     @Published private(set) var tip: Tip?
+    /// When the tip will fade; nil while it's paused (pointer on it).
+    @Published private(set) var tipExpires: Date?
     var tipRect: CGRect = .zero
     var hoveringTip = false {
-        didSet { if !hoveringTip, tip != nil { scheduleDismiss(after: 4) } }
+        didSet {
+            guard tip != nil, hoveringTip != oldValue else { return }
+            if hoveringTip {
+                dismissTask?.cancel()
+                tipExpires = nil
+            } else {
+                scheduleDismiss(after: 4)
+            }
+        }
     }
     private var dismissTask: Task<Void, Never>?
 
     func present(_ tip: Tip) {
         self.tip = tip
-        scheduleDismiss(after: 10)
+        scheduleDismiss(after: Self.tipSeconds)
     }
 
     func dismissTip() {
         dismissTask?.cancel()
         tip = nil
+        tipExpires = nil
         tipRect = .zero
     }
 
     private func scheduleDismiss(after seconds: Double) {
         dismissTask?.cancel()
+        tipExpires = Date().addingTimeInterval(seconds)
         dismissTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled, let self, !self.hoveringTip else { return }
@@ -51,7 +66,7 @@ final class PillPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    private static let size = NSSize(width: 440, height: 190)
+    private static let size = NSSize(width: 440, height: 300)
     private let model = PillModel.shared
     private let controller: DictationController
     private var monitors: [Any] = []

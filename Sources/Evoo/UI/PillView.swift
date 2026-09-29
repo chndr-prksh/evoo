@@ -39,7 +39,7 @@ struct PillView: View {
     var body: some View {
         VStack(spacing: 8) {
             if let tip = model.tip, look != .recording {
-                TipBanner(tip: tip, dismiss: model.dismissTip)
+                TipBanner(tip: tip, expires: model.tipExpires, dismiss: model.dismissTip)
                     .background(GeometryReader { proxy in
                         Color.clear
                             .onAppear { model.tipRect = proxy.frame(in: .global) }
@@ -123,45 +123,109 @@ struct PillView: View {
     }
 }
 
-/// "Did you know" card above the pill: what the feature does, the words to say, and a close button.
+/// "Did you know" card above the pill: a big icon, the feature's name, and the words to say — centered,
+/// with room to breathe. A thin bar shows how long it stays (it waits while the pointer is on it).
 private struct TipBanner: View {
     let tip: Tip
+    let expires: Date?
     let dismiss: () -> Void
 
+    private static let width: CGFloat = 300
+
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.yellow)
-                .padding(.top, 1)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(tip.text)
-                    .font(.system(size: 12.5, weight: .bold))
+        VStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(style.color.opacity(0.22))
+                    .frame(width: 52, height: 52)
+                Image(systemName: style.icon)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(style.color)
+            }
+            Text(tip.text)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            if tip.example.isEmpty {
+                Text("Evoo learns as you go")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.white.opacity(0.6))
+            } else {
+                VStack(spacing: 6) {
+                    Text("Hold fn and say")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.white.opacity(0.55))
+                    HStack(spacing: 7) {
+                        Image(systemName: "mic.fill").font(.system(size: 12))
+                        Text("“\(tip.example)”")
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .font(.system(size: 13.5, weight: .semibold))
                     .foregroundStyle(.white)
-                if !tip.example.isEmpty {
-                    Text("Say “\(tip.example)”")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.75))
+                    .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(.white.opacity(0.12)))
                 }
             }
-            .lineLimit(1)
-            Spacer(minLength: 0)
+        }
+        .padding(.top, 22)
+        .padding(.bottom, 20)
+        .padding(.horizontal, 20)
+        .frame(width: Self.width)
+        .overlay(alignment: .topTrailing) {
             Button(action: dismiss) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(.white.opacity(0.7))
-                    .frame(width: 18, height: 18)
+                    .frame(width: 22, height: 22)
                     .background(Circle().fill(.white.opacity(0.12)))
             }
             .buttonStyle(.plain)
             .help("Dismiss")
+            .padding(10)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-        .fixedSize()
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.black.opacity(0.92)))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.16), lineWidth: 1))
-        .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
+        .overlay(alignment: .bottom) { countdown }
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.black.opacity(0.92)))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(0.14), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: .black.opacity(0.35), radius: 14, y: 5)
+    }
+
+    /// Thin bar that empties until the card fades; full (paused) while the pointer is on the card.
+    private var countdown: some View {
+        TimelineView(.animation) { context in
+            let remaining = expires.map { max(0, $0.timeIntervalSince(context.date)) } ?? PillModel.tipSeconds
+            Capsule()
+                .fill(style.color.opacity(0.8))
+                .frame(width: Self.width * remaining / PillModel.tipSeconds, height: 3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var style: (icon: String, color: Color) {
+        switch tip.id {
+        case "corrections": ("arrow.uturn.backward.circle.fill", .orange)
+        case "commands": ("app.badge.fill", .blue)
+        case "lists": ("list.bullet.rectangle.fill", .teal)
+        case "editing": ("pencil.line", .pink)
+        case "search": ("magnifyingglass", .cyan)
+        case "shortcuts": ("text.badge.plus", .mint)
+        case "spotlight": ("doc.text.magnifyingglass", .indigo)
+        case "reminders": ("bell.fill", .red)
+        case "notes": ("note.text", .yellow)
+        case "keys": ("command", .gray)
+        case "windows": ("rectangle.split.2x1.fill", .purple)
+        case "history": ("clock.arrow.circlepath", .green)
+        case "readAloud": ("speaker.wave.2.fill", .orange)
+        case "transcribe": ("waveform.badge.plus", .blue)
+        case "dictionary": ("person.text.rectangle.fill", .green)
+        case "rewrite": ("wand.and.stars", .purple)
+        default: ("sparkles", .yellow)
+        }
     }
 }
 
