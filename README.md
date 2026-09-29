@@ -12,6 +12,8 @@ Hold `fn`, speak, release — clean text appears at your cursor in any app.
 - Voice shortcuts: say "my email" (alone or mid-sentence) and get the full text you set up.
 - Voice editing: "replace Tuesday with Wednesday", "delete the last sentence", "make that a list".
 - History: search and copy your recent dictations (menu → History…), kept only on your Mac.
+- **Welcome tour** on first launch: privacy & offline, what you can do, and a step-by-step permissions guide
+  that ticks off each step live. Afterwards, a small tip by the pill now and then introduces one feature at a time.
 - **Voice commands** (say the whole command as one dictation; anything else is typed as usual):
   - Apps & web: "open Slack", "switch to Chrome", "open github.com", "search Google for …", "ask ChatGPT …",
     "YouTube …", "new Google doc", "new email about …" — every installed app, plus your own in Settings → Apps

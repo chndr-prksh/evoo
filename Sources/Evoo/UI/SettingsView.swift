@@ -211,6 +211,7 @@ struct SettingsView: View {
 
             Section("General") {
                 Toggle("Show floating pill", isOn: $settings.showPill)
+                Toggle("Show occasional tips about features", isOn: $settings.showTips)
                 Toggle("Play sounds", isOn: $settings.playSounds)
                 Toggle("Restore clipboard after pasting", isOn: $settings.restoreClipboard)
                 Toggle("Start Evoo at login", isOn: $launchAtLogin)

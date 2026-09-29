@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var pill: PillPanel!
     private var settingsWindow: NSWindow?
     private var historyWindow: NSWindow?
+    private var welcomeWindow: NSWindow?
     private var cancellables: Set<AnyCancellable> = []
 
     func applicationDidFinishLaunching(_: Notification) {
@@ -50,7 +51,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             MainActor.assumeIsolated { self?.controller.debugDictate(text) }
         }
         #endif
-        if !controller.permissions.allGranted { openSettings() }
+        if !UserDefaults.standard.bool(forKey: "onboarded") {
+            openWelcome()
+        } else if !controller.permissions.allGranted {
+            openSettings()
+        }
     }
 
     // MARK: - Menu
@@ -93,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item("History & Notes…", #selector(openHistory), key: "y"))
         menu.addItem(item("Transcribe a File…", #selector(transcribeFile)))
         addUpdateItems(to: menu)
+        menu.addItem(item("Welcome Tour…", #selector(openWelcome)))
         menu.addItem(item("Settings…", #selector(openSettings), key: ","))
         menu.addItem(item("Quit Evoo", #selector(NSApplication.terminate(_:)), key: "q", target: NSApp))
     }
@@ -128,6 +134,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func transcribeFile() { controller.transcribeFile() }
+
+    @objc func openWelcome() {
+        if welcomeWindow == nil {
+            let view = WelcomeView(permissions: controller.permissions) { [weak self] in
+                UserDefaults.standard.set(true, forKey: "onboarded")
+                self?.welcomeWindow?.close()
+                self?.controller.startHotkeysIfPossible()
+            }
+            let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+            window.title = "Welcome to Evoo"
+            window.styleMask = [.titled, .closable, .fullSizeContentView]
+            window.titlebarAppearsTransparent = true
+            window.isReleasedWhenClosed = false
+            window.center()
+            welcomeWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        welcomeWindow?.makeKeyAndOrderFront(nil)
+    }
 
     @objc private func openHistory() {
         if historyWindow == nil {

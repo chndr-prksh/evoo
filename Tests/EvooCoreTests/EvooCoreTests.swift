@@ -200,6 +200,13 @@ import Testing
         #expect(fix("Let's meet tomorrow or no, day after tomorrow.") == "Let's meet day after tomorrow.")
     }
 
+    @Test func brokenOffWordStarts() {
+        #expect(fix("Make it skippable, like m make it simple.") == "Make it skippable, like make it simple.")
+        #expect(fix("Th the plan is ready.") == "The plan is ready.")
+        #expect(fix("I am in a meeting.") == "I am in a meeting.")
+        #expect(fix("Go to the store.") == "Go to the store.")
+    }
+
     @Test func scratchThat() {
         #expect(fix("I love pizza. Scratch that. I love pasta.") == "I love pasta.")
     }
@@ -631,5 +638,16 @@ import Testing
         #expect(Tone.forApp("com.apple.mail") == .professional)
         #expect(Tone.forApp("com.apple.TextEdit") == .neutral)
         #expect(RefinePrompt.prefix(language: .english, tone: .casual).contains("casual"))
+    }
+}
+
+@Suite struct TipTests {
+    @Test func cadence() {
+        #expect(Tips.next(afterUses: 4, shown: []) == nil)
+        #expect(Tips.next(afterUses: 5, shown: [])?.id == "corrections")
+        #expect(Tips.next(afterUses: 6, shown: ["corrections"]) == nil) // next one waits for use 12
+        #expect(Tips.next(afterUses: 12, shown: ["corrections"])?.id == "commands")
+        let all = Set(Tips.all.map(\.id))
+        #expect(Tips.next(afterUses: 1000, shown: all) == nil)
     }
 }

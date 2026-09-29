@@ -77,8 +77,19 @@ public enum DictationRules {
         return out
     }
 
+    /// Real one- and two-letter words, so only broken-off starts are dropped.
+    static let shortWords: Set<String> = ["a", "i", "an", "am", "as", "at", "be", "by", "do", "go", "he", "hi", "if",
+                                          "in", "is", "it", "me", "my", "no", "of", "oh", "ok", "on", "or", "so", "to",
+                                          "up", "us", "we", "ah", "ha", "yo"]
+
     static func removeStutters(_ tokens: [Token]) -> [Token] {
-        var t = tokens
+        // Broken-off word starts: "like m make it" → "like make it", "th the plan" → "the plan".
+        var t = tokens.enumerated().filter { i, tok in
+            guard i + 1 < tokens.count, !tok.endsClause, !tok.endsSentence else { return true }
+            let w = tok.norm, next = tokens[i + 1].norm
+            return !(w.count <= 2 && !w.isEmpty && !shortWords.contains(w) && w.allSatisfy(\.isLetter)
+                && next.count > w.count && next.hasPrefix(w))
+        }.map(\.element)
         var changed = true
         while changed {
             changed = false

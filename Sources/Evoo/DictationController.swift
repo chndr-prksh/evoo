@@ -382,6 +382,7 @@ final class DictationController: ObservableObject {
             if out.action == .pressEnter { await injector.pressReturn() }
             lastText = text
             if settings.keepHistory { DictationHistory.shared.add(text, app: targetApp) }
+            offerTip()
             let totalMs = (ContinuousClock.now - releasedAt).ms
             lastTimings = String(format: "%.1fs audio · ", seconds) + out.summary
                 + " · fn up → pasted \(totalMs) ms" + (reused ? " (ready early)" : "")
@@ -456,6 +457,24 @@ final class DictationController: ObservableObject {
             transcribeFile()
         }
         return true
+    }
+
+    /// Every few dictations, introduce one more feature (schedule in `Tips`).
+    private func offerTip() {
+        settings.dictationCount += 1
+        guard settings.showTips else { return }
+        var extra: [Tip] = []
+        if SystemInfo.canRunSmartCleanup {
+            extra.append(Tip(id: "rewrite", text: "With Smart cleanup on (Settings), select text and say:",
+                             example: "make this more formal"))
+        }
+        guard let tip = Tips.next(afterUses: settings.dictationCount, shown: Set(settings.shownTips), extra: extra)
+        else { return }
+        settings.shownTips.append(tip.id)
+        Task {
+            try? await Task.sleep(for: .milliseconds(700)) // after the text has landed
+            PillModel.shared.present(tip)
+        }
     }
 
     func transcribeFile() {

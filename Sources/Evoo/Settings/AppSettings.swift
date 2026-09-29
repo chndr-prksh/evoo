@@ -39,6 +39,10 @@ final class AppSettings: ObservableObject {
     @Published var customApps: [AppTarget] {
         didSet { defaults.set(try? JSONEncoder().encode(customApps), forKey: "customApps") }
     }
+    /// Occasional tips by the pill introducing one feature at a time.
+    @Published var showTips: Bool { didSet { save(showTips, "showTips") } }
+    @Published var dictationCount: Int { didSet { save(dictationCount, "dictationCount") } }
+    @Published var shownTips: [String] { didSet { save(shownTips, "shownTips") } }
     /// Keep recent dictations on this Mac so they can be searched and re-used.
     @Published var keepHistory: Bool { didSet { save(keepHistory, "keepHistory") } }
     @Published var habits: LearnedHabits {
@@ -75,6 +79,9 @@ final class AppSettings: ObservableObject {
         snippets = UserDefaults.standard.data(forKey: "snippets")
             .flatMap { try? JSONDecoder().decode([Snippet].self, from: $0) } ?? []
         keepHistory = bool("keepHistory", true)
+        showTips = bool("showTips", true)
+        dictationCount = UserDefaults.standard.integer(forKey: "dictationCount")
+        shownTips = UserDefaults.standard.stringArray(forKey: "shownTips") ?? []
         appCommands = bool("appCommands", true)
         customApps = UserDefaults.standard.data(forKey: "customApps")
             .flatMap { try? JSONDecoder().decode([AppTarget].self, from: $0) } ?? []

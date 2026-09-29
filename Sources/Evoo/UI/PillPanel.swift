@@ -6,6 +6,36 @@ import SwiftUI
 /// Shared between the panel (AppKit) and the pill (SwiftUI).
 @MainActor
 final class PillModel: ObservableObject {
+    static let shared = PillModel()
+
+    /// A feature tip shown above the pill (see `Tips`); fades after 3 s unless the pointer is on it.
+    @Published private(set) var tip: Tip?
+    var tipRect: CGRect = .zero
+    var hoveringTip = false {
+        didSet { if !hoveringTip, tip != nil { scheduleDismiss(after: 1.5) } }
+    }
+    private var dismissTask: Task<Void, Never>?
+
+    func present(_ tip: Tip) {
+        self.tip = tip
+        scheduleDismiss(after: 3)
+    }
+
+    func dismissTip() {
+        dismissTask?.cancel()
+        tip = nil
+        tipRect = .zero
+    }
+
+    private func scheduleDismiss(after seconds: Double) {
+        dismissTask?.cancel()
+        dismissTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled, let self, !self.hoveringTip else { return }
+            self.dismissTip()
+        }
+    }
+
     @Published var hovering = false
     /// The pill's frame in the hosting view's coordinates (top-left origin).
     var pillRect: CGRect = .zero
@@ -21,8 +51,8 @@ final class PillPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    private static let size = NSSize(width: 360, height: 96)
-    private let model = PillModel()
+    private static let size = NSSize(width: 440, height: 190)
+    private let model = PillModel.shared
     private let controller: DictationController
     private var monitors: [Any] = []
 
@@ -72,14 +102,17 @@ final class PillPanel: NSPanel {
     }
 
     private func updateHover() {
-        let r = model.pillRect
-        guard r != .zero else { return }
-        // Convert SwiftUI (top-left) to screen coordinates and add a little slack around the pill.
-        let onScreen = NSRect(x: frame.minX + r.minX, y: frame.maxY - r.maxY, width: r.width, height: r.height)
-            .insetBy(dx: -8, dy: -8)
-        let inside = onScreen.contains(NSEvent.mouseLocation)
-        if ignoresMouseEvents == inside { ignoresMouseEvents = !inside }
-        if model.hovering != inside { model.hovering = inside }
+        // Convert SwiftUI (top-left) rects to screen coordinates, with a little slack around them.
+        func onScreen(_ r: CGRect) -> Bool {
+            r != .zero && NSRect(x: frame.minX + r.minX, y: frame.maxY - r.maxY, width: r.width, height: r.height)
+                .insetBy(dx: -8, dy: -8).contains(NSEvent.mouseLocation)
+        }
+        let overPill = onScreen(model.pillRect)
+        let overTip = model.tip != nil && onScreen(model.tipRect)
+        let interactive = overPill || overTip
+        if ignoresMouseEvents == interactive { ignoresMouseEvents = !interactive }
+        if model.hovering != overPill { model.hovering = overPill }
+        if model.hoveringTip != overTip { model.hoveringTip = overTip }
     }
 
     private func popUpLanguageMenu() {

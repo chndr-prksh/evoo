@@ -38,7 +38,15 @@ struct PillView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            if look == .hover {
+            if let tip = model.tip, look != .recording {
+                TipBanner(tip: tip, dismiss: model.dismissTip)
+                    .background(GeometryReader { proxy in
+                        Color.clear
+                            .onAppear { model.tipRect = proxy.frame(in: .global) }
+                            .onChange(of: proxy.frame(in: .global)) { _, rect in model.tipRect = rect }
+                    })
+                    .transition(.opacity.combined(with: .offset(y: 6)))
+            } else if look == .hover {
                 Hint(mode: settings.activationMode)
                     .transition(.opacity.combined(with: .offset(y: 4)))
             }
@@ -46,6 +54,7 @@ struct PillView: View {
         }
         .padding(.bottom, 4)
         .animation(spring, value: look)
+        .animation(spring, value: model.tip)
     }
 
     private var capsule: some View {
@@ -111,6 +120,49 @@ struct PillView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 16)
         }
+    }
+}
+
+/// "Did you know" card above the pill: what the feature does, the words to say, and a close button.
+private struct TipBanner: View {
+    let tip: Tip
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.yellow)
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(tip.text)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !tip.example.isEmpty {
+                    Text("Try it — hold fn and say “\(tip.example)”")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
+            Button(action: dismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(width: 18, height: 18)
+                    .background(Circle().fill(.white.opacity(0.12)))
+            }
+            .buttonStyle(.plain)
+            .help("Dismiss")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .frame(width: 400)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.black.opacity(0.92)))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.16), lineWidth: 1))
+        .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
     }
 }
 

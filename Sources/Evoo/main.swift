@@ -2,7 +2,11 @@ import AppKit
 
 #if DEBUG
 if let i = CommandLine.arguments.firstIndex(of: "--snapshot-pill"), i + 1 < CommandLine.arguments.count {
-    MainActor.assumeIsolated { PillSnapshots.run(into: URL(fileURLWithPath: CommandLine.arguments[i + 1])) }
+    MainActor.assumeIsolated {
+        let dir = URL(fileURLWithPath: CommandLine.arguments[i + 1])
+        PillSnapshots.run(into: dir)
+        PillSnapshots.welcome(into: dir)
+    }
     exit(0)
 }
 #endif
