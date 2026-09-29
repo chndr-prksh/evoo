@@ -3,6 +3,17 @@
 **Open-source voice dictation for macOS that runs entirely on your Mac.**
 Hold `fn`, speak, release — clean text appears at your cursor in any app.
 
+<p>
+  <a href="https://github.com/chndr-prksh/evoo/releases/latest/download/Evoo.zip">
+    <img alt="Download for Mac" src="https://img.shields.io/badge/Download%20for%20Mac-free-2ea44f?style=for-the-badge&logo=apple&logoColor=white" height="44">
+  </a>
+</p>
+
+Apple Silicon Mac (M1 or newer), macOS 14+. After downloading: unzip, drag **Evoo** to Applications, open it.
+The first time, macOS says it "could not verify" Evoo (it isn't signed with a paid Apple certificate) — open
+**System Settings › Privacy & Security** and click **Open Anyway**, once. Or skip that step entirely with the
+one-line install below. Evoo updates itself after that.
+
 - 100% local: speech recognition and text cleanup run on-device. No accounts, no cloud, no API keys.
 - Understands what you *meant*: "let's meet tomorrow, no, day after tomorrow" → **"Let's meet day after tomorrow."**
 - Works everywhere you can paste: Chrome, Slack, Gmail, Notion, VS Code, Cursor, Terminal, Office…
