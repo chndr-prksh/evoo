@@ -14,6 +14,24 @@ Hold `fn`, speak, release — clean text appears at your cursor in any app.
   elsewhere, and never a line break in Terminal (a pasted newline could run a command).
 - Apache-2.0. Every model it uses is open-weight and free.
 
+## Install
+
+**One line** (Apple Silicon Mac, macOS 14+). Paste into Terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/chndr-prksh/evoo/main/install.sh | bash
+```
+
+It downloads the latest release, verifies its checksum, installs `/Applications/Evoo.app`, and opens it.
+
+**Or download** `Evoo.zip` from [Releases](https://github.com/chndr-prksh/evoo/releases/latest), unzip, and drag
+Evoo to Applications. Evoo isn't signed with a paid Apple Developer ID, so the first time macOS will say it
+"could not verify" Evoo: open **System Settings › Privacy & Security** and click **Open Anyway** (once).
+
+**Updates:** every change pushed to `main` is built and published automatically. Evoo checks every few hours;
+when a new build is out, a dot appears by its menu bar icon — choose **Install Update** and it relaunches on the
+new version, keeping your settings and permissions.
+
 ## How it works
 
 ```

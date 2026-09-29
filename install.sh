@@ -1,12 +1,12 @@
 #!/bin/bash
 # Installs (or updates) Evoo from the latest GitHub release into /Applications.
-#   curl -fsSL https://raw.githubusercontent.com/__REPO__/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/chndr-prksh/evoo/main/install.sh | bash
 #
 # Downloading with curl (instead of a browser) means macOS doesn't quarantine the app, so it opens
 # without the "Apple could not verify…" prompt. Later updates happen inside Evoo (menu → Install Update).
 set -euo pipefail
 
-REPO="__REPO__"
+REPO="chndr-prksh/evoo"
 BASE="https://github.com/$REPO/releases/latest/download"
 APP="/Applications/Evoo.app"
 WORK="$(mktemp -d)"
