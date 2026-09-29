@@ -50,9 +50,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let text = note.object as? String else { return }
             MainActor.assumeIsolated { self?.controller.debugDictate(text) }
         }
+        // Debug: open the welcome tour on its last (try-it) page.
+        DistributedNotificationCenter.default().addObserver(forName: .init("app.evoo.debug.welcomeTry"), object: nil,
+                                                            queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.openWelcome(page: 3) }
+        }
         #endif
         if !UserDefaults.standard.bool(forKey: "onboarded") {
-            openWelcome()
+            openWelcome(page: 0)
         } else if !controller.permissions.allGranted {
             openSettings()
         }
@@ -98,7 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item("History & Notes…", #selector(openHistory), key: "y"))
         menu.addItem(item("Transcribe a File…", #selector(transcribeFile)))
         addUpdateItems(to: menu)
-        menu.addItem(item("Welcome Tour…", #selector(openWelcome)))
+        menu.addItem(item("Welcome Tour…", #selector(showWelcomeTour)))
         menu.addItem(item("Settings…", #selector(openSettings), key: ","))
         menu.addItem(item("Quit Evoo", #selector(NSApplication.terminate(_:)), key: "q", target: NSApp))
     }
@@ -135,13 +140,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func transcribeFile() { controller.transcribeFile() }
 
-    @objc func openWelcome() {
-        if welcomeWindow == nil {
-            let view = WelcomeView(permissions: controller.permissions) { [weak self] in
+    @objc func showWelcomeTour() { openWelcome(page: 0) }
+
+    func openWelcome(page: Int = 0) {
+        if welcomeWindow == nil || page != 0 {
+            welcomeWindow?.close()
+            let view = WelcomeView(permissions: controller.permissions, finish: { [weak self] in
                 UserDefaults.standard.set(true, forKey: "onboarded")
                 self?.welcomeWindow?.close()
                 self?.controller.startHotkeysIfPossible()
-            }
+            }, page: page)
             let window = NSWindow(contentViewController: NSHostingController(rootView: view))
             window.title = "Welcome to Evoo"
             window.styleMask = [.titled, .closable, .fullSizeContentView]

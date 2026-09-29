@@ -4,7 +4,14 @@ import AppKit
 /// for pasting): window title, labels, chat headers, recipients, and the text around the cursor.
 /// Used only to spot names for the current dictation; nothing is stored. Password fields are skipped.
 enum ScreenText {
+    /// Evoo's own windows (welcome tour, settings) are frontmost. Accessibility queries to our own process from
+    /// its main thread would wait on themselves, so every reader below skips them.
+    static var evooIsFrontmost: Bool {
+        NSWorkspace.shared.frontmostApplication?.processIdentifier == ProcessInfo.processInfo.processIdentifier
+    }
+
     static func capture(maxElements: Int = 2_500, budget: TimeInterval = 0.35) -> [String] {
+        guard !evooIsFrontmost else { return [] }
         let deadline = Date().addingTimeInterval(budget)
         let system = AXUIElementCreateSystemWide()
         AXUIElementSetMessagingTimeout(system, 0.05)
@@ -53,10 +60,12 @@ enum ScreenText {
 
     /// The text field that has keyboard focus, unless it's a password field.
     static func focusedField() -> AXUIElement? {
+        guard !evooIsFrontmost else { return nil }
         if let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier { enableWebAccessibility(for: pid) }
         let system = AXUIElementCreateSystemWide()
         AXUIElementSetMessagingTimeout(system, 0.1)
         guard let field = element(system, kAXFocusedUIElementAttribute), !isSecure(field) else { return nil }
+        AXUIElementSetMessagingTimeout(field, 0.15) // a slow app must never stall dictation
         return field
     }
 

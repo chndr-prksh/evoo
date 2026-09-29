@@ -10,6 +10,7 @@ struct WelcomeView: View {
     @State var page = 0
     @State private var tryText = ""
     @State private var drag: CGFloat = 0
+    @FocusState private var tryFocused: Bool
     private let pages = 4
     private let refresh = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -152,10 +153,12 @@ struct WelcomeView: View {
                 .foregroundStyle(permissions.allGranted ? .green : .orange)
             Text(permissions.allGranted ? "You're all set" : "Almost there").font(.system(size: 26, weight: .bold))
             Text(permissions.allGranted
-                ? "Click in the box, hold fn, and say something. Release fn to see it typed."
+                ? "Hold fn and say something. Release fn to see it typed below."
                 : "Some permissions are still off — go back a page, or finish later in Settings.")
                 .foregroundStyle(.secondary).multilineTextAlignment(.center)
             TextEditor(text: $tryText)
+                .focused($tryFocused)
+                .onAppear { tryFocused = true } // ready to dictate into, no click needed
                 .font(.body)
                 .frame(height: 110)
                 .padding(8)

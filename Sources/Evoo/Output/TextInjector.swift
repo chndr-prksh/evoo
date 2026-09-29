@@ -12,6 +12,14 @@ final class TextInjector {
     ]
 
     func insert(_ text: String, restoreClipboard: Bool) async {
+        // Typing into Evoo's own window (the welcome tour's try-it box): insert directly, no simulated ⌘V.
+        if ScreenText.evooIsFrontmost, let view = NSApp.keyWindow?.firstResponder as? NSTextView {
+            view.insertText(text, replacementRange: view.selectedRange())
+            #if DEBUG
+            try? view.string.write(toFile: "/tmp/evoo-selftest.txt", atomically: true, encoding: .utf8)
+            #endif
+            return
+        }
         let pasteboard = NSPasteboard.general
         let saved = restoreClipboard ? snapshot(pasteboard) : []
 
