@@ -6,6 +6,7 @@ import SwiftUI
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let controller = DictationController()
+    private let updater = Updater()
     private var statusItem: NSStatusItem!
     private var pill: PillPanel!
     private var settingsWindow: NSWindow?
@@ -32,6 +33,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .store(in: &cancellables)
 
         controller.bootstrap()
+        updater.start()
+        updater.$state
+            .sink { [weak self] state in
+                // A small dot next to the menu bar icon when an update is waiting.
+                let waiting = if case .available = state { true } else { false }
+                self?.statusItem.button?.title = waiting ? "•" : ""
+            }
+            .store(in: &cancellables)
         #if DEBUG
         DistributedNotificationCenter.default().addObserver(forName: .init("app.evoo.debug.dictate"), object: nil,
                                                             queue: .main) { [weak self] note in
@@ -79,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(pillItem)
 
         menu.addItem(.separator())
+        addUpdateItems(to: menu)
         menu.addItem(item("Settings…", #selector(openSettings), key: ","))
         menu.addItem(item("Quit Evoo", #selector(NSApplication.terminate(_:)), key: "q", target: NSApp))
     }
@@ -88,6 +98,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.target = target ?? self
         return item
     }
+
+    private func addUpdateItems(to menu: NSMenu) {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+        guard updater.isEnabled else {
+            menu.addItem(withTitle: "Evoo \(version) (local build)", action: nil, keyEquivalent: "").isEnabled = false
+            menu.addItem(.separator())
+            return
+        }
+        switch updater.state {
+        case let .available(build):
+            menu.addItem(item("Install Update (build \(build))…", #selector(installUpdate)))
+        case let .installing(message):
+            menu.addItem(withTitle: message, action: nil, keyEquivalent: "").isEnabled = false
+        case .checking:
+            menu.addItem(withTitle: "Checking for updates…", action: nil, keyEquivalent: "").isEnabled = false
+        case let .failed(message):
+            menu.addItem(withTitle: message, action: nil, keyEquivalent: "").isEnabled = false
+            menu.addItem(item("Check for Updates", #selector(checkForUpdates)))
+        case .idle, .upToDate:
+            menu.addItem(item("Check for Updates", #selector(checkForUpdates)))
+        }
+        menu.addItem(withTitle: "Evoo \(version)", action: nil, keyEquivalent: "").isEnabled = false
+        menu.addItem(.separator())
+    }
+
+    @objc private func checkForUpdates() { updater.check() }
+    @objc private func installUpdate() { updater.install() }
 
     @objc private func toggleDictation() { controller.toggleFromUI() }
     @objc private func repaste() { controller.repasteLast() }

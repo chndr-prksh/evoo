@@ -141,6 +141,60 @@ case "corpus":
     let mode = useLLM ? "rules + \(model.rawValue)\(fallbackOnly ? " as fallback" : "") (ran on \(llmRuns), accepted \(llmAccepted))" : "rules"
     print("\n\(mode): \(close)/\(n) correct (\(exact) exact incl. punctuation) · avg \((total / n).formatted(.units(allowed: [.microseconds]))), worst \(worst.formatted(.units(allowed: [.milliseconds])))")
 
+case "cloud":
+    // Benchmarks hosted open-weight models on the correction scorecard: accuracy, latency, and how often
+    // they'd beat a 300 ms budget. The API key comes from EVOO_CLOUD_KEY (never stored by the tool).
+    //   EVOO_CLOUD_KEY=… evoo-cli cloud --provider groq [--model-name llama-3.1-8b-instant] Benchmarks/corrections.tsv
+    guard let key = ProcessInfo.processInfo.environment["EVOO_CLOUD_KEY"], !key.isEmpty else {
+        print("Set EVOO_CLOUD_KEY to your provider API key."); exit(2)
+    }
+    let provider = option("--provider").flatMap(CloudCorrector.Provider.init(rawValue:)) ?? .groq
+    let cloud = CloudCorrector(provider: provider, apiKey: key, model: option("--model-name"))
+    let budget = Double(option("--budget-ms") ?? "300") ?? 300
+    let quietCloud = flag("--quiet")
+    let path = inputs.first ?? "Benchmarks/corrections.tsv"
+    let cases = try String(contentsOfFile: path, encoding: .utf8).split(separator: "\n")
+        .filter { !$0.hasPrefix("#") && $0.contains("\t") }
+        .map { $0.split(separator: "\t", maxSplits: 1).map(String.init) }
+    func loose(_ s: String) -> String { s.lowercased().filter { $0.isLetter || $0.isNumber || $0 == " " || $0 == ":" } }
+    _ = try? await cloud.answer(for: "warm up") // open the connection first, like the app does on fn down
+    var times: [Double] = []
+    var cloudRight = 0, hybridRight = 0, rulesRight = 0, inBudget = 0, errors = 0
+    for c in cases {
+        let (input, expected) = (c[0], c[1])
+        let rules = pipeline.postProcess(input, language: .english, style: nil).text
+        let t0 = clock.now
+        var answer = "error"
+        do { answer = try await cloud.answer(for: TextCleaner.clean(input)) } catch {
+            errors += 1
+            if errors == 1 { print("request failed: \(error.localizedDescription)") }
+        }
+        let ms = Double((clock.now - t0).components.attoseconds) / 1e15 + Double((clock.now - t0).components.seconds) * 1000
+        times.append(ms)
+        let edited = CorrectionPrompt.parse(answer).flatMap { CorrectionPrompt.apply($0, to: TextCleaner.clean(input)) }
+        // "none" keeps the rules' result; an error or an unusable answer counts as a miss for the cloud.
+        let cloudOut = answer == "error" ? "" : edited.map { pipeline.postProcess($0, language: .english, style: nil).text } ?? rules
+        // Hybrid = what the app would do: cloud answer if it arrives within budget, else the rules.
+        let hybrid = ms <= budget && answer != "error" ? cloudOut : rules
+        if ms <= budget { inBudget += 1 }
+        if loose(cloudOut) == loose(expected) { cloudRight += 1 }
+        if loose(hybrid) == loose(expected) { hybridRight += 1 }
+        if loose(rules) == loose(expected) { rulesRight += 1 }
+        if loose(cloudOut) != loose(expected), !quietCloud {
+            print("✘ [\(Int(ms)) ms, answer \(answer)] \(input)\n    got:  \(cloudOut)\n    want: \(expected)")
+        }
+    }
+    let sorted = times.sorted()
+    let n = cases.count
+    print("""
+
+    \(provider.rawValue) · \(cloud.model)
+      cloud alone:        \(cloudRight)/\(n) correct\(errors > 0 ? "  (\(errors) failed requests)" : "")
+      rules alone:        \(rulesRight)/\(n) correct
+      rules + cloud (≤\(Int(budget)) ms): \(hybridRight)/\(n) correct
+      latency: p50 \(Int(sorted[n / 2])) ms · p90 \(Int(sorted[n * 9 / 10])) ms · max \(Int(sorted.last!)) ms · within budget \(inBudget)/\(n)
+    """)
+
 case "post":
     for input in inputs {
         let t0 = clock.now

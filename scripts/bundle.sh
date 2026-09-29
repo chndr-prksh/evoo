@@ -4,6 +4,7 @@
 #   scripts/bundle.sh                         # release build, ad-hoc signed
 #   EVOO_SIGN_IDENTITY="Evoo Dev" scripts/bundle.sh   # sign with a stable identity (keeps permissions across rebuilds)
 #   CONFIG=debug scripts/bundle.sh
+#   EVOO_BUILD=42 EVOO_REPO=owner/evoo scripts/bundle.sh   # what CI sets: build number + repo for updates
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -18,6 +19,13 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Frameworks" "$APP/Contents/Resources"
 cp "$BIN/Evoo" "$APP/Contents/MacOS/Evoo"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+# Version stamping: the updater compares CFBundleVersion (the CI build number) with the latest release.
+BUILD="${EVOO_BUILD:-0}"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 0.1.$BUILD" "$APP/Contents/Info.plist"
+if [ -n "${EVOO_REPO:-}" ]; then
+  /usr/libexec/PlistBuddy -c "Add :EvooRepository string $EVOO_REPO" "$APP/Contents/Info.plist"
+fi
 ditto "$BIN/llama.framework" "$APP/Contents/Frameworks/llama.framework"
 for bundle in "$BIN"/*.bundle; do
   [ -e "$bundle" ] && ditto "$bundle" "$APP/Contents/Resources/$(basename "$bundle")"

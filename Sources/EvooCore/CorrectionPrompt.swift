@@ -16,19 +16,19 @@ public enum CorrectionPrompt {
         words(text).contains { cues.contains(normalize($0)) }
     }
 
-    static let system = """
+    public static let system = """
     You fix self-corrections in dictated text. The words are numbered. When the speaker corrects \
     themselves, answer with the numbers of the words to delete: the part they took back and the \
     correction words (no, sorry, actually, I mean, wait, not…). Keep the correction itself. \
     If nothing was corrected, answer none. Answer only with numbers and ranges.
     """
 
-    struct Example {
-        let text: String
-        let answer: String
+    public struct Example: Sendable {
+        public let text: String
+        public let answer: String
     }
 
-    static let examples: [Example] = [
+    public static let examples: [Example] = [
         .init(text: "Let's meet tomorrow, no, day after tomorrow.", answer: "3-4"),
         .init(text: "Email him, no, call him.", answer: "1-3"),
         .init(text: "Ask Sarah, no, ask Emma to review it.", answer: "1-3"),
