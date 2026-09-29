@@ -383,6 +383,7 @@ final class DictationController: ObservableObject {
             if out.action == .pressEnter { await injector.pressReturn() }
             lastText = text
             if settings.keepHistory { DictationHistory.shared.add(text, app: targetApp) }
+            noteFeatures(raw: raw, text: text)
             offerTip()
             let totalMs = (ContinuousClock.now - releasedAt).ms
             lastTimings = String(format: "%.1fs audio · ", seconds) + out.summary
@@ -418,6 +419,17 @@ final class DictationController: ObservableObject {
     /// Returns true if the dictation was such a command.
     private func runMacCommand(_ raw: String) async -> Bool {
         guard settings.appCommands, let command = MacCommands.parse(TextCleaner.clean(raw)) else { return false }
+        switch command {
+        case .spotlight: markUsed("spotlight")
+        case .keys: markUsed("keys")
+        case .window: markUsed("windows")
+        case .reminder, .event: markUsed("reminders")
+        case .note: markUsed("notes")
+        case .askHistory: markUsed("history")
+        case .readAloud: markUsed("readAloud")
+        case .transcribeFile: markUsed("transcribe")
+        default: break
+        }
         switch command {
         case let .spotlight(query):
             phase = .idle
@@ -472,22 +484,43 @@ final class DictationController: ObservableObject {
         if !used.isEmpty { show("Learned “\(used.joined(separator: "”, “"))” from your screen") }
     }
 
-    /// Every few dictations, introduce one more feature (schedule in `Tips`).
+    /// Every few dictations, introduce one feature the user hasn't used yet (schedule in `Tips`).
     private func offerTip() {
         settings.dictationCount += 1
         guard settings.showTips else { return }
         var extra: [Tip] = []
         if SystemInfo.canRunSmartCleanup {
-            extra.append(Tip(id: "rewrite", text: "With Smart cleanup on (Settings), select text and say:",
-                             example: "make this more formal"))
+            extra.append(Tip(id: "rewrite", text: "Rewrite selected text (Smart cleanup)", example: "make this more formal"))
         }
-        guard let tip = Tips.next(afterUses: settings.dictationCount, shown: Set(settings.shownTips), extra: extra)
+        let skip = Set(settings.shownTips + settings.usedFeatures)
+        guard let tip = Tips.next(afterUses: settings.dictationCount, lastTipAt: settings.lastTipAt, skip: skip,
+                                  extra: extra)
         else { return }
         settings.shownTips.append(tip.id)
+        settings.lastTipAt = settings.dictationCount
         Task {
             try? await Task.sleep(for: .milliseconds(700)) // after the text has landed
             PillModel.shared.present(tip)
         }
+    }
+
+    /// Remembers that a feature was used, so its tip is never shown.
+    private func markUsed(_ feature: String) {
+        if !settings.usedFeatures.contains(feature) { settings.usedFeatures.append(feature) }
+    }
+
+    /// Spots features in an ordinary dictation: a correction, a list, a voice shortcut, a taught name.
+    private func noteFeatures(raw: String, text: String) {
+        let said = TextCleaner.clean(raw)
+        let words = { (s: String) in s.lowercased().split { !$0.isLetter && !$0.isNumber } }
+        if CorrectionPrompt.hasCue(said), words(said) != words(text) { markUsed("corrections") }
+        if text.contains("\n"), text.range(of: #"(?m)^(- |• |☐ |\d+\. )"#, options: .regularExpression) != nil {
+            markUsed("lists")
+        }
+        if settings.snippets.contains(where: { !$0.trigger.isEmpty && said.localizedCaseInsensitiveContains($0.trigger) }) {
+            markUsed("shortcuts")
+        }
+        if !settings.personalWords.isEmpty { markUsed("dictionary") }
     }
 
     func transcribeFile() {
@@ -499,6 +532,7 @@ final class DictationController: ObservableObject {
         guard settings.appCommands else { return false }
         let targets = InstalledApps.shared.targets(custom: settings.customApps)
         guard let command = AppCommands.parse(TextCleaner.clean(raw), targets: targets) else { return false }
+        if case .search = command { markUsed("search") } else { markUsed("commands") }
         if let message = InstalledApps.shared.run(command) { show(message) } else { show("Couldn't open that") }
         return true
     }
@@ -535,6 +569,7 @@ final class DictationController: ObservableObject {
     private func rewriteSelectionIfAsked(_ raw: String, selection: String?, session: Int) async throws -> Bool {
         let instruction = TextCleaner.clean(raw)
         guard let selection, smartCleanupReady, RewritePrompt.isInstruction(instruction) else { return false }
+        markUsed("rewrite")
         phase = .refining
         guard let rewritten = try await refiner.rewrite(selection, instruction: instruction),
               !Task.isCancelled, session == self.session
@@ -557,6 +592,7 @@ final class DictationController: ObservableObject {
 
     /// "replace Tuesday with Wednesday" etc.: rewrites the text Evoo last typed, in place.
     private func applyVoiceEdit(_ edit: VoiceEdit, style: OutputStyle) async {
+        markUsed("editing")
         guard let last = lastText, let edited = edit.apply(to: last, style: style) else {
             return show(lastText == nil ? "Nothing to edit yet" : "Couldn't find that in your last dictation")
         }

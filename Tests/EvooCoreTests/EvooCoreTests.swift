@@ -658,12 +658,16 @@ import Testing
 
 @Suite struct TipTests {
     @Test func cadence() {
-        #expect(Tips.next(afterUses: 4, shown: []) == nil)
-        #expect(Tips.next(afterUses: 5, shown: [])?.id == "corrections")
-        #expect(Tips.next(afterUses: 6, shown: ["corrections"]) == nil) // next one waits for use 12
-        #expect(Tips.next(afterUses: 12, shown: ["corrections"])?.id == "commands")
-        let all = Set(Tips.all.map(\.id))
-        #expect(Tips.next(afterUses: 1000, shown: all) == nil)
+        #expect(Tips.next(afterUses: 4, lastTipAt: 0, skip: []) == nil)
+        #expect(Tips.next(afterUses: 5, lastTipAt: 0, skip: [])?.id == "corrections")
+        #expect(Tips.next(afterUses: 8, lastTipAt: 5, skip: ["corrections"]) == nil) // every 4
+        #expect(Tips.next(afterUses: 9, lastTipAt: 5, skip: ["corrections"])?.id == "commands")
+    }
+
+    @Test func skipsFeaturesAlreadyUsed() {
+        // They already open apps by voice, so the next tip moves on to lists.
+        #expect(Tips.next(afterUses: 9, lastTipAt: 5, skip: ["corrections", "commands"])?.id == "lists")
+        #expect(Tips.next(afterUses: 1000, lastTipAt: 1, skip: Set(Tips.all.map(\.id))) == nil)
     }
 }
 

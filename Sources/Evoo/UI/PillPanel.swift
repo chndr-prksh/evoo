@@ -8,17 +8,17 @@ import SwiftUI
 final class PillModel: ObservableObject {
     static let shared = PillModel()
 
-    /// A feature tip shown above the pill (see `Tips`); fades after 3 s unless the pointer is on it.
+    /// A feature tip shown above the pill (see `Tips`); fades after 8 s unless the pointer is on it.
     @Published private(set) var tip: Tip?
     var tipRect: CGRect = .zero
     var hoveringTip = false {
-        didSet { if !hoveringTip, tip != nil { scheduleDismiss(after: 1.5) } }
+        didSet { if !hoveringTip, tip != nil { scheduleDismiss(after: 3) } }
     }
     private var dismissTask: Task<Void, Never>?
 
     func present(_ tip: Tip) {
         self.tip = tip
-        scheduleDismiss(after: 3)
+        scheduleDismiss(after: 8)
     }
 
     func dismissTip() {

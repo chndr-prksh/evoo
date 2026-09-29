@@ -50,6 +50,10 @@ final class AppSettings: ObservableObject {
     @Published var showTips: Bool { didSet { save(showTips, "showTips") } }
     @Published var dictationCount: Int { didSet { save(dictationCount, "dictationCount") } }
     @Published var shownTips: [String] { didSet { save(shownTips, "shownTips") } }
+    /// Dictation count when the last tip was shown.
+    @Published var lastTipAt: Int { didSet { save(lastTipAt, "lastTipAt") } }
+    /// Features the user has used — their tips are never shown.
+    @Published var usedFeatures: [String] { didSet { save(usedFeatures, "usedFeatures") } }
     /// Keep recent dictations on this Mac so they can be searched and re-used.
     @Published var keepHistory: Bool { didSet { save(keepHistory, "keepHistory") } }
     @Published var habits: LearnedHabits {
@@ -93,6 +97,8 @@ final class AppSettings: ObservableObject {
         screenLearned = UserDefaults.standard.stringArray(forKey: "screenLearned") ?? []
         dictationCount = UserDefaults.standard.integer(forKey: "dictationCount")
         shownTips = UserDefaults.standard.stringArray(forKey: "shownTips") ?? []
+        lastTipAt = UserDefaults.standard.integer(forKey: "lastTipAt")
+        usedFeatures = UserDefaults.standard.stringArray(forKey: "usedFeatures") ?? []
         appCommands = bool("appCommands", true)
         customApps = UserDefaults.standard.data(forKey: "customApps")
             .flatMap { try? JSONDecoder().decode([AppTarget].self, from: $0) } ?? []

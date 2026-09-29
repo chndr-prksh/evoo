@@ -134,18 +134,17 @@ private struct TipBanner: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.yellow)
                 .padding(.top, 1)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(tip.text)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 12.5, weight: .bold))
                     .foregroundStyle(.white)
-                    .fixedSize(horizontal: false, vertical: true)
                 if !tip.example.isEmpty {
-                    Text("Try it — hold fn and say “\(tip.example)”")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Say “\(tip.example)”")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.75))
                 }
             }
+            .lineLimit(1)
             Spacer(minLength: 0)
             Button(action: dismiss) {
                 Image(systemName: "xmark")
@@ -159,7 +158,7 @@ private struct TipBanner: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
-        .frame(width: 400)
+        .fixedSize()
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.black.opacity(0.92)))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.16), lineWidth: 1))
         .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
