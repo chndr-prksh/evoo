@@ -70,6 +70,21 @@ public final class CloudCorrector: @unchecked Sendable {
         }
     }
 
+    /// Model IDs this key can use (the provider's /models list).
+    public func availableModels() async throws -> [String] {
+        var request = URLRequest(url: provider.baseURL.appendingPathComponent("models"))
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await session.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw CloudError.http((response as? HTTPURLResponse)?.statusCode ?? 0, String(decoding: data.prefix(300), as: UTF8.self))
+        }
+        struct List: Decodable {
+            struct Model: Decodable { let id: String }
+            let data: [Model]
+        }
+        return try JSONDecoder().decode(List.self, from: data).data.map(\.id).sorted()
+    }
+
     /// Raw answer text ("3-4", "none") — exposed for benchmarking.
     public func answer(for text: String) async throws -> String {
         var messages: [[String: String]] = [["role": "system", "content": CorrectionPrompt.system]]

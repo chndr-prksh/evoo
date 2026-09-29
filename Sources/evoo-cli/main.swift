@@ -141,6 +141,14 @@ case "corpus":
     let mode = useLLM ? "rules + \(model.rawValue)\(fallbackOnly ? " as fallback" : "") (ran on \(llmRuns), accepted \(llmAccepted))" : "rules"
     print("\n\(mode): \(close)/\(n) correct (\(exact) exact incl. punctuation) · avg \((total / n).formatted(.units(allowed: [.microseconds]))), worst \(worst.formatted(.units(allowed: [.milliseconds])))")
 
+case "cloud-models":
+    // Lists the models your key can use:  evoo-cli cloud-models --provider groq   (key in EVOO_CLOUD_KEY)
+    guard let key = ProcessInfo.processInfo.environment["EVOO_CLOUD_KEY"], !key.isEmpty else {
+        print("Set EVOO_CLOUD_KEY to your provider API key."); exit(2)
+    }
+    let provider = option("--provider").flatMap(CloudCorrector.Provider.init(rawValue:)) ?? .groq
+    for id in try await CloudCorrector(provider: provider, apiKey: key).availableModels() { print(id) }
+
 case "cloud":
     // Benchmarks hosted open-weight models on the correction scorecard: accuracy, latency, and how often
     // they'd beat a 300 ms budget. The API key comes from EVOO_CLOUD_KEY (never stored by the tool).
