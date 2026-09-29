@@ -20,75 +20,110 @@ public struct ClassSession: Codable, Identifiable, Equatable, Sendable {
         public var time: TimeInterval
         public var page: Int?
         public var text: String
+        /// Typed by the student during class (vs. written by Evoo).
+        public var mine: Bool?
 
-        public init(time: TimeInterval, page: Int?, text: String) {
+        public init(time: TimeInterval, page: Int?, text: String, mine: Bool? = nil) {
             self.time = time
             self.page = page
             self.text = text
+            self.mine = mine
         }
+    }
+
+    /// A moment the student flagged during class.
+    public struct Mark: Codable, Equatable, Sendable {
+        public enum Kind: String, Codable, CaseIterable, Sendable {
+            case important, confusing, exam
+
+            public var label: String {
+                switch self {
+                case .important: "Important"
+                case .confusing: "Confusing"
+                case .exam: "On the exam"
+                }
+            }
+
+            public var symbol: String {
+                switch self {
+                case .important: "★"
+                case .confusing: "❓"
+                case .exam: "🎯"
+                }
+            }
+        }
+
+        public var time: TimeInterval
+        public var kind: Kind
+
+        public init(time: TimeInterval, kind: Kind) {
+            self.time = time
+            self.kind = kind
+        }
+    }
+
+    /// Made after class from the notes: for review and active recall.
+    public struct StudyPack: Codable, Equatable, Sendable {
+        public struct Card: Codable, Equatable, Sendable {
+            public var front: String
+            public var back: String
+        }
+
+        public struct Term: Codable, Equatable, Sendable {
+            public var term: String
+            public var meaning: String
+        }
+
+        public var summary: String = ""
+        public var terms: [Term] = []
+        public var questions: [String] = []
+        public var flashcards: [Card] = []
+        public var todos: [String] = []
     }
 
     public var id = UUID()
     public var title: String
+    /// What the class is about ("Probability", "Constitutional Law") — sets how notes are written.
+    public var subject: String?
     public var started: Date
     /// File name of the class material inside the session folder, if one was added.
     public var pdfFile: String?
     public var segments: [Segment] = []
     public var notes: [Note] = []
+    public var marks: [Mark]? = []
+    /// Recording of the lecture (file name in the class folder), for replaying any moment.
+    public var audioFile: String?
+    public var studyPack: StudyPack?
+    public var duration: TimeInterval?
 
-    public init(title: String, started: Date = Date(), pdfFile: String? = nil) {
+    public init(title: String, subject: String? = nil, started: Date = Date(), pdfFile: String? = nil) {
         self.title = title
+        self.subject = subject
         self.started = started
         self.pdfFile = pdfFile
     }
 
-    /// Notes as Markdown, grouped by slide when there is one.
+    /// Notes as Markdown (the notes carry their own topic headings).
     public func markdown() -> String {
-        var out = "# \(title)\n\n_\(started.formatted(date: .complete, time: .shortened))_\n"
-        var lastPage: Int?? = .none
-        for note in notes {
-            if lastPage == .none || lastPage! != note.page {
-                out += "\n## " + (note.page.map { "Slide \($0 + 1)" } ?? "Notes") + "\n\n"
-                lastPage = .some(note.page)
+        var out = "# \(title)\n\n_\(subject.map { $0 + " · " } ?? "")\(started.formatted(date: .complete, time: .shortened))_\n\n"
+        if let pack = studyPack, !pack.summary.isEmpty { out += "## Summary\n\n\(pack.summary)\n\n" }
+        out += notes.map { $0.mine == true ? "> ✍️ " + $0.text : $0.text }.joined(separator: "\n\n") + "\n"
+        if let pack = studyPack {
+            if !pack.terms.isEmpty {
+                out += "\n## Key terms\n\n" + pack.terms.map { "- **\($0.term)** — \($0.meaning)" }.joined(separator: "\n") + "\n"
             }
-            out += note.text + "\n"
+            if !pack.questions.isEmpty {
+                out += "\n## Practice questions\n\n" + pack.questions.map { "- \($0)" }.joined(separator: "\n") + "\n"
+            }
+            if !pack.flashcards.isEmpty {
+                out += "\n## Flashcards\n\n" + pack.flashcards.map { "- **Q:** \($0.front)  \n  **A:** \($0.back)" }
+                    .joined(separator: "\n") + "\n"
+            }
+            if !pack.todos.isEmpty {
+                out += "\n## To do\n\n" + pack.todos.map { "- [ ] \($0)" }.joined(separator: "\n") + "\n"
+            }
         }
         return out
-    }
-}
-
-/// Follows which slide the professor is on by matching recent speech against each slide's text.
-/// Moves forward readily, back only on clear evidence, and never jumps far on a weak match.
-public struct SlideTracker: Sendable {
-    public let pages: [String]
-    public private(set) var current = 0
-
-    public init(pages: [String]) {
-        self.pages = pages
-    }
-
-    /// Call with the last minute or so of transcript. Returns the (possibly new) current page.
-    @discardableResult
-    public mutating func update(with recent: String) -> Int {
-        guard pages.count > 1, !recent.isEmpty else { return current }
-        let lower = recent.lowercased()
-        // Spoken navigation: "next slide", "slide 12", "page 5".
-        if let n = lower.range(of: #"(?:slide|page) (?:number )?(\d{1,3})\b"#, options: .regularExpression)
-            .flatMap({ Int(lower[$0].filter(\.isNumber)) }), n >= 1, n <= pages.count
-        {
-            current = n - 1
-            return current
-        }
-        let scores = SemanticSearch.scores(recent, in: pages)
-        let window = max(0, current - 1) ... min(pages.count - 1, current + 3)
-        guard let best = window.max(by: { scores[$0] < scores[$1] }) else { return current }
-        let margin = best > current ? 0.08 : 0.2 // going back needs stronger evidence
-        if best != current, scores[best] > scores[current] + margin { current = best }
-        return current
-    }
-
-    public mutating func set(_ page: Int) {
-        current = min(max(0, page), max(0, pages.count - 1))
     }
 }
 
@@ -122,21 +157,139 @@ public enum LectureNotes {
     }
 }
 
-/// Prompt for the local LLM (16 GB Macs) to write notes like a student would.
+/// Prompt for the local LLM to write structured notes the way a strong student in that subject would.
 public enum ClassNotePrompt {
     static let system = """
-    You take lecture notes for a student. You get the current slide (if any) and what the professor just \
-    said. Write concise notes of what the professor ADDED — explanations, intuition, worked examples with the \
-    numbers, what they stressed, questions from students. Don't copy the slide. Use short "- " bullets, "→" for \
-    implications, "★" for anything stressed as important or on the exam, and LaTeX for math between $…$ \
-    (e.g. $P(A\\mid B)=\\frac{P(B\\mid A)P(A)}{P(B)}$). If nothing new was said, output nothing.
+    You take structured lecture notes for a student. You get the subject, the topic you were last writing \
+    about, and what the professor just said. Write clear, well-organized notes of it:
+    - Start a new topic with a heading line "## Topic name" — only when the professor moves to a new topic; \
+    otherwise continue the current one without a heading.
+    - Use short "- " bullets, indented "  - " for details. Put key terms in **bold**; write a definition as \
+    "**Term** — meaning".
+    - Keep worked examples with their actual numbers or specifics, labelled "Example:".
+    - Mark anything the professor stresses as important, or says is on the exam, with "★".
+    - Write it the way notes in this subject are normally written: math, statistics, physics, engineering → \
+    formulas in LaTeX between $…$ ($$…$$ for important ones), steps of derivations; programming → code in \
+    backticks, complexity; history, politics → dates, people, cause → effect; law → rules, cases, tests; \
+    biology, chemistry, medicine → mechanisms, processes as steps, terminology; economics, business → \
+    models, definitions, graphs described in words; languages, literature → quotes, themes, examples.
+    - Only what was actually said — never invent facts. Skip filler, jokes and logistics unless they matter \
+    (like exam dates). If nothing substantive was said, output nothing.
     """
 
     public static var prefix: String { "<|im_start|>system\n\(system)<|im_end|>\n" }
 
-    public static func suffix(slide: String?, transcript: String, thinkBlock: Bool) -> String {
-        let slidePart = slide.map { "Slide:\n\(String($0.prefix(1_500)))\n\n" } ?? ""
-        return "<|im_start|>user\n\(slidePart)Professor said:\n\(transcript)<|im_end|>\n<|im_start|>assistant\n"
+    public static func suffix(subject: String?, lastTopic: String?, transcript: String, marks: [ClassSession.Mark.Kind] = [],
+                              thinkBlock: Bool) -> String
+    {
+        var user = "Subject: \(subject?.isEmpty == false ? subject! : "General")\n"
+        if let lastTopic { user += "Current topic: \(lastTopic)\n" }
+        for kind in Set(marks) {
+            switch kind {
+            case .important: user += "The student flagged this part as IMPORTANT — mark its key point with ★.\n"
+            case .exam: user += "The student flagged this part as ON THE EXAM — mark it with ★ and \"(exam)\".\n"
+            case .confusing: user += "The student found this part CONFUSING — add a bullet starting \"❓ In plain words:\" that explains it simply.\n"
+            }
+        }
+        user += "\nProfessor said:\n\(transcript)"
+        return "<|im_start|>user\n\(user)<|im_end|>\n<|im_start|>assistant\n" + (thinkBlock ? "<think>\n\n</think>\n\n" : "")
+    }
+
+    /// The last "## Topic" heading in the notes so far.
+    public static func lastTopic(in notes: [String]) -> String? {
+        for note in notes.reversed() {
+            if let line = note.split(separator: "\n").last(where: { $0.hasPrefix("## ") }) {
+                return String(line.dropFirst(3))
+            }
+        }
+        return nil
+    }
+
+    /// Subjects offered when starting a class (anything else can be typed).
+    public static let commonSubjects = [
+        "Mathematics", "Probability & Statistics", "Physics", "Chemistry", "Biology", "Computer Science",
+        "Economics", "Business", "History", "Political Science", "Law", "Medicine", "Psychology",
+        "Literature", "Philosophy", "Engineering",
+    ]
+}
+
+/// After class: summary, key terms, practice questions, flashcards and to-dos from the notes.
+public enum StudyPackPrompt {
+    static let system = """
+    You turn a student's lecture notes into a study pack. Use only what's in the notes. Output exactly these \
+    sections, in this order, with these headings:
+    ## Summary
+    3–5 sentences covering the lecture's main ideas.
+    ## Key terms
+    - **Term** — one-line meaning
+    ## Practice questions
+    - A question a professor could ask on an exam (5–8 of them).
+    ## Flashcards
+    - Q: question | A: short answer   (8–15 of them)
+    ## To do
+    - Assignments, readings, deadlines or exam dates mentioned (write "- None" if there are none).
+    Keep formulas in LaTeX between $…$.
+    """
+
+    public static var prefix: String { "<|im_start|>system\n\(system)<|im_end|>\n" }
+
+    public static func suffix(subject: String?, notes: String, thinkBlock: Bool) -> String {
+        "<|im_start|>user\nSubject: \(subject ?? "General")\n\nNotes:\n\(notes)<|im_end|>\n<|im_start|>assistant\n"
+            + (thinkBlock ? "<think>\n\n</think>\n\n" : "")
+    }
+
+    /// Reads the model's sections back into a study pack (tolerant of small format slips).
+    public static func parse(_ text: String) -> ClassSession.StudyPack {
+        var pack = ClassSession.StudyPack()
+        var section = ""
+        var summary: [String] = []
+        for raw in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("#") {
+                section = line.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+                continue
+            }
+            guard !line.isEmpty else { continue }
+            let item = line.replacingOccurrences(of: #"^(?:[-*•]|\d+[.)])\s*"#, with: "", options: .regularExpression)
+            switch true {
+            case section.hasPrefix("summary"): summary.append(line)
+            case section.hasPrefix("key term"):
+                let parts = item.components(separatedBy: " — ").count > 1 ? item.components(separatedBy: " — ")
+                    : item.components(separatedBy: " - ")
+                if parts.count >= 2 {
+                    pack.terms.append(.init(term: parts[0].replacingOccurrences(of: "**", with: "").trimmingCharacters(in: .whitespaces),
+                                            meaning: parts.dropFirst().joined(separator: " — ").trimmingCharacters(in: .whitespaces)))
+                }
+            case section.hasPrefix("practice"), section.hasPrefix("question"): pack.questions.append(item)
+            case section.hasPrefix("flashcard"):
+                let parts = item.components(separatedBy: "|")
+                if parts.count >= 2 {
+                    let clean = { (s: String) in s.trimmingCharacters(in: .whitespaces)
+                        .replacingOccurrences(of: #"^[QA]:\s*"#, with: "", options: .regularExpression) }
+                    pack.flashcards.append(.init(front: clean(parts[0]), back: clean(parts.dropFirst().joined(separator: "|"))))
+                }
+            case section.hasPrefix("to do"), section.hasPrefix("todo"):
+                if item.lowercased() != "none" { pack.todos.append(item) }
+            default: break
+            }
+        }
+        pack.summary = summary.joined(separator: " ")
+        return pack
+    }
+}
+
+/// "Ask your lecture": answers from what was said, pointing to when.
+public enum LectureQAPrompt {
+    static let system = """
+    You answer a student's question about a lecture, using only the transcript excerpts given (each starts with \
+    its time, like [12:40]). Answer clearly in a few sentences, with formulas in LaTeX between $…$, and cite the \
+    times you used like (12:40). If the lecture didn't cover it, say so.
+    """
+
+    public static var prefix: String { "<|im_start|>system\n\(system)<|im_end|>\n" }
+
+    public static func suffix(question: String, excerpts: String, thinkBlock: Bool) -> String {
+        "<|im_start|>user\nTranscript excerpts:\n\(excerpts)\n\nQuestion: \(question)<|im_end|>\n<|im_start|>assistant\n"
             + (thinkBlock ? "<think>\n\n</think>\n\n" : "")
     }
 }

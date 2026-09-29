@@ -25,15 +25,18 @@ one-line install below. Evoo updates itself after that.
 - History: search and copy your recent dictations (menu → History…), kept only on your Mac.
 - **Welcome tour** on first launch: privacy & offline, what you can do, and a step-by-step permissions guide
   that ticks off each step live. Afterwards, a small tip by the pill now and then introduces one feature at a time.
-- **Class Notes** (🎓 on the pill, or say "start class notes"): drop the professor's PDF (optional), start the
-  class, and Evoo listens, follows the slides, and writes notes beside each one with a local AI — formulas in
-  LaTeX, worked examples, ★ for what's stressed. Every class is saved with its date and time; say
-  "search note Bayes theorem" to find where something was said. Export to Markdown.
+- **Class Notes** (🎓 on the pill, or say "start class notes"): pick the subject, start the class, and Evoo
+  listens and writes structured notes in that subject's style with a local AI — headings, key terms, formulas in
+  LaTeX, worked examples, ★ for what's stressed. During class: flag moments (★ Important, ❓ Confusing, 🎯 Exam —
+  ⌘1–3) and type your own notes. Afterwards: click any note or transcript line to replay that moment of the
+  recording (1–2× speed), get a study pack (summary, key terms, practice questions, to-dos), flip through
+  flashcards, and ask questions about the lecture. Classes are grouped by subject; say "search note Bayes
+  theorem" to find where something was said. Export to PDF or Markdown.
 - **Voice commands** (say the whole command as one dictation; anything else is typed as usual):
   - Apps & web: "open Slack", "switch to Chrome", "open github.com", "search Google for …", "ask ChatGPT …",
     "YouTube …", "new Google doc", "new email about …" — every installed app, plus your own in Settings → Apps
   - Your Mac: "search my Mac for …" (Spotlight), "run shortcut Morning Routine" (Apple Shortcuts), "volume 30",
-    "mute", "next song", "dark mode", "take a screenshot", "lock screen"
+    "volume thirty", "press space bar", "mute", "next song", "dark mode", "take a screenshot", "lock screen"
   - Keys: "new tab", "reopen tab", "refresh", "copy", "paste", "save", "scroll down", "press command shift T"
   - Windows & buttons: "move this to the left half", "maximize this window", "full screen", "click Send"
   - Assistant: "remind me to call Divya tomorrow at 5", "schedule lunch with Raj Friday at 1 PM",

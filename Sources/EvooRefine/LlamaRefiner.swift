@@ -104,12 +104,38 @@ public final class LlamaRefiner: @unchecked Sendable {
     }
 
     /// Student-style notes for what the professor just said (see `ClassNotePrompt`).
-    public func classNotes(slide: String?, transcript: String) async throws -> String? {
+    public func classNotes(subject: String?, lastTopic: String?, transcript: String,
+                           marks: [ClassSession.Mark.Kind] = []) async throws -> String?
+    {
         let raw = try await run { [self] in
             try primePrefix(ClassNotePrompt.prefix)
-            let suffix = ClassNotePrompt.suffix(slide: slide, transcript: String(transcript.suffix(4_000)),
+            let suffix = ClassNotePrompt.suffix(subject: subject, lastTopic: lastTopic,
+                                                transcript: String(transcript.suffix(4_000)), marks: marks,
                                                 thinkBlock: loadedModel?.usesThinkBlock ?? true)
-            return try generate(suffix: suffix, maxTokens: 350)
+            return try generate(suffix: suffix, maxTokens: 450)
+        }
+        let out = RewritePrompt.sanitize(raw)
+        return out.isEmpty ? nil : out
+    }
+
+    /// Summary, key terms, practice questions, flashcards and to-dos from a class's notes.
+    public func studyPack(subject: String?, notes: String) async throws -> ClassSession.StudyPack {
+        let raw = try await run { [self] in
+            try primePrefix(StudyPackPrompt.prefix)
+            let suffix = StudyPackPrompt.suffix(subject: subject, notes: String(notes.suffix(7_000)),
+                                                thinkBlock: loadedModel?.usesThinkBlock ?? true)
+            return try generate(suffix: suffix, maxTokens: 1_200)
+        }
+        return StudyPackPrompt.parse(RefinePrompt.sanitize(raw))
+    }
+
+    /// Answers a question about a lecture from transcript excerpts.
+    public func answer(question: String, excerpts: String) async throws -> String? {
+        let raw = try await run { [self] in
+            try primePrefix(LectureQAPrompt.prefix)
+            let suffix = LectureQAPrompt.suffix(question: question, excerpts: String(excerpts.suffix(7_000)),
+                                                thinkBlock: loadedModel?.usesThinkBlock ?? true)
+            return try generate(suffix: suffix, maxTokens: 400)
         }
         let out = RewritePrompt.sanitize(raw)
         return out.isEmpty ? nil : out

@@ -233,8 +233,8 @@ case "cloud":
 
 case "class-notes":
     // Simulates Class Notes on a recorded lecture: transcribes it in chunks, then writes notes with the local
-    // model every ~120 words, like the app does live.  evoo-cli class-notes lecture.m4a [--slide "slide text"]
-    let slide = option("--slide")
+    // model, like the app does live.  evoo-cli class-notes lecture.m4a [--subject "Probability"]
+    let subject = option("--subject")
     let engine = ParakeetEngine()
     try await engine.load { _ in }
     try await refiner.load(.qwen3_4b)
@@ -249,7 +249,7 @@ case "class-notes":
         }
         print("TRANSCRIPT:\n\(transcript.trimmingCharacters(in: .whitespaces))\n")
         let t0 = clock.now
-        let notes = try await refiner.classNotes(slide: slide, transcript: transcript) ?? "(none)"
+        let notes = try await refiner.classNotes(subject: subject, lastTopic: nil, transcript: transcript) ?? "(none)"
         print("NOTES (\((clock.now - t0).formatted(.units(allowed: [.seconds])))):\n\(notes)")
     }
     await engine.unload()

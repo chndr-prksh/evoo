@@ -64,16 +64,26 @@ public enum MacCommands {
         if let m = match(#"run (?:the )?shortcut (?:called |named )?(.+)"#) ?? match(#"run (?:the |my )?(.+?) shortcut"#) {
             return .runShortcut(m[1].trimmingCharacters(in: CharacterSet(charactersIn: "\"“” ")))
         }
-        // Keys: named actions first, then "press <combo>"
-        let lower = s.lowercased()
-        if let (combo, name) = namedKeys[lower.replacingOccurrences(of: "please ", with: "")] {
+        // Keys & volume are matched on a forgiving form: "Volume, thirty." → "volume 30", "space bar" → "spacebar".
+        let n = commandForm(s)
+        func matchN(_ pattern: String) -> [String]? {
+            guard let regex = try? NSRegularExpression(pattern: "^(?i)(?:please |hey evoo )?" + pattern + "$"),
+                  let m = regex.firstMatch(in: n, range: NSRange(n.startIndex..., in: n)) else { return nil }
+            return (0 ..< m.numberOfRanges).map { Range(m.range(at: $0), in: n).map { String(n[$0]) } ?? "" }
+        }
+        // Keys: named actions first, then "press <combo>", then a key said on its own ("spacebar", "escape")
+        if let (combo, name) = namedKeys[n.replacingOccurrences(of: "please ", with: "")] {
             return .keys(combo, name: name)
         }
-        if let m = match(#"(?:press|hit|type) (.+)"#), let combo = combo(m[1]) {
+        if let m = matchN(#"(?:press|hit|type|tap|push) (?:the |on )?(.+?)(?: key| button)?"#), let combo = combo(m[1]) {
             return .keys(combo, name: m[1])
         }
+        if let key = loneKeys[n] { return .keys(KeyCombo(key), name: n) }
         // Volume & media
-        if let m = match(#"(?:set (?:the )?)?volume (?:to )?(\d{1,3})(?: ?%| percent)?"#), let v = Int(m[1]) {
+        if let m = matchN(#"(?:(?:set|turn|change|put|make|bring|reduce|increase|lower|raise|adjust) (?:the |my )?)?(?:volume|sound)(?: level)?(?: (?:to|at|of|up to|down to))? (\d{1,3})(?: ?%| percent)?"#)
+            ?? matchN(#"(?:set|turn|change|put|bring|reduce|increase|lower|raise) (?:the |my )?(?:volume|sound) (?:up |down )?to (\d{1,3})(?: ?%| percent)?"#),
+            let v = Int(m[1])
+        {
             return .volume(min(100, v))
         }
         if match(#"(?:turn (?:the )?)?volume up|louder|turn it up"#) != nil { return .volumeStep(up: true) }
@@ -195,9 +205,46 @@ public enum MacCommands {
         "switch app": (KeyCombo("tab", command: true), "Switch app"),
     ]
 
+    /// Keys that are commands even when said alone.
+    static let loneKeys: [String: String] = [
+        "spacebar": "space", "escape": "escape", "tab key": "tab", "enter key": "return", "return key": "return",
+        "backspace": "delete", "up arrow": "up", "down arrow": "down", "left arrow": "left", "right arrow": "right",
+    ]
+
+    /// Lowercased, no punctuation, number words as digits, "space bar" → "spacebar".
+    static func commandForm(_ text: String) -> String {
+        var t = text.lowercased()
+            .replacingOccurrences(of: #"[,;:!?.\-]"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "per cent", with: "percent")
+            .replacingOccurrences(of: #"\bspace ?bar\b"#, with: "spacebar", options: .regularExpression)
+        t = t.split(separator: " ").joined(separator: " ")
+        // "thirty five" → "35", "one hundred" → "100"
+        let units = ["zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
+                     "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
+                     "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19]
+        let tens = ["twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80,
+                    "ninety": 90]
+        var out: [String] = []
+        var words = t.split(separator: " ").map(String.init)[...]
+        while let w = words.popFirst() {
+            if w == "hundred" || (w == "a" && words.first == "hundred") || (w == "one" && words.first == "hundred") {
+                if w != "hundred" { words.removeFirst() }
+                out.append("100")
+            } else if let v = tens[w] {
+                if let next = words.first, let u = units[next], u < 10 { words.removeFirst(); out.append(String(v + u)) }
+                else { out.append(String(v)) }
+            } else if let v = units[w], out.last.map({ ["volume", "to", "at", "sound", "of", "level"].contains($0) }) ?? false {
+                out.append(String(v))
+            } else {
+                out.append(w)
+            }
+        }
+        return out.joined(separator: " ")
+    }
+
     static let keyNames: [String: String] = [
-        "enter": "return", "return": "return", "escape": "escape", "esc": "escape", "tab": "tab", "space": "space",
-        "spacebar": "space", "delete": "delete", "backspace": "delete", "forward delete": "forwarddelete",
+        "enter": "return", "return": "return", "escape": "escape", "esc": "escape", "tab": "tab", "space": "space", "spacebar": "space",
+        "delete": "delete", "backspace": "delete", "forward delete": "forwarddelete",
         "up": "up", "down": "down", "left": "left", "right": "right", "up arrow": "up", "down arrow": "down",
         "left arrow": "left", "right arrow": "right", "page up": "pageup", "page down": "pagedown", "home": "home",
         "end": "end", "comma": ",", "period": ".", "dot": ".", "slash": "/", "minus": "-", "equals": "=", "plus": "=",

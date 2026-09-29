@@ -557,10 +557,10 @@ import Testing
 
     @Test func keys() {
         #expect(p("New tab.") == .keys(KeyCombo("t", command: true), name: "New tab"))
-        #expect(p("Press command shift T") == .keys(KeyCombo("t", command: true, shift: true), name: "command shift T"))
+        #expect(p("Press command shift T") == .keys(KeyCombo("t", command: true, shift: true), name: "command shift t"))
         #expect(p("press enter") == .keys(KeyCombo("return"), name: "enter"))
         #expect(p("Hit escape.") == .keys(KeyCombo("escape"), name: "escape"))
-        #expect(p("press F5") == .keys(KeyCombo("f5"), name: "F5"))
+        #expect(p("press F5") == .keys(KeyCombo("f5"), name: "f5"))
     }
 
     @Test func systemAndWindows() {
@@ -707,15 +707,37 @@ import Testing
         #expect(MacCommands.parse("What did I say about the invoice?") == .askHistory("the invoice"))
     }
 
-    @Test func tracksSlides() {
-        var t = SlideTracker(pages: [
-            "Introduction to probability. Sample spaces and events.",
-            "Conditional probability. P of A given B. Bayes theorem.",
-            "Random variables. Expectation and variance.",
-        ])
-        #expect(t.update(with: "so today we start with what a sample space is and what an event is") == 0)
-        #expect(t.update(with: "now the probability of A given B, and this leads to Bayes theorem") == 1)
-        #expect(t.update(with: "let's go to slide 3") == 2)
+    @Test func promptCarriesSubjectAndTopic() {
+        let p = ClassNotePrompt.suffix(subject: "Constitutional Law", lastTopic: "Due process", transcript: "…", thinkBlock: false)
+        #expect(p.contains("Subject: Constitutional Law"))
+        #expect(p.contains("Current topic: Due process"))
+        #expect(ClassNotePrompt.lastTopic(in: ["## Bayes theorem\n- flips conditionals", "- more"]) == "Bayes theorem")
+    }
+
+    @Test func parsesStudyPack() {
+        let pack = StudyPackPrompt.parse("""
+        ## Summary
+        Conditional probability updates beliefs. Bayes flips it.
+        ## Key terms
+        - **Conditional probability** — probability of A given B
+        - **Independence** - knowing B says nothing about A
+        ## Practice questions
+        1. State Bayes' theorem.
+        ## Flashcards
+        - Q: What is $P(A\\mid B)$? | A: $P(A\\cap B)/P(B)$
+        ## To do
+        - None
+        """)
+        #expect(pack.summary.hasPrefix("Conditional probability updates"))
+        #expect(pack.terms.map(\.term) == ["Conditional probability", "Independence"])
+        #expect(pack.questions == ["State Bayes' theorem."])
+        #expect(pack.flashcards.first?.back == "$P(A\\cap B)/P(B)$")
+        #expect(pack.todos.isEmpty)
+    }
+
+    @Test func marksReachThePrompt() {
+        let p = ClassNotePrompt.suffix(subject: "Physics", lastTopic: nil, transcript: "…", marks: [.confusing], thinkBlock: false)
+        #expect(p.contains("CONFUSING"))
     }
 
     @Test func writesBulletsWithoutAI() {
@@ -734,4 +756,23 @@ import Testing
         #expect(hits.first?.sessionID == a.id)
         #expect(hits.first?.time == 120)
     }
+}
+
+@Test func spokenVolumeAndKeyVariants() {
+    for phrase in ["Volume 30", "Volume, thirty.", "volume thirty percent", "Set the volume to 30%.", "Turn the volume to thirty",
+                   "Change volume to 30", "Volume at 30.", "Sound 30", "Reduce the volume to thirty"] {
+        #expect(MacCommands.parse(phrase) == .volume(30), "\(phrase)")
+    }
+    #expect(MacCommands.parse("Volume thirty five.") == .volume(35))
+    #expect(MacCommands.parse("Volume one hundred") == .volume(100))
+    for phrase in ["Press space bar.", "Space bar.", "Spacebar", "Hit space.", "Press the space bar key", "press space"] {
+        guard case let .keys(combo, _)? = MacCommands.parse(phrase) else {
+            Issue.record("not a key: \(phrase)"); continue
+        }
+        #expect(combo.key == "space", "\(phrase)")
+    }
+    guard case let .keys(c, _)? = MacCommands.parse("Press command, shift, T.") else { Issue.record("cmd shift t"); return }
+    #expect(c.command && c.shift && c.key == "t")
+    #expect(MacCommands.parse("Click Send") == .click("Send"))
+    #expect(MacCommands.parse("I turned the volume up to thirty at the party yesterday") == nil)
 }

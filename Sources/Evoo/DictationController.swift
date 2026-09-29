@@ -1,5 +1,4 @@
 import AppKit
-import PDFKit
 import Combine
 import EvooCore
 import EvooRefine
@@ -555,21 +554,39 @@ final class DictationController: ObservableObject {
         }
     }
 
-    /// A recorder wired to the speech engine and the local notes model.
-    func makeClassRecorder(session: ClassSession, pdf: PDFDocument?) -> ClassRecorder? {
+    /// The local notes AI (loads the notes model on first use), or nil if it isn't downloaded yet.
+    func classAI() -> ClassAI? {
+        guard notesModelInstalled else { return nil }
+        let refiner = self.refiner
+        let ready: () async -> Void = {
+            if refiner.loadedModel != Self.notesModel { try? await refiner.load(Self.notesModel) }
+        }
+        return ClassAI(
+            notes: { subject, topic, transcript, marks in
+                await ready()
+                return try? await refiner.classNotes(subject: subject, lastTopic: topic, transcript: transcript, marks: marks)
+            },
+            studyPack: { subject, notes in
+                await ready()
+                return try? await refiner.studyPack(subject: subject, notes: notes)
+            },
+            answer: { question, excerpts in
+                await ready()
+                return try? await refiner.answer(question: question, excerpts: excerpts)
+            }
+        )
+    }
+
+    /// A recorder wired to the speech engine and the local notes AI.
+    func makeClassRecorder(session: ClassSession) -> ClassRecorder? {
         guard engines.ready(settings.resolvedEngine) != nil else {
             show("Speech model is still preparing — try again shortly")
             return nil
         }
-        let refiner = self.refiner
-        let writer: ((String?, String) async -> String?)? = notesModelInstalled ? { slide, transcript in
-            if refiner.loadedModel != Self.notesModel { try? await refiner.load(Self.notesModel) }
-            return try? await refiner.classNotes(slide: slide, transcript: transcript)
-        } : nil
-        return ClassRecorder(session: session, pdf: pdf, transcribe: { [weak self] samples in
+        return ClassRecorder(session: session, transcribe: { [weak self] samples in
             guard let engine = await self?.engines.ready(.parakeet) else { return "" }
             return try await engine.transcribe(samples, language: .english)
-        }, writeNotes: writer)
+        }, ai: classAI())
     }
 
     func transcribeFile() {

@@ -38,10 +38,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         controller.onOpenHistory = { [weak self] in self?.openHistory() }
         controller.onOpenClassNotes = { [weak self] query in self?.openClassNotes(query: query) }
         PillModel.shared.openClassNotes = { [weak self] in self?.openClassNotes(query: nil) }
-        ClassNotesModel.shared.makeRecorder = { [weak self] session, pdf in
-            self?.controller.makeClassRecorder(session: session, pdf: pdf)
+        ClassNotesModel.shared.makeRecorder = { [weak self] session in
+            self?.controller.makeClassRecorder(session: session)
         }
         ClassNotesModel.shared.microphone = { AppSettings.shared.microphoneUID }
+        ClassNotesModel.shared.ai = { [weak self] in self?.controller.classAI() }
         controller.bootstrap()
         updater.start()
         updater.$state
