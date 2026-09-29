@@ -11,6 +11,16 @@ if let i = CommandLine.arguments.firstIndex(of: "--snapshot-pill"), i + 1 < Comm
 }
 #endif
 
+#if DEBUG
+if let i = CommandLine.arguments.firstIndex(of: "--snapshot-notes"), i + 1 < CommandLine.arguments.count {
+    let app = NSApplication.shared
+    MainActor.assumeIsolated {
+        NotesSnapshot.current = NotesSnapshot(out: URL(fileURLWithPath: CommandLine.arguments[i + 1]))
+    }
+    app.run()
+}
+#endif
+
 let app = NSApplication.shared
 let delegate = MainActor.assumeIsolated { AppDelegate() }
 app.delegate = delegate

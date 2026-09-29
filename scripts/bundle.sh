@@ -27,6 +27,7 @@ if [ -n "${EVOO_REPO:-}" ]; then
   /usr/libexec/PlistBuddy -c "Add :EvooRepository string $EVOO_REPO" "$APP/Contents/Info.plist"
 fi
 ditto "$BIN/llama.framework" "$APP/Contents/Frameworks/llama.framework"
+ditto Resources/katex "$APP/Contents/Resources/katex" # math rendering for class notes (MIT)
 for bundle in "$BIN"/*.bundle; do
   [ -e "$bundle" ] && ditto "$bundle" "$APP/Contents/Resources/$(basename "$bundle")"
 done

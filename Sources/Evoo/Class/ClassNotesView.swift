@@ -273,61 +273,42 @@ private struct ClassPageView: View {
         }
     }
 
+    @StateObject private var exporter = NotesExporter()
+
     private var notes: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack {
-                        Text(session.started.formatted(date: .complete, time: .shortened))
-                            .font(.caption).foregroundStyle(.secondary)
-                        Spacer()
-                        Button("Export Markdown…", action: export).font(.caption)
-                    }
-                    if session.notes.isEmpty && session.segments.isEmpty {
-                        Text("Notes appear here as the lecture goes on.").foregroundStyle(.secondary)
-                    }
-                    ForEach(Array(session.notes.enumerated()), id: \.offset) { _, note in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(label(note.time, note.page)).font(.caption.bold()).foregroundStyle(.tint)
-                            Text(note.text).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(isFocused(note.time)
-                                ? Color.yellow.opacity(0.25) : Color.secondary.opacity(0.07)))
-                        .id(note.time)
-                    }
-                    if !session.segments.isEmpty {
-                        DisclosureGroup("Full transcript") {
-                            VStack(alignment: .leading, spacing: 6) {
-                                ForEach(Array(session.segments.enumerated()), id: \.offset) { _, s in
-                                    Text("[\(clock(s.time))] ").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                                        + Text(s.text).font(.callout)
-                                }
-                            }
-                            .textSelection(.enabled)
-                        }
-                    }
+        VStack(spacing: 0) {
+            HStack {
+                Text(session.started.formatted(date: .complete, time: .shortened))
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Menu("Export") {
+                    Button("PDF (with formulas)…") { exporter.exportPDF(named: session.title) }
+                    Button("Markdown…", action: export)
                 }
-                .padding(16)
+                .menuStyle(.borderlessButton)
+                .fixedSize()
             }
-            .onAppear { scroll(proxy) }
-            .onChange(of: focusTime) { _, _ in scroll(proxy) }
-            .onChange(of: session.notes.count) { _, _ in
-                if focusTime == nil, let last = session.notes.last { withAnimation { proxy.scrollTo(last.time, anchor: .bottom) } }
-            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            NotesWebView(items: session.notes.map { note in
+                NotesWebView.Item(id: String(Int(note.time * 1000)), label: label(note.time, note.page),
+                                  text: note.text, focused: isFocused(note.time))
+            }, transcript: session.segments.map { "[\(clock($0.time))] \($0.text)" },
+            scrollTo: focusedNoteID, exporter: exporter)
         }
+    }
+
+    private var focusedNoteID: String? {
+        guard let f = focusTime, let note = session.notes.last(where: { $0.time <= f }) ?? session.notes.first else {
+            return nil
+        }
+        return String(Int(note.time * 1000))
     }
 
     private func isFocused(_ t: TimeInterval) -> Bool {
         guard let f = focusTime else { return false }
         let next = session.notes.first { $0.time > t }?.time ?? .infinity
         return f >= t && f < next
-    }
-
-    private func scroll(_ proxy: ScrollViewProxy) {
-        guard let f = focusTime, let note = session.notes.last(where: { $0.time <= f }) ?? session.notes.first else { return }
-        withAnimation { proxy.scrollTo(note.time, anchor: .center) }
     }
 
     private func label(_ t: TimeInterval, _ page: Int?) -> String {

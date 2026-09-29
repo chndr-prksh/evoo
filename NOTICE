@@ -19,6 +19,7 @@ Text refinement
   (GGUF quantization by Unsloth)
 
 Libraries
+- KaTeX (math rendering in class notes) — MIT — https://katex.org
 - FluidAudio — Apache-2.0 — https://github.com/FluidInference/FluidAudio
 - WhisperKit — MIT — https://github.com/argmaxinc/WhisperKit
 - llama.cpp — MIT — https://github.com/ggml-org/llama.cpp
