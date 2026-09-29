@@ -35,6 +35,17 @@ public final class ParakeetEngine: SpeechEngine {
         return try await manager.transcribe(samples, decoderState: &state, language: hint).text
     }
 
+    /// Full transcription with word timings, for files and subtitles.
+    public func transcribeDetailed(_ samples: [Float]) async throws -> (text: String, timings: [Subtitles.Timed]) {
+        guard let manager else { throw EngineError.notLoaded }
+        var state = TdtDecoderState.make(decoderLayers: version.decoderLayers)
+        let result = try await manager.transcribe(samples, decoderState: &state, language: .english)
+        let timings = (result.tokenTimings ?? []).map {
+            Subtitles.Timed(text: $0.token, start: $0.startTime, end: $0.endTime)
+        }
+        return (result.text, timings)
+    }
+
     public func unload() async {
         await manager?.cleanup()
         manager = nil

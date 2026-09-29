@@ -11,9 +11,18 @@ struct AppsSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Voice commands for apps", isOn: $settings.appCommands)
-                Text("Say the whole thing as one dictation: “open Slack”, “switch to Chrome”, “search Google for flights to Delhi”, “ask ChatGPT how tides work”, “YouTube lo-fi music”, “new Google doc”, “new email about the invoice”, “open github.com”. Anything else is typed as usual.")
+                Toggle("Voice commands", isOn: $settings.appCommands)
+                Text("Say the whole thing as one dictation — anything else is typed as usual.")
                     .font(.caption).foregroundStyle(.secondary)
+                DisclosureGroup("Everything you can say") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Self.examples, id: \.0) { group, lines in
+                            Text(group).font(.caption.bold())
+                            Text(lines).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
             }
 
             Section("Your apps and sites") {
@@ -69,6 +78,16 @@ struct AppsSettingsView: View {
         }
         .formStyle(.grouped)
     }
+
+    static let examples: [(String, String)] = [
+        ("Apps & web", "“open Slack” · “switch to Chrome” · “open github.com” · “search Google for flights to Delhi” · “ask ChatGPT how tides work” · “YouTube lo-fi music” · “new Google doc” · “new email about the invoice”"),
+        ("Your Mac", "“search my Mac for tax documents” (Spotlight) · “run shortcut Morning Routine” · “volume 30” · “mute” · “next song” · “dark mode” · “take a screenshot” · “lock screen”"),
+        ("Keys", "“new tab” · “close tab” · “reopen tab” · “refresh” · “select all” · “copy” · “paste” · “save” · “go back” · “scroll down” · “press command shift T” · “press enter”"),
+        ("Windows & buttons", "“move this to the left half” · “maximize this window” · “full screen” · “minimize” · “click Send” · “press the Reply all button”"),
+        ("Assistant", "“remind me to call Divya tomorrow at 5” · “schedule lunch with Raj Friday at 1 PM” · “note: pricing idea…” · “what did I say about the invoice?”"),
+        ("Audio", "“read this aloud” (selected text) · “stop reading” · “transcribe a file”"),
+        ("Editing", "“replace Tuesday with Wednesday” · “delete the last sentence” · “make that a list” · “undo that” · “… press enter”"),
+    ]
 
     /// Choose an installed app to add under a name of your choice.
     private func pickApp() {

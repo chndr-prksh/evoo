@@ -45,6 +45,8 @@ final class DictationController: ObservableObject {
     /// Names read from the screen while the user speaks; ready by the time fn goes up.
     private var screenNames: Task<[String], Never>?
     private var targetApp: String?
+    /// Opens the History & Notes window (owned by the app delegate).
+    var onOpenHistory: (() -> Void)?
     /// Text selected when fn went down — the target of "rewrite by voice".
     private var selectionAtStart: String?
 
@@ -344,6 +346,7 @@ final class DictationController: ObservableObject {
             let asrStart = ContinuousClock.now
             let (raw, reused) = try await speculator.transcript(for: samples, engine: engine)
             let asrMs = (ContinuousClock.now - asrStart).ms
+            if await runMacCommand(raw) { return }
             if runAppCommand(raw) { return }
             if try await rewriteSelectionIfAsked(raw, selection: selectionAtStart, session: session) { return }
             // Smart cleanup (16 GB+): the local LLM polishes the dictation after the rules.
@@ -406,6 +409,56 @@ final class DictationController: ObservableObject {
         if !learned.isEmpty, phase == .idle || isMessage {
             show("Learned “\(learned.joined(separator: "”, “"))”")
         }
+    }
+
+    /// Controlling the Mac by voice (keys, Spotlight, Shortcuts, volume, windows, clicks, reminders, notes…).
+    /// Returns true if the dictation was such a command.
+    private func runMacCommand(_ raw: String) async -> Bool {
+        guard settings.appCommands, let command = MacCommands.parse(TextCleaner.clean(raw)) else { return false }
+        switch command {
+        case let .spotlight(query):
+            phase = .idle
+            await MacActions.spotlight(query, injector: injector)
+        case let .runShortcut(name):
+            show(await MacActions.runShortcut(name) ?? "Ran “\(name)”")
+        case let .keys(combo, name):
+            if MacActions.press(combo) { show(name.prefix(1).uppercased() + name.dropFirst()) } else { show("Unknown key") }
+        case let .volume(v): MacActions.setVolume(v); show("Volume \(v)%")
+        case let .volumeStep(up): MacActions.stepVolume(up: up); show(up ? "Volume up" : "Volume down")
+        case let .mute(on): MacActions.mute(on); show(on ? "Muted" : "Unmuted")
+        case let .media(key): MacActions.media(key); show(key == .playPause ? "Play/Pause" : key == .next ? "Next" : "Previous")
+        case let .darkMode(on): MacActions.darkMode(on); show(on ? "Dark mode" : "Light mode")
+        case let .window(action):
+            if !MacActions.window(action) { show("Couldn't move this window") } else { phase = .idle }
+        case let .click(label):
+            show(MacActions.click(label) ? "Clicked “\(label)”" : "Couldn't find “\(label)”")
+        case let .reminder(task, due):
+            show(await Assistant.addReminder(task, due: due))
+        case let .event(title, start, minutes):
+            show(await Assistant.addEvent(title, start: start, minutes: minutes))
+        case let .note(text):
+            DictationHistory.notes.add(text, app: targetApp)
+            show("Noted")
+        case let .askHistory(query):
+            HistoryQuery.shared.text = query
+            HistoryQuery.shared.showNotes = false
+            phase = .idle
+            onOpenHistory?()
+        case .readAloud:
+            if let text = ScreenText.selectedText() { Assistant.read(text); show("Reading aloud") }
+            else { show("Select some text first") }
+        case .stopReading:
+            Assistant.stopReading()
+            phase = .idle
+        case .transcribeFile:
+            phase = .idle
+            transcribeFile()
+        }
+        return true
+    }
+
+    func transcribeFile() {
+        FileTranscriber.pickAndTranscribe { [weak self] status in self?.show(status) }
     }
 
     /// "open Slack", "search Google for …": do it instead of typing. Returns true if it was a command.
@@ -477,6 +530,7 @@ final class DictationController: ObservableObject {
     func debugDictate(_ text: String) {
         Task {
             let app = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            if await runMacCommand(text) { return }
             if runAppCommand(text) { return }
             let selection = smartCleanupReady ? ScreenText.selectedText() : nil
             if (try? await rewriteSelectionIfAsked(text, selection: selection, session: session)) == true { return }

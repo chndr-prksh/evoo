@@ -231,6 +231,20 @@ case "cloud":
       latency: p50 \(Int(sorted[n / 2])) ms · p90 \(Int(sorted[n * 9 / 10])) ms · max \(Int(sorted.last!)) ms · within budget \(inBudget)/\(n)
     """)
 
+case "transcribe":
+    // Transcribes audio files with Parakeet: prints the text and writes <name>.srt next to each file.
+    //   evoo-cli transcribe interview.m4a
+    let engine = ParakeetEngine()
+    try await engine.load { _ in }
+    for path in inputs {
+        let samples = try AudioConverter().resampleAudioFile(path: path)
+        let (text, timings) = try await engine.transcribeDetailed(samples)
+        let srt = URL(fileURLWithPath: path).deletingPathExtension().appendingPathExtension("srt")
+        try Subtitles.srt(timings).write(to: srt, atomically: true, encoding: .utf8)
+        print("\(URL(fileURLWithPath: path).lastPathComponent): \(text)\n  → \(srt.path)")
+    }
+    await engine.unload()
+
 case "post":
     for input in inputs {
         let t0 = clock.now

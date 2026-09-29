@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             .store(in: &cancellables)
 
+        controller.onOpenHistory = { [weak self] in self?.openHistory() }
         controller.bootstrap()
         updater.start()
         updater.$state
@@ -89,7 +90,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(pillItem)
 
         menu.addItem(.separator())
-        menu.addItem(item("History…", #selector(openHistory), key: "y"))
+        menu.addItem(item("History & Notes…", #selector(openHistory), key: "y"))
+        menu.addItem(item("Transcribe a File…", #selector(transcribeFile)))
         addUpdateItems(to: menu)
         menu.addItem(item("Settings…", #selector(openSettings), key: ","))
         menu.addItem(item("Quit Evoo", #selector(NSApplication.terminate(_:)), key: "q", target: NSApp))
@@ -125,9 +127,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
     }
 
+    @objc private func transcribeFile() { controller.transcribeFile() }
+
     @objc private func openHistory() {
         if historyWindow == nil {
-            let window = NSWindow(contentViewController: NSHostingController(rootView: HistoryView(history: .shared)))
+            let view = HistoryView(history: .shared, notes: .notes, query: .shared)
+            let window = NSWindow(contentViewController: NSHostingController(rootView: view))
             window.title = "Evoo History"
             window.styleMask = [.titled, .closable, .resizable]
             window.isReleasedWhenClosed = false

@@ -12,19 +12,23 @@ final class DictationHistory: ObservableObject {
         var text: String
     }
 
-    static let shared = DictationHistory()
-    private static let limit = 500
+    static let shared = DictationHistory(file: "history.json", limit: 500)
+    /// Voice notes ("note: …") — same storage, kept separately and for longer.
+    static let notes = DictationHistory(file: "notes.json", limit: 5_000)
 
     @Published private(set) var entries: [Entry] = []
-    private let file = ModelPaths.root.deletingLastPathComponent().appendingPathComponent("history.json")
+    private let file: URL
+    private let limit: Int
 
-    private init() {
+    private init(file name: String, limit: Int) {
+        file = ModelPaths.root.deletingLastPathComponent().appendingPathComponent(name)
+        self.limit = limit
         entries = (try? JSONDecoder().decode([Entry].self, from: Data(contentsOf: file))) ?? []
     }
 
     func add(_ text: String, app: String?) {
         entries.insert(Entry(date: Date(), app: app, text: text), at: 0)
-        if entries.count > Self.limit { entries.removeLast(entries.count - Self.limit) }
+        if entries.count > limit { entries.removeLast(entries.count - limit) }
         save()
     }
 

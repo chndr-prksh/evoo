@@ -24,6 +24,16 @@
 	<string>public.app-category.productivity</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Evoo listens while you hold the Fn key and transcribes your speech on this Mac. Audio never leaves your computer.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Evoo adds reminders you dictate ("remind me to call Divya tomorrow at 5").</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Evoo adds reminders you dictate ("remind me to call Divya tomorrow at 5").</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Evoo adds calendar events you dictate ("schedule lunch with Raj Friday at 1").</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Evoo adds calendar events you dictate ("schedule lunch with Raj Friday at 1").</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Evoo switches dark mode when you ask it to.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Evoo contributors. Apache-2.0.</string>
 	<key>NSHighResolutionCapable</key>

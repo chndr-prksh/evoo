@@ -522,3 +522,95 @@ import Testing
         #expect(parse("Ask him to call me.") == nil)
     }
 }
+
+@Suite struct MacCommandTests {
+    func p(_ s: String) -> MacCommand? { MacCommands.parse(s) }
+
+    @Test func spotlightAndShortcuts() {
+        #expect(p("Search my Mac for tax documents.") == .spotlight("tax documents"))
+        #expect(p("spotlight quarterly report") == .spotlight("quarterly report"))
+        #expect(p("Run shortcut Morning Routine.") == .runShortcut("Morning Routine"))
+        #expect(p("run the focus mode shortcut") == .runShortcut("focus mode"))
+    }
+
+    @Test func keys() {
+        #expect(p("New tab.") == .keys(KeyCombo("t", command: true), name: "New tab"))
+        #expect(p("Press command shift T") == .keys(KeyCombo("t", command: true, shift: true), name: "command shift T"))
+        #expect(p("press enter") == .keys(KeyCombo("return"), name: "enter"))
+        #expect(p("Hit escape.") == .keys(KeyCombo("escape"), name: "escape"))
+        #expect(p("press F5") == .keys(KeyCombo("f5"), name: "F5"))
+    }
+
+    @Test func systemAndWindows() {
+        #expect(p("Set volume to 30.") == .volume(30))
+        #expect(p("volume 80 percent") == .volume(80))
+        #expect(p("Mute") == .mute(true))
+        #expect(p("next song") == .media(.next))
+        #expect(p("Pause the music") == .media(.playPause))
+        #expect(p("Turn on dark mode") == .darkMode(true))
+        #expect(p("light mode") == .darkMode(false))
+        #expect(p("Move this to the left half.") == .window(.leftHalf))
+        #expect(p("maximize this window") == .window(.maximize))
+        #expect(p("Full screen") == .window(.fullScreen))
+    }
+
+    @Test func clicks() {
+        #expect(p("Click Send.") == .click("Send"))
+        #expect(p("press the reply all button") == .click("reply all"))
+    }
+
+    @Test func remindersAndEvents() {
+        guard case let .reminder(task, due)? = p("Remind me to call Divya tomorrow at 5 PM.") else {
+            Issue.record("not a reminder"); return
+        }
+        #expect(task == "Call Divya")
+        #expect(due.map { Calendar.current.component(.hour, from: $0) } == 17)
+        guard case let .reminder(task2, due2)? = p("remind me to pay rent tomorrow") else { Issue.record("no"); return }
+        #expect(task2 == "Pay rent")
+        #expect(due2.map { Calendar.current.component(.hour, from: $0) } == 9)
+        guard case let .event(title, start, minutes)? = p("Schedule lunch with Raj on Friday at 1 PM.") else {
+            Issue.record("not an event"); return
+        }
+        #expect(title == "Lunch with Raj")
+        #expect(Calendar.current.component(.hour, from: start) == 13)
+        #expect(minutes == 60)
+        guard case let .event(t2, _, m2)? = p("schedule a call with the design team tomorrow at 3 PM for 45 minutes") else {
+            Issue.record("no"); return
+        }
+        #expect(t2 == "Call with the design team")
+        #expect(m2 == 45)
+    }
+
+    @Test func notesHistoryAudio() {
+        #expect(p("Note: pricing idea, tiered plans for teams.") == .note("Pricing idea, tiered plans for teams"))
+        #expect(p("take a note that the demo went well") == .note("The demo went well"))
+        #expect(p("What did I say about the invoice?") == .askHistory("the invoice"))
+        #expect(p("Read this aloud.") == .readAloud)
+        #expect(p("stop reading") == .stopReading)
+        #expect(p("Transcribe a file") == .transcribeFile)
+    }
+
+    @Test func ordinaryDictationIsNotACommand() {
+        #expect(p("Copy the numbers into the sheet and send it.") == nil)
+        #expect(p("Can you remind me what the plan was?") == nil)
+        #expect(p("I'll schedule it once I hear back.") == nil)
+        #expect(p("The volume of sales went up this quarter.") == nil)
+        #expect(p("Please click on the link I sent you yesterday to see the whole proposal.") == nil)
+        #expect(p("Press A") == nil)
+    }
+}
+
+@Suite struct SearchAndSubtitleTests {
+    @Test func findsByWordsAndMeaning() {
+        let texts = ["Send the invoice to Priya by Friday.", "Let's meet for lunch tomorrow.", "The billing for March is overdue."]
+        let r = SemanticSearch.rank("invoice", in: texts)
+        #expect(r.first == 0)
+        #expect(!r.contains(1))
+    }
+
+    @Test func buildsSubtitles() {
+        let tokens = [("▁Hello", 0.0, 0.4), ("▁there.", 0.4, 0.9), ("▁How", 1.2, 1.4), ("▁are", 1.4, 1.5), ("▁you?", 1.5, 1.9)]
+            .map { Subtitles.Timed(text: $0.0, start: $0.1, end: $0.2) }
+        #expect(Subtitles.srt(tokens) == "1\n00:00:00,000 --> 00:00:00,900\nHello there.\n\n2\n00:00:01,200 --> 00:00:01,900\nHow are you?\n")
+    }
+}

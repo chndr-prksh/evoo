@@ -12,9 +12,16 @@ Hold `fn`, speak, release — clean text appears at your cursor in any app.
 - Voice shortcuts: say "my email" (alone or mid-sentence) and get the full text you set up.
 - Voice editing: "replace Tuesday with Wednesday", "delete the last sentence", "make that a list".
 - History: search and copy your recent dictations (menu → History…), kept only on your Mac.
-- Voice commands for apps: "open Slack", "switch to Chrome", "search Google for …", "ask ChatGPT …",
-  "YouTube …", "new Google doc", "new email about …", "open github.com". Works with every installed app;
-  add your own apps, sites and search links in Settings → Apps.
+- **Voice commands** (say the whole command as one dictation; anything else is typed as usual):
+  - Apps & web: "open Slack", "switch to Chrome", "open github.com", "search Google for …", "ask ChatGPT …",
+    "YouTube …", "new Google doc", "new email about …" — every installed app, plus your own in Settings → Apps
+  - Your Mac: "search my Mac for …" (Spotlight), "run shortcut Morning Routine" (Apple Shortcuts), "volume 30",
+    "mute", "next song", "dark mode", "take a screenshot", "lock screen"
+  - Keys: "new tab", "reopen tab", "refresh", "copy", "paste", "save", "scroll down", "press command shift T"
+  - Windows & buttons: "move this to the left half", "maximize this window", "full screen", "click Send"
+  - Assistant: "remind me to call Divya tomorrow at 5", "schedule lunch with Raj Friday at 1 PM",
+    "note: …", "what did I say about the invoice?" (searches by meaning, on-device)
+  - Audio: "read this aloud", "stop reading", "transcribe a file" (→ text + .srt subtitles)
 - **16 GB Macs — Smart cleanup (local AI):** a local model (Qwen3 4B, Apache-2.0) polishes each dictation after
   the rules — grammar, messy phrasing, "can u" → "can you" — and powers **rewrite by voice**: select text, hold fn,
   say "make this more formal", "shorten this", "translate to Hindi". Off by default; download from Settings.
