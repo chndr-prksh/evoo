@@ -174,11 +174,24 @@ case "cloud":
         let (input, expected) = (c[0], c[1])
         let rules = pipeline.postProcess(input, language: .english, style: nil).text
         if paceMs > 0 { try await Task.sleep(for: .milliseconds(paceMs)) }
-        let t0 = clock.now
         var answer = "error"
-        do { answer = try await cloud.answer(for: TextCleaner.clean(input)) } catch {
-            errors += 1
-            if errors == 1 { print("request failed: \(error.localizedDescription)") }
+        var t0 = clock.now
+        for attempt in 1 ... 6 {
+            t0 = clock.now
+            do {
+                answer = try await cloud.answer(for: TextCleaner.clean(input))
+                break
+            } catch let CloudCorrector.CloudError.http(429, body) where attempt < 6 {
+                // Free-tier rate limit: wait as long as the provider asks, then retry (not counted as latency).
+                let wait = body.range(of: #"try again in ([0-9.]+)s"#, options: .regularExpression)
+                    .flatMap { Double(body[$0].filter { $0.isNumber || $0 == "." }) } ?? 10
+                print("  rate-limited, waiting \(Int(wait.rounded(.up))) s…")
+                try await Task.sleep(for: .seconds(wait + 0.5))
+            } catch {
+                errors += 1
+                if errors == 1 { print("request failed: \(error.localizedDescription)") }
+                break
+            }
         }
         let ms = Double((clock.now - t0).components.attoseconds) / 1e15 + Double((clock.now - t0).components.seconds) * 1000
         times.append(ms)
