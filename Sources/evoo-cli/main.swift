@@ -169,7 +169,7 @@ case "cloud":
     func loose(_ s: String) -> String { s.lowercased().filter { $0.isLetter || $0.isNumber || $0 == " " || $0 == ":" } }
     _ = try? await cloud.answer(for: "warm up") // open the connection first, like the app does on fn down
     var times: [Double] = []
-    var cloudRight = 0, hybridRight = 0, rulesRight = 0, inBudget = 0, errors = 0
+    var cloudRight = 0, hybridRight = 0, rulesRight = 0, inBudget = 0, errors = 0, fallbackRight = 0
     for c in cases {
         let (input, expected) = (c[0], c[1])
         let rules = pipeline.postProcess(input, language: .english, style: nil).text
@@ -200,6 +200,11 @@ case "cloud":
         let cloudOut = answer == "error" ? "" : edited.map { pipeline.postProcess($0, language: .english, style: nil).text } ?? rules
         // Hybrid = what the app would do: cloud answer if it arrives within budget, else the rules.
         let hybrid = ms <= budget && answer != "error" ? cloudOut : rules
+        // Fallback: trust the rules whenever they changed something; ask the cloud only when a correction word
+        // is present but the rules left the sentence as it was.
+        let rulesActed = TextCleaner.clean(input).lowercased().filter(\.isLetter) != rules.lowercased().filter(\.isLetter)
+        let fallback = !rulesActed && CorrectionPrompt.hasCue(input) && ms <= budget && answer != "error" ? cloudOut : rules
+        if loose(fallback) == loose(expected) { fallbackRight += 1 }
         if ms <= budget { inBudget += 1 }
         if loose(cloudOut) == loose(expected) { cloudRight += 1 }
         if loose(hybrid) == loose(expected) { hybridRight += 1 }
@@ -216,6 +221,7 @@ case "cloud":
       cloud alone:        \(cloudRight)/\(n) correct\(errors > 0 ? "  (\(errors) failed requests)" : "")
       rules alone:        \(rulesRight)/\(n) correct
       rules + cloud (≤\(Int(budget)) ms): \(hybridRight)/\(n) correct
+      rules, cloud as backup:  \(fallbackRight)/\(n) correct
       latency: p50 \(Int(sorted[n / 2])) ms · p90 \(Int(sorted[n * 9 / 10])) ms · max \(Int(sorted.last!)) ms · within budget \(inBudget)/\(n)
     """)
 
