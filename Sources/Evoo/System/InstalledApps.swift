@@ -42,7 +42,7 @@ final class InstalledApps: ObservableObject {
     /// same name as a web service (Notion, Spotify, WhatsApp) opens the app but keeps the service's search link.
     func targets(custom: [AppTarget]) -> [AppTarget] {
         var byName: [String: AppTarget] = [:]
-        for t in AppCommands.builtIn { byName[t.id] = t }
+        for t in Websites.all + AppCommands.builtIn { byName[t.id] = t }
         for app in apps {
             if var web = byName[app.id] {
                 web.bundleID = app.bundleID
@@ -71,6 +71,12 @@ final class InstalledApps: ObservableObject {
             guard let url = AppCommands.searchURL(target, query: query) else { return nil }
             NSWorkspace.shared.open(url)
             return "Searching \(target.name)"
+        case let .openIn(url, browser):
+            guard let id = browser.bundleID, let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else {
+                return nil
+            }
+            NSWorkspace.shared.open([url], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
+            return "Opening \(url.host ?? "site") in \(browser.name)"
         case let .openURL(url):
             NSWorkspace.shared.open(url)
             return "Opening \(url.host ?? "new \(url.scheme ?? "item")")"

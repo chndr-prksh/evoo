@@ -54,9 +54,12 @@ struct AppsSettingsView: View {
                 }
             }
 
-            Section("Built-in web services (\(AppCommands.builtIn.count))") {
-                Text(AppCommands.builtIn.map { $0.searchURL != nil ? "\($0.name) 🔍" : $0.name }.joined(separator: " · "))
+            Section("Websites you can open by name (\(AppCommands.builtIn.count + Websites.all.count))") {
+                Text((AppCommands.builtIn + Websites.all).map { $0.searchURL != nil ? "\($0.name) 🔍" : $0.name }
+                    .joined(separator: " · "))
                     .font(.caption)
+                Text("Add “in Chrome”, “in Safari”, … to choose the browser: “open GitHub in Chrome”.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Text("🔍 = you can also search it: “search YouTube for …”, “ask ChatGPT …”.")
                     .font(.caption).foregroundStyle(.secondary)
             }

@@ -28,6 +28,8 @@ public struct AppTarget: Codable, Hashable, Identifiable, Sendable {
 
 public enum AppCommand: Equatable, Sendable {
     case open(AppTarget)
+    /// A website in a specific browser: "open GitHub in Chrome".
+    case openIn(URL, browser: AppTarget)
     case search(AppTarget, query: String)
     case openURL(URL)
 }
@@ -126,7 +128,19 @@ public enum AppCommands {
                 }
             }
         }
-        let verbs = #"(?:open|launch|start|switch to|go to|bring up|show me|pull up)"#
+        let verbs = #"(?:open|launch|start|switch to|go to|bring up|show me|pull up|visit)"#
+        // "open GitHub in Chrome", "open gmail.com on Safari"
+        if let m = match(verbs + #" (?:the )?(.+?) (?:in|on|using|with) (.+?)(?: browser)?"#),
+           Websites.browserNames.contains(m[2].lowercased()) || target(named: m[2]).map({ Websites.browserNames.contains($0.name.lowercased()) }) == true,
+           let browser = target(named: m[2]) ?? targets.first(where: { $0.spokenNames.contains(m[2].lowercased()) }),
+           browser.bundleID != nil
+        {
+            if let site = target(named: m[1]), let url = site.url.flatMap(URL.init(string:)) {
+                return .openIn(url, browser: browser)
+            }
+            let domain = m[1].lowercased().replacingOccurrences(of: " dot ", with: ".").replacingOccurrences(of: " ", with: "")
+            if domain.contains("."), let url = URL(string: "https://" + domain) { return .openIn(url, browser: browser) }
+        }
         // "open github.com", "go to evoo dot app" — checked before " app" is trimmed as a suffix below.
         if let m = match(verbs + #" (?:the )?(.+)"#) {
             let site = m[1].lowercased().replacingOccurrences(of: " dot ", with: ".").replacingOccurrences(of: " ", with: "")

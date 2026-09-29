@@ -492,7 +492,7 @@ import Testing
 }
 
 @Suite struct AppCommandTests {
-    let targets = AppCommands.builtIn + [
+    let targets = AppCommands.builtIn + Websites.all + [
         AppTarget(name: "Slack", bundleID: "com.tinyspeck.slackmacgap"),
         AppTarget(name: "Visual Studio Code", aliases: ["vs code", "code"], bundleID: "com.microsoft.VSCode"),
         AppTarget(name: "Google Chrome", aliases: ["chrome"], bundleID: "com.google.Chrome"),
@@ -500,6 +500,7 @@ import Testing
     func parse(_ s: String) -> AppCommand? { AppCommands.parse(s, targets: targets) }
     func name(_ c: AppCommand?) -> String? {
         switch c { case let .open(t): "open \(t.name)"; case let .search(t, q): "search \(t.name): \(q)"
+        case let .openIn(u, b): "\(u.absoluteString) in \(b.name)"
         case let .openURL(u): u.absoluteString; case nil: nil }
     }
 
@@ -509,6 +510,15 @@ import Testing
         #expect(name(parse("Open VS Code.")) == "open Visual Studio Code")
         #expect(name(parse("Open github.com")) == "https://github.com")
         #expect(name(parse("Go to evoo dot app")) == "https://evoo.app")
+    }
+
+    @Test func websitesAndBrowsers() {
+        #expect(name(parse("Open GitHub in Chrome.")) == "https://github.com in Google Chrome")
+        #expect(name(parse("open gmail on chrome")) == "https://mail.google.com in Google Chrome")
+        #expect(name(parse("Open hacker news")) == "open Hacker News")
+        #expect(name(parse("go to prime video")) == "open Prime Video")
+        #expect(name(parse("Open evoo.app in Chrome")) == "https://evoo.app in Google Chrome")
+        #expect(name(parse("Open the report in Chrome")) == nil) // not a site
     }
 
     @Test func searchesAndAsks() {
