@@ -11,6 +11,15 @@ struct SettingsView: View {
     @State private var newWord = ""
 
     var body: some View {
+        TabView {
+            general.tabItem { Label("General", systemImage: "gearshape") }
+            AppsSettingsView(settings: settings, installed: .shared)
+                .tabItem { Label("Apps", systemImage: "square.grid.2x2") }
+        }
+        .frame(width: 520, height: 680)
+    }
+
+    private var general: some View {
         Form {
             Section("Permissions") {
                 ForEach(Permissions.Kind.allCases) { kind in
@@ -214,7 +223,6 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 640)
         .onAppear {
             permissions.refresh()
             microphones = AudioDevices.inputs()

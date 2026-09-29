@@ -110,6 +110,7 @@ final class DictationController: ObservableObject {
 
     func bootstrap() {
         DictationPipeline.preload()
+        InstalledApps.shared.scan()
         applyVocabulary()
         permissions.refresh()
         startHotkeysIfPossible()
@@ -343,6 +344,7 @@ final class DictationController: ObservableObject {
             let asrStart = ContinuousClock.now
             let (raw, reused) = try await speculator.transcript(for: samples, engine: engine)
             let asrMs = (ContinuousClock.now - asrStart).ms
+            if runAppCommand(raw) { return }
             if try await rewriteSelectionIfAsked(raw, selection: selectionAtStart, session: session) { return }
             // Smart cleanup (16 GB+): the local LLM polishes the dictation after the rules.
             // Otherwise the LLM only runs for Hinglish (multilingual builds).
@@ -406,6 +408,15 @@ final class DictationController: ObservableObject {
         }
     }
 
+    /// "open Slack", "search Google for …": do it instead of typing. Returns true if it was a command.
+    private func runAppCommand(_ raw: String) -> Bool {
+        guard settings.appCommands else { return false }
+        let targets = InstalledApps.shared.targets(custom: settings.customApps)
+        guard let command = AppCommands.parse(TextCleaner.clean(raw), targets: targets) else { return false }
+        if let message = InstalledApps.shared.run(command) { show(message) } else { show("Couldn't open that") }
+        return true
+    }
+
     /// Rewrite by voice: text was selected and the dictation is an instruction ("make this formal").
     /// Returns true if it handled the dictation.
     private func rewriteSelectionIfAsked(_ raw: String, selection: String?, session: Int) async throws -> Bool {
@@ -466,6 +477,7 @@ final class DictationController: ObservableObject {
     func debugDictate(_ text: String) {
         Task {
             let app = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            if runAppCommand(text) { return }
             let selection = smartCleanupReady ? ScreenText.selectedText() : nil
             if (try? await rewriteSelectionIfAsked(text, selection: selection, session: session)) == true { return }
             // Same path as a real dictation after speech recognition: commands, edits, rules, formatting.

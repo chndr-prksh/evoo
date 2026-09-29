@@ -33,6 +33,12 @@ final class AppSettings: ObservableObject {
     @Published var snippets: [Snippet] {
         didSet { defaults.set(try? JSONEncoder().encode(snippets), forKey: "snippets") }
     }
+    /// "open Slack", "search Google for …" act instead of typing.
+    @Published var appCommands: Bool { didSet { save(appCommands, "appCommands") } }
+    /// Apps and sites the user added for voice commands.
+    @Published var customApps: [AppTarget] {
+        didSet { defaults.set(try? JSONEncoder().encode(customApps), forKey: "customApps") }
+    }
     /// Keep recent dictations on this Mac so they can be searched and re-used.
     @Published var keepHistory: Bool { didSet { save(keepHistory, "keepHistory") } }
     @Published var habits: LearnedHabits {
@@ -69,6 +75,9 @@ final class AppSettings: ObservableObject {
         snippets = UserDefaults.standard.data(forKey: "snippets")
             .flatMap { try? JSONDecoder().decode([Snippet].self, from: $0) } ?? []
         keepHistory = bool("keepHistory", true)
+        appCommands = bool("appCommands", true)
+        customApps = UserDefaults.standard.data(forKey: "customApps")
+            .flatMap { try? JSONDecoder().decode([AppTarget].self, from: $0) } ?? []
         habits = UserDefaults.standard.data(forKey: "habits")
             .flatMap { try? JSONDecoder().decode(LearnedHabits.self, from: $0) } ?? LearnedHabits()
     }

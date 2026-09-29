@@ -478,3 +478,47 @@ import Testing
         #expect(!RewritePrompt.isInstruction("Make sure you bring the slides."))
     }
 }
+
+@Suite struct AppCommandTests {
+    let targets = AppCommands.builtIn + [
+        AppTarget(name: "Slack", bundleID: "com.tinyspeck.slackmacgap"),
+        AppTarget(name: "Visual Studio Code", aliases: ["vs code", "code"], bundleID: "com.microsoft.VSCode"),
+        AppTarget(name: "Google Chrome", aliases: ["chrome"], bundleID: "com.google.Chrome"),
+    ]
+    func parse(_ s: String) -> AppCommand? { AppCommands.parse(s, targets: targets) }
+    func name(_ c: AppCommand?) -> String? {
+        switch c { case let .open(t): "open \(t.name)"; case let .search(t, q): "search \(t.name): \(q)"
+        case let .openURL(u): u.absoluteString; case nil: nil }
+    }
+
+    @Test func opensApps() {
+        #expect(name(parse("Open Slack.")) == "open Slack")
+        #expect(name(parse("switch to Chrome")) == "open Google Chrome")
+        #expect(name(parse("Open VS Code.")) == "open Visual Studio Code")
+        #expect(name(parse("Open github.com")) == "https://github.com")
+        #expect(name(parse("Go to evoo dot app")) == "https://evoo.app")
+    }
+
+    @Test func searchesAndAsks() {
+        #expect(name(parse("Search Google for flights to Delhi.")) == "search Google: flights to Delhi")
+        #expect(name(parse("search for lo-fi music on YouTube")) == "search YouTube: lo-fi music")
+        #expect(name(parse("Google best biryani near me")) == "search Google: best biryani near me")
+        #expect(name(parse("Ask ChatGPT how do tides work?")) == "search ChatGPT: how do tides work")
+        #expect(AppCommands.searchURL(targets[0], query: "flights to Delhi")?.absoluteString
+            == "https://www.google.com/search?q=flights%20to%20Delhi")
+    }
+
+    @Test func creates() {
+        #expect(name(parse("New Google doc.")) == "https://docs.new")
+        #expect(name(parse("create a new spreadsheet")) == "https://sheets.new")
+        #expect(name(parse("New email about the invoice")) == "mailto:?subject=the%20invoice")
+    }
+
+    @Test func ordinaryDictationIsNotACommand() {
+        #expect(parse("Open the file and check the numbers.") == nil)
+        #expect(parse("I will open Slack later today.") == nil)
+        #expect(parse("Can you search for the invoice?") == nil)
+        #expect(parse("We need a new approach.") == nil)
+        #expect(parse("Ask him to call me.") == nil)
+    }
+}
