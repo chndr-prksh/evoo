@@ -467,3 +467,14 @@ import Testing
         #expect(VoiceEdit.replace(old: "Friday", new: "Monday").apply(to: last, style: .plain) == nil)
     }
 }
+
+@Suite struct RewritePromptTests {
+    @Test func recognizesInstructions() {
+        #expect(RewritePrompt.isInstruction("Make this more formal."))
+        #expect(RewritePrompt.isInstruction("rewrite it as a bullet list"))
+        #expect(RewritePrompt.isInstruction("Can you shorten this"))
+        #expect(RewritePrompt.isInstruction("Translate to Hindi"))
+        #expect(!RewritePrompt.isInstruction("Thanks for the update, see you tomorrow."))
+        #expect(!RewritePrompt.isInstruction("Make sure you bring the slides."))
+    }
+}

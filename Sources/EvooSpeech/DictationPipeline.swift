@@ -35,6 +35,8 @@ public final class DictationPipeline {
         case whenNeeded
         /// Deletion-only self-correction by a small LLM, only when a correction word is present.
         case corrections
+        /// Smart cleanup (16 GB+ Macs): the local LLM polishes every non-trivial dictation after the rules.
+        case polish
     }
 
     private let refiner: LlamaRefiner
@@ -107,6 +109,16 @@ public final class DictationPipeline {
             }
             return Output(text: text, raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: (clock.now - t).ms, usedLLM: true)
         }
+        if llm == .polish, refiner.isLoaded, Self.worthPolishing(text) {
+            t = clock.now
+            if let polished = try? await refiner.refine(text, language: language),
+               !polished.contains("\n") || text.contains("\n") // keep Evoo's own list formatting per app
+            {
+                text = polished
+            }
+            return Output(text: text, raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: (clock.now - t).ms,
+                          usedLLM: true, action: post.action)
+        }
         let needsLLM = post.unresolved || language == .hinglish // Hinglish needs romanizing
         if llm == .whenNeeded, needsLLM, !text.isEmpty, refiner.isLoaded {
             t = clock.now
@@ -116,6 +128,14 @@ public final class DictationPipeline {
         }
         return Output(text: text, raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: refineTime.ms, usedLLM: usedLLM,
                       action: post.action)
+    }
+
+    /// Short, single-line dictations without anything to fix ("Sounds good.") are pasted as-is: faster,
+    /// and nothing for the model to improve. Multi-line (lists) keep Evoo's per-app formatting.
+    static func worthPolishing(_ text: String) -> Bool {
+        guard !text.isEmpty, !text.contains("\n") else { return false }
+        let words = text.split(separator: " ").count
+        return words >= 6 || RefinePrompt.needsRefinement(text, language: .english)
     }
 
     /// LLM deletions on the cleaned transcript, then the usual rules/formatting on the result.

@@ -13,6 +13,8 @@ final class AppSettings: ObservableObject {
     @Published var engine: EnginePreference { didSet { save(engine.rawValue, "engine") } }
     @Published var refinementEnabled: Bool { didSet { save(refinementEnabled, "refinementEnabled") } }
     @Published var refinerModel: RefinerModel { didSet { save(refinerModel.rawValue, "refinerModel") } }
+    /// 16 GB+ Macs: a local LLM polishes every dictation and powers "rewrite by voice".
+    @Published var smartCleanup: Bool { didSet { save(smartCleanup, "smartCleanup") } }
     /// CoreAudio device UID; nil = system default input.
     @Published var microphoneUID: String? { didSet { save(microphoneUID, "microphoneUID") } }
     @Published var showPill: Bool { didSet { save(showPill, "showPill") } }
@@ -48,7 +50,8 @@ final class AppSettings: ObservableObject {
         language = value("language", .english)
         engine = value("engine", .automatic)
         refinementEnabled = bool("refinementEnabled", true)
-        refinerModel = value("refinerModel", .qwen3_1_7b)
+        refinerModel = value("refinerModel", SystemInfo.canRunSmartCleanup ? .qwen3_4b : .qwen3_1_7b)
+        smartCleanup = bool("smartCleanup", false) && SystemInfo.canRunSmartCleanup
         microphoneUID = UserDefaults.standard.string(forKey: "microphoneUID")
         showPill = bool("showPill", true)
         playSounds = bool("playSounds", true)

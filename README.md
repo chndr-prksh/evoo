@@ -12,6 +12,9 @@ Hold `fn`, speak, release — clean text appears at your cursor in any app.
 - Voice shortcuts: say "my email" (alone or mid-sentence) and get the full text you set up.
 - Voice editing: "replace Tuesday with Wednesday", "delete the last sentence", "make that a list".
 - History: search and copy your recent dictations (menu → History…), kept only on your Mac.
+- **16 GB Macs — Smart cleanup (local AI):** a local model (Qwen3 4B, Apache-2.0) polishes each dictation after
+  the rules — grammar, messy phrasing, "can u" → "can you" — and powers **rewrite by voice**: select text, hold fn,
+  say "make this more formal", "shorten this", "translate to Hindi". Off by default; download from Settings.
 - Formats as you speak: "…buy tomorrow bread, eggs, milk" becomes a bulleted list; "first… second… third…"
   becomes numbered steps; "new line", "new paragraph", emails. Markdown in Notion/editors/browsers, • bullets
   elsewhere, and never a line break in Terminal (a pasted newline could run a command).

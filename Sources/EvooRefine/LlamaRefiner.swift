@@ -91,6 +91,19 @@ public final class LlamaRefiner: @unchecked Sendable {
         return CorrectionPrompt.apply(indices, to: text)
     }
 
+    /// "Make this more formal" applied to selected text. Returns nil if the model produced nothing usable.
+    public func rewrite(_ text: String, instruction: String) async throws -> String? {
+        let raw = try await run { [self] in
+            try primePrefix(RewritePrompt.prefix)
+            let suffix = RewritePrompt.suffix(instruction: instruction, text: text,
+                                              thinkBlock: loadedModel?.usesThinkBlock ?? true)
+            let budget = min(1_500, tokenize(text, vocab: vocab!, addSpecial: false).count * 3 + 64)
+            return try generate(suffix: suffix, maxTokens: budget)
+        }
+        let out = RewritePrompt.sanitize(raw)
+        return out.isEmpty ? nil : out
+    }
+
     // MARK: - llama.cpp
 
     /// Ensures the KV cache holds exactly `prefix`, evaluating it only when it changed (e.g. new language).

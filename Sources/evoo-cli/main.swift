@@ -107,6 +107,7 @@ case "corpus":
     // Scores self-correction handling on a TSV of "input<TAB>expected" (Benchmarks/corrections.tsv).
     let quiet = flag("--quiet")
     let fallbackOnly = flag("--fallback") // LLM only when the rules left a correction word untouched
+    let rewrite = flag("--rewrite") // local LLM polishes every sentence after the rules ("smart cleanup")
     let path = inputs.first ?? "Benchmarks/corrections.tsv"
     let cases = try String(contentsOfFile: path, encoding: .utf8).split(separator: "\n")
         .filter { !$0.hasPrefix("#") && $0.contains("\t") }
@@ -117,13 +118,18 @@ case "corpus":
     func loose(_ s: String) -> String { s.lowercased().filter { $0.isLetter || $0.isNumber || $0 == " " || $0 == ":" } }
     var exact = 0, close = 0
     var worst = Duration.zero, total = Duration.zero
-    if useLLM { try await loadRefiner() }
+    if useLLM || rewrite { try await loadRefiner() }
     var llmRuns = 0, llmAccepted = 0
     for (input, expected) in cases {
         let t0 = clock.now
         var out = pipeline.postProcess(input, language: .english, style: nil).text
         let rulesActed = TextCleaner.clean(input).lowercased().filter(\.isLetter) != out.lowercased().filter(\.isLetter)
-        if useLLM, CorrectionPrompt.hasCue(input), !(fallbackOnly && rulesActed) {
+        if rewrite {
+            llmRuns += 1
+            let polished = try await refiner.refine(out, language: .english)
+            if polished != out { llmAccepted += 1 }
+            out = polished
+        } else if useLLM, CorrectionPrompt.hasCue(input), !(fallbackOnly && rulesActed) {
             llmRuns += 1
             if let corrected = await pipeline.correctWithLLM(input, language: .english, style: nil) {
                 out = corrected
@@ -138,7 +144,7 @@ case "corpus":
         }
     }
     let n = cases.count
-    let mode = useLLM ? "rules + \(model.rawValue)\(fallbackOnly ? " as fallback" : "") (ran on \(llmRuns), accepted \(llmAccepted))" : "rules"
+    let mode = rewrite ? "rules + \(model.rawValue) smart cleanup (changed \(llmAccepted) of \(llmRuns))" : useLLM ? "rules + \(model.rawValue)\(fallbackOnly ? " as fallback" : "") (ran on \(llmRuns), accepted \(llmAccepted))" : "rules"
     print("\n\(mode): \(close)/\(n) correct (\(exact) exact incl. punctuation) · avg \((total / n).formatted(.units(allowed: [.microseconds]))), worst \(worst.formatted(.units(allowed: [.milliseconds])))")
 
 case "cloud-models":

@@ -121,6 +121,31 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Smart cleanup (local AI)") {
+                if SystemInfo.canRunSmartCleanup {
+                    Toggle("Polish every dictation with local AI", isOn: $settings.smartCleanup)
+                        .disabled(!controller.refinerInstalled)
+                    Text("A local model tidies what you said — corrections, grammar, messy phrasing — after Evoo's rules. Adds about a second on 16 GB Macs. Also enables rewrite by voice: select text, hold fn, say “make this more formal”, “shorten this”, “translate to Hindi”. Runs entirely on this Mac.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Picker("Model", selection: $settings.refinerModel) {
+                        Text(RefinerModel.qwen3_4b.title).tag(RefinerModel.qwen3_4b)
+                        Text(RefinerModel.qwen3_1_7b.title).tag(RefinerModel.qwen3_1_7b)
+                    }
+                    if let progress = controller.refinerDownloadProgress {
+                        ProgressView(value: progress) { Text("Downloading \(Int(progress * 100))%") }
+                    } else if !controller.refinerInstalled {
+                        HStack {
+                            Text("Download the model to turn this on").foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Download") { controller.downloadRefiner() }
+                        }
+                    }
+                } else {
+                    Text("Needs a Mac with 16 GB of memory (this one has \(Int(SystemInfo.memoryGB.rounded())) GB). Everything else in Evoo works fully without it.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+
             Section("Voice shortcuts") {
                 Text("Say the phrase, get the text — alone or mid-sentence (“send it to my email”).")
                     .font(.caption).foregroundStyle(.secondary)

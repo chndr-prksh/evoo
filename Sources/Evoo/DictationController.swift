@@ -45,6 +45,12 @@ final class DictationController: ObservableObject {
     /// Names read from the screen while the user speaks; ready by the time fn goes up.
     private var screenNames: Task<[String], Never>?
     private var targetApp: String?
+    /// Text selected when fn went down — the target of "rewrite by voice".
+    private var selectionAtStart: String?
+
+    private var smartCleanupReady: Bool {
+        settings.smartCleanup && SystemInfo.canRunSmartCleanup && refiner.isLoaded
+    }
 
     private var gesture: HotkeyGesture
     private var gestureTimer: Task<Void, Never>?
@@ -59,7 +65,8 @@ final class DictationController: ObservableObject {
 
     private static let maxRecordingSeconds: Double = 300
     private static let minRecordingSeconds: Double = 0.3
-    private static let processingTimeoutSeconds: Double = 20
+    /// Generous: smart cleanup / rewrite-by-voice runs a local LLM (about a second on 16 GB Macs).
+    private static let processingTimeoutSeconds: Double = 45
 
     init() {
         gesture = HotkeyGesture(mode: AppSettings.shared.activationMode)
@@ -89,6 +96,9 @@ final class DictationController: ObservableObject {
         settings.$personalWords.dropFirst()
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.applyVocabulary() }
+            .store(in: &cancellables)
+        settings.$smartCleanup.dropFirst()
+            .sink { [weak self] _ in DispatchQueue.main.async { self?.prepareRefiner() } }
             .store(in: &cancellables)
         settings.$refinerModel.combineLatest(settings.$refinementEnabled, settings.$language).dropFirst()
             .debounce(for: .milliseconds(200), scheduler: RunLoop.main)
@@ -143,7 +153,9 @@ final class DictationController: ObservableObject {
     }
 
     func prepareRefiner() {
-        guard Features.multilingual, settings.refinementEnabled else { return refiner.unload() }
+        let wanted = (settings.smartCleanup && SystemInfo.canRunSmartCleanup)
+            || (Features.multilingual && settings.refinementEnabled)
+        guard wanted else { return refiner.unload() }
         let model = settings.refinerModel
         guard ModelDownloader.isInstalled(model) else { return }
         Task {
@@ -163,6 +175,7 @@ final class DictationController: ObservableObject {
                     Task { @MainActor in self.refinerDownloadProgress = p }
                 }
                 refinerDownloadProgress = nil
+                if SystemInfo.canRunSmartCleanup { settings.smartCleanup = true } // downloaded to use it
                 prepareRefiner()
             } catch {
                 refinerDownloadProgress = nil
@@ -249,6 +262,7 @@ final class DictationController: ObservableObject {
         phase = .recording
         levels = levels.map { _ in 0 }
         play("Tink")
+        selectionAtStart = smartCleanupReady ? ScreenText.selectedText() : nil
         // Read names on screen (chat header, recipients…) in the background while the user speaks.
         screenNames = settings.useScreenContext && permissions.granted[.accessibility] == true
             ? Task.detached(priority: .userInitiated) {
@@ -329,12 +343,15 @@ final class DictationController: ObservableObject {
             let asrStart = ContinuousClock.now
             let (raw, reused) = try await speculator.transcript(for: samples, engine: engine)
             let asrMs = (ContinuousClock.now - asrStart).ms
-            // The LLM only runs for corrections the rules can't resolve, and for Hinglish (multilingual builds).
-            let willUseLLM = Features.multilingual && settings.refinementEnabled && refiner.isLoaded
-            if willUseLLM, language != .english { phase = .refining }
+            if try await rewriteSelectionIfAsked(raw, selection: selectionAtStart, session: session) { return }
+            // Smart cleanup (16 GB+): the local LLM polishes the dictation after the rules.
+            // Otherwise the LLM only runs for Hinglish (multilingual builds).
+            let policy: DictationPipeline.LLMPolicy = smartCleanupReady ? .polish
+                : Features.multilingual && settings.refinementEnabled && refiner.isLoaded ? .whenNeeded : .off
+            if policy != .off { phase = .refining }
             let names = await screenNames?.value ?? []
             let out = await pipeline.finish(raw: raw, asrMs: asrMs, language: language, style: style,
-                                            contextTerms: names, llm: willUseLLM ? .whenNeeded : .off)
+                                            contextTerms: names, llm: policy)
             // Cancelled, timed out, or superseded by a newer dictation: don't paste stale text.
             guard !Task.isCancelled, session == self.session else { return }
             if out.action == .undo {
@@ -389,6 +406,24 @@ final class DictationController: ObservableObject {
         }
     }
 
+    /// Rewrite by voice: text was selected and the dictation is an instruction ("make this formal").
+    /// Returns true if it handled the dictation.
+    private func rewriteSelectionIfAsked(_ raw: String, selection: String?, session: Int) async throws -> Bool {
+        let instruction = TextCleaner.clean(raw)
+        guard let selection, smartCleanupReady, RewritePrompt.isInstruction(instruction) else { return false }
+        phase = .refining
+        guard let rewritten = try await refiner.rewrite(selection, instruction: instruction),
+              !Task.isCancelled, session == self.session
+        else {
+            show("Couldn't rewrite that — try again")
+            return true
+        }
+        await injector.insert(rewritten, restoreClipboard: settings.restoreClipboard) // replaces the selection
+        lastText = rewritten
+        phase = .idle
+        return true
+    }
+
     /// Adds a space when dictating right after existing text ("…5 PM." + "We need…"), like typing would.
     static func spaced(_ text: String) -> String {
         guard let before = ScreenText.characterBeforeCursor(), !before.isWhitespace,
@@ -431,9 +466,11 @@ final class DictationController: ObservableObject {
     func debugDictate(_ text: String) {
         Task {
             let app = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            let selection = smartCleanupReady ? ScreenText.selectedText() : nil
+            if (try? await rewriteSelectionIfAsked(text, selection: selection, session: session)) == true { return }
             // Same path as a real dictation after speech recognition: commands, edits, rules, formatting.
             let out = await pipeline.finish(raw: text, asrMs: 0, language: .english, style: OutputStyle.forApp(app),
-                                            llm: .off)
+                                            llm: smartCleanupReady ? .polish : .off)
             if case let .edit(edit) = out.action { return await applyVoiceEdit(edit, style: OutputStyle.forApp(app)) }
             await injector.insert(Self.spaced(out.text), restoreClipboard: settings.restoreClipboard)
             lastText = out.text

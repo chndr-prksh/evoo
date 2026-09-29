@@ -64,6 +64,13 @@ enum ScreenText {
         attribute(field, kAXValueAttribute)
     }
 
+    /// The text currently selected in the focused field, if any.
+    static func selectedText() -> String? {
+        guard let field = focusedField(), let s: String = attribute(field, kAXSelectedTextAttribute),
+              !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return s
+    }
+
     /// The character just before the cursor in the focused field, if the app exposes it.
     static func characterBeforeCursor() -> Character? {
         guard let field = focusedField(), let text = value(of: field) else { return nil }
