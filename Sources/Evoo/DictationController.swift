@@ -83,6 +83,9 @@ final class DictationController: ObservableObject {
                 self?.prepareSpeechModel()
             }
             .store(in: &cancellables)
+        settings.$snippets
+            .sink { [weak self] snippets in self?.pipeline.snippets = snippets }
+            .store(in: &cancellables)
         settings.$personalWords.dropFirst()
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.applyVocabulary() }
@@ -338,6 +341,10 @@ final class DictationController: ObservableObject {
                 injector.undo()
                 return (phase = .idle)
             }
+            if case let .edit(edit) = out.action {
+                await applyVoiceEdit(edit, style: style ?? .plain)
+                return (phase = .idle)
+            }
             guard !out.text.isEmpty else { return (phase = .idle) }
 
             // Habits learned from the user's edits in this app (e.g. no final full stop in WhatsApp).
@@ -346,10 +353,12 @@ final class DictationController: ObservableObject {
                     personal.contains(word) || !DictationPipeline.isKnownWord(word.lowercased())
                 }
                 : out.text
-            await injector.insert(text, restoreClipboard: settings.restoreClipboard)
+            let spaced = Self.spaced(text)
+            await injector.insert(spaced, restoreClipboard: settings.restoreClipboard)
             if settings.learnFromEdits, out.action != .pressEnter { editWatcher.didInsert(text, app: targetApp) }
             if out.action == .pressEnter { await injector.pressReturn() }
             lastText = text
+            if settings.keepHistory { DictationHistory.shared.add(text, app: targetApp) }
             let totalMs = (ContinuousClock.now - releasedAt).ms
             lastTimings = String(format: "%.1fs audio · ", seconds) + out.summary
                 + " · fn up → pasted \(totalMs) ms" + (reused ? " (ready early)" : "")
@@ -380,6 +389,37 @@ final class DictationController: ObservableObject {
         }
     }
 
+    /// Adds a space when dictating right after existing text ("…5 PM." + "We need…"), like typing would.
+    static func spaced(_ text: String) -> String {
+        guard let before = ScreenText.characterBeforeCursor(), !before.isWhitespace,
+              let first = text.first, !",.;:!?)".contains(first), !text.hasPrefix("\n") else { return text }
+        return " " + text
+    }
+
+    /// "replace Tuesday with Wednesday" etc.: rewrites the text Evoo last typed, in place.
+    private func applyVoiceEdit(_ edit: VoiceEdit, style: OutputStyle) async {
+        guard let last = lastText, let edited = edit.apply(to: last, style: style) else {
+            return show(lastText == nil ? "Nothing to edit yet" : "Couldn't find that in your last dictation")
+        }
+        // Select exactly what Evoo typed, so pasting replaces only that; otherwise undo it and retype.
+        var selected = false
+        if let field = ScreenText.focusedField(), let value = ScreenText.value(of: field),
+           let range = value.range(of: last, options: .backwards)
+        {
+            selected = ScreenText.select(NSRange(range, in: value), in: field)
+        }
+        if !selected {
+            injector.undo()
+            try? await Task.sleep(for: .milliseconds(80))
+        }
+        if edited.isEmpty {
+            if selected { injector.deleteSelection() }
+        } else {
+            await injector.insert(edited, restoreClipboard: settings.restoreClipboard)
+        }
+        lastText = edited.isEmpty ? nil : edited
+    }
+
     func repasteLast() {
         guard let lastText else { return }
         Task { await injector.insert(lastText, restoreClipboard: settings.restoreClipboard) }
@@ -391,8 +431,13 @@ final class DictationController: ObservableObject {
     func debugDictate(_ text: String) {
         Task {
             let app = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-            await injector.insert(text, restoreClipboard: settings.restoreClipboard)
-            editWatcher.didInsert(text, app: app)
+            // Same path as a real dictation after speech recognition: commands, edits, rules, formatting.
+            let out = await pipeline.finish(raw: text, asrMs: 0, language: .english, style: OutputStyle.forApp(app),
+                                            llm: .off)
+            if case let .edit(edit) = out.action { return await applyVoiceEdit(edit, style: OutputStyle.forApp(app)) }
+            await injector.insert(Self.spaced(out.text), restoreClipboard: settings.restoreClipboard)
+            lastText = out.text
+            editWatcher.didInsert(out.text, app: app)
         }
     }
 

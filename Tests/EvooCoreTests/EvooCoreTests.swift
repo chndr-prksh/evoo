@@ -418,3 +418,52 @@ import Testing
         #expect(habits.adapt("See you soon.", app: "com.apple.mail") { _ in false } == "See you soon.") // per app
     }
 }
+
+@Suite struct SnippetTests {
+    let snippets = [Snippet(trigger: "my email", expansion: "chandra@example.com"),
+                    Snippet(trigger: "my address", expansion: "12 Main St, Apt 4\nKent, WA 98032"),
+                    Snippet(trigger: "my work email", expansion: "c@work.com")]
+
+    @Test func wholeDictationIsExpandedVerbatim() {
+        let m = Snippets.mask("My address.", snippets: snippets)
+        #expect(m.isWholeDictation)
+        #expect(m.text == "12 Main St, Apt 4\nKent, WA 98032")
+    }
+
+    @Test func inlineTriggersSurviveProcessing() {
+        let m = Snippets.mask("Send it to my work email and my email.", snippets: snippets)
+        #expect(!m.isWholeDictation)
+        let processed = DictationRules.apply(m.text).text.uppercased() // anything the pipeline might do
+        #expect(Snippets.unmask(processed, m.restore) == "SEND IT TO c@work.com AND chandra@example.com.")
+    }
+
+    @Test func noTriggerNoChange() {
+        let m = Snippets.mask("Email me later.", snippets: snippets)
+        #expect(m.text == "Email me later." && m.restore.isEmpty)
+    }
+}
+
+@Suite struct VoiceEditTests {
+    @Test func parses() {
+        #expect(VoiceEdit.parse("Replace Tuesday with Wednesday.") == .replace(old: "Tuesday", new: "Wednesday"))
+        #expect(VoiceEdit.parse("change 5 PM to 6 PM") == .replace(old: "5 PM", new: "6 PM"))
+        #expect(VoiceEdit.parse("Delete the last sentence.") == .deleteLastSentence)
+        #expect(VoiceEdit.parse("delete last word") == .deleteLastWord)
+        #expect(VoiceEdit.parse("Make that a numbered list.") == .makeList(numbered: true))
+        #expect(VoiceEdit.parse("Turn it into bullet points") == .makeList(numbered: false))
+        #expect(VoiceEdit.parse("I need to change my plans.") == nil)
+    }
+
+    @Test func applies() {
+        let last = "Let's meet on Tuesday at 5 PM. Bring the slides."
+        #expect(VoiceEdit.replace(old: "tuesday", new: "wednesday").apply(to: last, style: .plain)
+            == "Let's meet on Wednesday at 5 PM. Bring the slides.")
+        #expect(VoiceEdit.deleteLastSentence.apply(to: last, style: .plain) == "Let's meet on Tuesday at 5 PM.")
+        #expect(VoiceEdit.deleteLastWord.apply(to: "Send it now.", style: .plain) == "Send it.")
+        #expect(VoiceEdit.makeList(numbered: false).apply(to: "We need milk, eggs and bread.", style: .plain)
+            == "We need:\n• Milk\n• Eggs\n• Bread")
+        #expect(VoiceEdit.makeList(numbered: true).apply(to: "Open settings, click privacy, and allow Evoo.", style: .plain)
+            == "1. Open settings\n2. Click privacy\n3. Allow Evoo")
+        #expect(VoiceEdit.replace(old: "Friday", new: "Monday").apply(to: last, style: .plain) == nil)
+    }
+}

@@ -32,6 +32,11 @@ final class TextInjector {
         if !saved.isEmpty { pasteboard.writeObjects(saved) }
     }
 
+    /// Delete key — removes the current selection.
+    func deleteSelection() {
+        postKey(CGKeyCode(kVK_Delete), flags: [])
+    }
+
     /// ⌘Z — "undo that".
     func undo() {
         postKey(CGKeyCode(kVK_ANSI_Z), flags: .maskCommand)

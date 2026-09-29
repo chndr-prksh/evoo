@@ -28,6 +28,11 @@ final class AppSettings: ObservableObject {
     @Published var useScreenContext: Bool { didSet { save(useScreenContext, "useScreenContext") } }
     /// Learn names and per-app habits from how the user edits dictated text.
     @Published var learnFromEdits: Bool { didSet { save(learnFromEdits, "learnFromEdits") } }
+    @Published var snippets: [Snippet] {
+        didSet { defaults.set(try? JSONEncoder().encode(snippets), forKey: "snippets") }
+    }
+    /// Keep recent dictations on this Mac so they can be searched and re-used.
+    @Published var keepHistory: Bool { didSet { save(keepHistory, "keepHistory") } }
     @Published var habits: LearnedHabits {
         didSet { defaults.set(try? JSONEncoder().encode(habits), forKey: "habits") }
     }
@@ -58,6 +63,9 @@ final class AppSettings: ObservableObject {
         fastestModel = bool("fastestModel", false)
         useScreenContext = bool("useScreenContext", true)
         learnFromEdits = bool("learnFromEdits", true)
+        snippets = UserDefaults.standard.data(forKey: "snippets")
+            .flatMap { try? JSONDecoder().decode([Snippet].self, from: $0) } ?? []
+        keepHistory = bool("keepHistory", true)
         habits = UserDefaults.standard.data(forKey: "habits")
             .flatMap { try? JSONDecoder().decode(LearnedHabits.self, from: $0) } ?? LearnedHabits()
     }

@@ -64,6 +64,27 @@ enum ScreenText {
         attribute(field, kAXValueAttribute)
     }
 
+    /// The character just before the cursor in the focused field, if the app exposes it.
+    static func characterBeforeCursor() -> Character? {
+        guard let field = focusedField(), let text = value(of: field) else { return nil }
+        var raw: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(field, kAXSelectedTextRangeAttribute as CFString, &raw) == .success,
+              let raw, CFGetTypeID(raw) == AXValueGetTypeID() else { return nil }
+        var range = CFRange()
+        guard AXValueGetValue(raw as! AXValue, .cfRange, &range), range.location > 0 else { return nil }
+        let utf16 = text.utf16
+        guard range.location <= utf16.count else { return nil }
+        let i = utf16.index(utf16.startIndex, offsetBy: range.location)
+        return String(text[..<i]).last
+    }
+
+    /// Selects `range` of the field's text so the next paste replaces exactly it.
+    static func select(_ range: NSRange, in field: AXUIElement) -> Bool {
+        var cf = CFRange(location: range.location, length: range.length)
+        guard let value = AXValueCreate(.cfRange, &cf) else { return false }
+        return AXUIElementSetAttributeValue(field, kAXSelectedTextRangeAttribute as CFString, value) == .success
+    }
+
     private static func isSecure(_ el: AXUIElement) -> Bool {
         (attribute(el, kAXSubroleAttribute) as String?) == kAXSecureTextFieldSubrole
     }

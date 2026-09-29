@@ -41,6 +41,8 @@ public final class DictationPipeline {
     private let normalizer = TextNormalizer.shared
     /// Names and terms to spell right ("Divya"). Set from the user's settings.
     public var dictionary = PersonalDictionary([])
+    /// Voice shortcuts ("my email" → address). Set from the user's settings.
+    public var snippets: [Snippet] = []
 
     /// macOS's built-in English word list, used so real words are never "corrected" into names.
     private static let knownWords: Set<String> = {
@@ -92,8 +94,11 @@ public final class DictationPipeline {
         var text = post.text
         var refineTime: Duration = .zero
         var usedLLM = false
-        if post.action == .undo {
-            return Output(text: "", raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: 0, usedLLM: false, action: .undo)
+        switch post.action {
+        case .undo, .edit:
+            return Output(text: "", raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: 0, usedLLM: false,
+                          action: post.action)
+        default: break
         }
         if llm == .corrections, refiner.isLoaded, CorrectionPrompt.hasCue(raw) {
             t = clock.now
@@ -135,7 +140,12 @@ public final class DictationPipeline {
     {
         // Spoken commands first ("capitalize each word, …", "… press enter", "undo that").
         let command = DictationCommands.parse(TextCleaner.clean(raw))
-        var text = command.text
+        // Voice shortcuts are swapped for placeholders so nothing below alters them.
+        let masked = Snippets.mask(command.text, snippets: snippets)
+        if masked.isWholeDictation {
+            return .init(text: masked.text, unresolved: false, action: command.action)
+        }
+        var text = masked.text
         guard !text.isEmpty else { return .init(text: "", unresolved: false, action: command.action) }
         // The user's dictionary first, then names on screen: "Deva" → "Divya".
         let names = contextTerms.isEmpty ? dictionary : PersonalDictionary(dictionary.terms + contextTerms)
@@ -149,8 +159,9 @@ public final class DictationPipeline {
         if language == .english {
             result.text = formatNumbers(result.text) // "four hundred ms" → "400 ms"
         }
-        return Processed(text: DictationCommands.applyCasing(command.casing, to: result.text),
-                         unresolved: result.unresolved, action: command.action)
+        let cased = DictationCommands.applyCasing(command.casing, to: result.text)
+        return Processed(text: Snippets.unmask(cased, masked.restore), unresolved: result.unresolved,
+                         action: command.action)
     }
 
     /// Runs NeMo ITN line by line, leaving list markers alone and keeping ordinals used as words

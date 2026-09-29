@@ -16,6 +16,8 @@ public enum DictationCommands {
     public enum Action: Equatable, Sendable {
         case pressEnter
         case undo
+        /// Change the text Evoo just typed ("replace Tuesday with Wednesday").
+        case edit(VoiceEdit)
     }
 
     public struct Parsed: Equatable, Sendable {
@@ -41,6 +43,10 @@ public enum DictationCommands {
                       options: .regularExpression) != nil
         {
             return Parsed(text: "", casing: nil, action: .undo)
+        }
+
+        if let edit = VoiceEdit.parse(text) {
+            return Parsed(text: "", casing: nil, action: .edit(edit))
         }
 
         // Leading casing command: "Capitalize each word, …" (optionally "please", optional punctuation after).

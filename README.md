@@ -9,6 +9,9 @@ Hold `fn`, speak, release — clean text appears at your cursor in any app.
 - English (Hindi/Hinglish are built but switched off for now — `Features.multilingual`). Pluggable speech engines.
 - Speculative transcription: Evoo starts transcribing when you pause, so text is usually ready the instant fn goes up.
 - Personal dictionary for names and jargon (Divya, Aarav, Kubernetes).
+- Voice shortcuts: say "my email" (alone or mid-sentence) and get the full text you set up.
+- Voice editing: "replace Tuesday with Wednesday", "delete the last sentence", "make that a list".
+- History: search and copy your recent dictations (menu → History…), kept only on your Mac.
 - Formats as you speak: "…buy tomorrow bread, eggs, milk" becomes a bulleted list; "first… second… third…"
   becomes numbered steps; "new line", "new paragraph", emails. Markdown in Notion/editors/browsers, • bullets
   elsewhere, and never a line break in Terminal (a pasted newline could run a command).

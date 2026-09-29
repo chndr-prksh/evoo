@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var pill: PillPanel!
     private var settingsWindow: NSWindow?
+    private var historyWindow: NSWindow?
     private var cancellables: Set<AnyCancellable> = []
 
     func applicationDidFinishLaunching(_: Notification) {
@@ -88,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(pillItem)
 
         menu.addItem(.separator())
+        menu.addItem(item("History…", #selector(openHistory), key: "y"))
         addUpdateItems(to: menu)
         menu.addItem(item("Settings…", #selector(openSettings), key: ","))
         menu.addItem(item("Quit Evoo", #selector(NSApplication.terminate(_:)), key: "q", target: NSApp))
@@ -121,6 +123,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         menu.addItem(withTitle: "Evoo \(version)", action: nil, keyEquivalent: "").isEnabled = false
         menu.addItem(.separator())
+    }
+
+    @objc private func openHistory() {
+        if historyWindow == nil {
+            let window = NSWindow(contentViewController: NSHostingController(rootView: HistoryView(history: .shared)))
+            window.title = "Evoo History"
+            window.styleMask = [.titled, .closable, .resizable]
+            window.isReleasedWhenClosed = false
+            window.center()
+            historyWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        historyWindow?.makeKeyAndOrderFront(nil)
     }
 
     @objc private func checkForUpdates() { updater.check() }

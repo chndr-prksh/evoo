@@ -121,6 +121,34 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Voice shortcuts") {
+                Text("Say the phrase, get the text — alone or mid-sentence (“send it to my email”).")
+                    .font(.caption).foregroundStyle(.secondary)
+                ForEach(settings.snippets.indices, id: \.self) { i in
+                    HStack(alignment: .top) {
+                        TextField("Say…", text: $settings.snippets[i].trigger).frame(width: 120)
+                        TextField("Type…", text: $settings.snippets[i].expansion, axis: .vertical).lineLimit(1 ... 4)
+                        Button {
+                            settings.snippets.remove(at: i)
+                        } label: {
+                            Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                Button("Add shortcut") { settings.snippets.append(Snippet(trigger: "", expansion: "")) }
+            }
+
+            Section("History") {
+                Toggle("Keep my recent dictations on this Mac", isOn: $settings.keepHistory)
+                HStack {
+                    Text("\(DictationHistory.shared.entries.count) saved").foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Clear history") { DictationHistory.shared.clear() }
+                        .disabled(DictationHistory.shared.entries.isEmpty)
+                }
+            }
+
             Section("Learning") {
                 Toggle("Learn from my edits", isOn: $settings.learnFromEdits)
                 Text("When you fix something Evoo typed, it learns: corrected names join your dictionary, and habits like deleting the final full stop in chat apps are remembered per app. Only learned words and counts are kept — never your text.")
