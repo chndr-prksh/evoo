@@ -39,6 +39,13 @@ final class AppSettings: ObservableObject {
     @Published var customApps: [AppTarget] {
         didSet { defaults.set(try? JSONEncoder().encode(customApps), forKey: "customApps") }
     }
+    /// Learn unusual words seen on screen across dictations (names, products, projects).
+    @Published var learnFromScreen: Bool { didSet { save(learnFromScreen, "learnFromScreen") } }
+    @Published var screenLexicon: ScreenLexicon {
+        didSet { defaults.set(try? JSONEncoder().encode(screenLexicon), forKey: "screenLexicon") }
+    }
+    /// Words added to the dictionary from the screen, so Settings can list them separately.
+    @Published var screenLearned: [String] { didSet { save(screenLearned, "screenLearned") } }
     /// Occasional tips by the pill introducing one feature at a time.
     @Published var showTips: Bool { didSet { save(showTips, "showTips") } }
     @Published var dictationCount: Int { didSet { save(dictationCount, "dictationCount") } }
@@ -80,6 +87,10 @@ final class AppSettings: ObservableObject {
             .flatMap { try? JSONDecoder().decode([Snippet].self, from: $0) } ?? []
         keepHistory = bool("keepHistory", true)
         showTips = bool("showTips", true)
+        learnFromScreen = bool("learnFromScreen", true)
+        screenLexicon = UserDefaults.standard.data(forKey: "screenLexicon")
+            .flatMap { try? JSONDecoder().decode(ScreenLexicon.self, from: $0) } ?? ScreenLexicon()
+        screenLearned = UserDefaults.standard.stringArray(forKey: "screenLearned") ?? []
         dictationCount = UserDefaults.standard.integer(forKey: "dictationCount")
         shownTips = UserDefaults.standard.stringArray(forKey: "shownTips") ?? []
         appCommands = bool("appCommands", true)

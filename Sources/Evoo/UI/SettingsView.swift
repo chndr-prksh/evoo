@@ -74,6 +74,17 @@ struct SettingsView: View {
                     }
                 }
                 Toggle("Recognize names on screen", isOn: $settings.useScreenContext)
+                Toggle("Learn unusual words from my screen", isOn: $settings.learnFromScreen)
+                    .disabled(!settings.useScreenContext)
+                if !settings.screenLearned.isEmpty {
+                    Text("Learned from your screen: " + settings.screenLearned.joined(separator: ", "))
+                        .font(.caption).foregroundStyle(.secondary)
+                    Button("Forget words learned from the screen") {
+                        settings.personalWords.removeAll { settings.screenLearned.contains($0) }
+                        settings.screenLearned = []
+                        settings.screenLexicon = ScreenLexicon()
+                    }
+                }
                 Text("While you dictate, Evoo reads names visible in the current window — a chat's contact, email recipients, the text you're replying to — so it spells them right. Read locally for that dictation only; never stored. Password fields are skipped.")
                     .font(.caption).foregroundStyle(.secondary)
                 Text("Names and terms Evoo should always spell right, e.g. Divya, Aarav, Kubernetes. Misheard words that sound like them are corrected; real English words are never changed.")

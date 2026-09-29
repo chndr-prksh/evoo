@@ -28,6 +28,16 @@ public struct PersonalDictionary: Sendable {
 
     public var isEmpty: Bool { entries.isEmpty && phrases.isEmpty }
 
+    /// Like `apply`, also reporting which dictionary terms were used — a strong signal for learning.
+    public func applyReporting(_ text: String, isKnownWord: (String) -> Bool) -> (text: String, used: [String]) {
+        let out = apply(text, isKnownWord: isKnownWord)
+        let before = Set(text.split(separator: " ").map { $0.trimmingCharacters(in: .punctuationCharacters) })
+        let used = terms.filter { term in
+            out.contains(term) && !before.contains(term) && !text.localizedCaseInsensitiveContains(term)
+        }
+        return (out, used)
+    }
+
     public func apply(_ text: String, isKnownWord: (String) -> Bool) -> String {
         guard !isEmpty else { return text }
         let withPhrases = applyPhrases(text, isKnownWord: isKnownWord)

@@ -358,6 +358,7 @@ final class DictationController: ObservableObject {
             let names = await screenNames?.value ?? []
             let out = await pipeline.finish(raw: raw, asrMs: asrMs, language: language, style: style,
                                             contextTerms: names, tone: Tone.forApp(targetApp), llm: policy)
+            learnFromScreen(seen: names, used: out.usedScreenTerms)
             // Cancelled, timed out, or superseded by a newer dictation: don't paste stale text.
             guard !Task.isCancelled, session == self.session else { return }
             if out.action == .undo {
@@ -457,6 +458,18 @@ final class DictationController: ObservableObject {
             transcribeFile()
         }
         return true
+    }
+
+    /// Screen words become permanent dictionary words when they fixed a dictation, or after they've shown up
+    /// in several separate dictations (`ScreenLexicon.threshold`).
+    private func learnFromScreen(seen: [String], used: [String]) {
+        guard settings.learnFromScreen, !seen.isEmpty else { return }
+        let promoted = settings.screenLexicon.observe(seen)
+        let new = Array(Set(used + promoted)).filter { !settings.personalWords.contains($0) }.sorted()
+        guard !new.isEmpty else { return }
+        settings.personalWords += new
+        settings.screenLearned += new
+        if !used.isEmpty { show("Learned “\(used.joined(separator: "”, “"))” from your screen") }
     }
 
     /// Every few dictations, introduce one more feature (schedule in `Tips`).

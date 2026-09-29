@@ -205,6 +205,11 @@ import Testing
         #expect(fix("Th the plan is ready.") == "The plan is ready.")
         #expect(fix("I am in a meeting.") == "I am in a meeting.")
         #expect(fix("Go to the store.") == "Go to the store.")
+        #expect(fix("Start adding those words in your dis dictionary.") == "Start adding those words in your dictionary.")
+        #expect(fix("Read the theory first.") == "Read the theory first.")
+        #expect(fix("Add it if it sounds if it's unusual.") == "Add it if it's unusual.")
+        #expect(fix("If it rains, if it snows, we stay.") == "If it rains, if it snows, we stay.")
+        #expect(fix("When we're done we leave.") == "When we're done we leave.")
     }
 
     @Test func scratchThat() {
@@ -649,5 +654,33 @@ import Testing
         #expect(Tips.next(afterUses: 12, shown: ["corrections"])?.id == "commands")
         let all = Set(Tips.all.map(\.id))
         #expect(Tips.next(afterUses: 1000, shown: all) == nil)
+    }
+}
+
+@Suite struct ScreenLearningTests {
+    let known: Set<String> = ["the", "meeting", "online", "type", "message", "hello", "how", "are", "you", "project", "review"]
+
+    @Test func harvestsLowercaseTermsOnlyWhenRepeated() {
+        let names = ContextVocabulary.names(from: ["deploy with kubectl", "kubectl get pods", "one-off zqxw"]) {
+            known.contains($0)
+        }
+        #expect(names.contains("kubectl"))
+        #expect(!names.contains("zqxw"))
+    }
+
+    @Test func learnsAfterThreeDictations() {
+        var lexicon = ScreenLexicon()
+        #expect(lexicon.observe(["Divya", "Kubernetes"]).isEmpty)
+        #expect(lexicon.observe(["Divya", "Divya"]).isEmpty) // counted once per dictation
+        #expect(lexicon.observe(["Divya"]) == ["Divya"])
+        #expect(lexicon.observe(["Divya"]).isEmpty) // only reported once
+    }
+
+    @Test func reportsWhichTermsFixedTheText() {
+        let d = PersonalDictionary(["Divya", "Aarav"])
+        let r = d.applyReporting("Hi Deva, how are you?") { known.contains($0) }
+        #expect(r.text == "Hi Divya, how are you?")
+        #expect(r.used == ["Divya"])
+        #expect(d.applyReporting("Hi Divya.") { known.contains($0) }.used.isEmpty) // already right
     }
 }

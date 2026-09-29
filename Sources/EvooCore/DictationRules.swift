@@ -82,14 +82,29 @@ public enum DictationRules {
                                           "in", "is", "it", "me", "my", "no", "of", "oh", "ok", "on", "or", "so", "to",
                                           "up", "us", "we", "ah", "ha", "yo"]
 
+    /// Common three-letter words, which are never treated as broken-off starts ("the theory", "car carpet").
+    static let commonThreeLetter: Set<String> = [
+        "the", "and", "for", "you", "are", "but", "not", "all", "any", "can", "had", "her", "was", "one", "our",
+        "out", "day", "get", "has", "him", "his", "how", "man", "new", "now", "old", "see", "two", "way", "who",
+        "did", "its", "let", "put", "say", "she", "too", "use", "car", "cat", "dog", "big", "bad", "yes", "yet",
+        "got", "may", "run", "sit", "top", "red", "far", "few", "own", "off", "end", "why", "ask", "men", "per",
+        "art", "pay", "buy", "fun", "job", "law", "map", "sun", "war", "air", "age", "key", "low", "set", "try",
+    ]
+
     static func removeStutters(_ tokens: [Token]) -> [Token] {
-        // Broken-off word starts: "like m make it" → "like make it", "th the plan" → "the plan".
+        // Broken-off word starts: "like m make it" → "like make it", "your dis dictionary" → "your dictionary".
         var t = tokens.enumerated().filter { i, tok in
             guard i + 1 < tokens.count, !tok.endsClause, !tok.endsSentence else { return true }
             let w = tok.norm, next = tokens[i + 1].norm
-            return !(w.count <= 2 && !w.isEmpty && !shortWords.contains(w) && w.allSatisfy(\.isLetter)
-                && next.count > w.count && next.hasPrefix(w))
+            guard !w.isEmpty, w.allSatisfy(\.isLetter), next.first == w.first else { return true }
+            // The fragment is the word's start, or nearly ("dis" before "dictionary").
+            let head = String(next.prefix(w.count))
+            let mismatches = zip(head, w).filter { $0 != $1 }.count
+            let fragment = (w.count <= 2 && next.hasPrefix(w) && !shortWords.contains(w) && next.count > w.count)
+                || (w.count == 3 && mismatches <= 1 && !commonThreeLetter.contains(w) && next.count >= 6)
+            return !fragment
         }.map(\.element)
+        t = removeRestarts(t)
         var changed = true
         while changed {
             changed = false
@@ -108,6 +123,32 @@ public enum DictationRules {
                     break outer
                 }
             }
+        }
+        return t
+    }
+
+    /// Openers people restart with ("if it sounds… if it's unusual", "when we… when we're done").
+    static let restartOpeners: Set<String> = ["if", "when", "i", "we", "you", "it", "so", "and", "but", "because",
+                                              "the", "this", "that", "they", "he", "she", "there", "what", "can"]
+
+    /// A phrase started, abandoned, and started again with a slightly different word:
+    /// "if it sounds if it's unusual" → "if it's unusual".
+    static func removeRestarts(_ input: [Token]) -> [Token] {
+        var t = input
+        var i = 0
+        while i + 3 < t.count {
+            let a = t[i].norm, b = t[i + 1].norm
+            guard restartOpeners.contains(a) else { i += 1; continue }
+            var restarted = false
+            for j in (i + 2) ... min(i + 5, t.count - 2) {
+                guard t[j].norm == a, t[j + 1].norm != b, t[j + 1].norm.hasPrefix(b), b.count >= 2 else { continue }
+                // Nothing between the two starts may end a clause — that would be two real phrases.
+                guard !t[i ..< j].contains(where: { $0.endsClause || $0.endsSentence }) else { break }
+                t.removeSubrange(i ..< j)
+                restarted = true
+                break
+            }
+            if !restarted { i += 1 }
         }
         return t
     }

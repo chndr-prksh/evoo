@@ -20,6 +20,8 @@ public final class DictationPipeline {
         public var usedLLM: Bool
         /// A spoken command to carry out: press Return after pasting, or undo the last dictation.
         public var action: DictationCommands.Action? = nil
+        /// Names from the screen that corrected this dictation ("Deva" → "Divya") — worth learning for good.
+        public var usedScreenTerms: [String] = []
 
         public var totalMs: Int { asrMs + postMs + refineMs }
 
@@ -127,7 +129,7 @@ public final class DictationPipeline {
             usedLLM = true
         }
         return Output(text: text, raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: refineTime.ms, usedLLM: usedLLM,
-                      action: post.action)
+                      action: post.action, usedScreenTerms: post.usedScreenTerms)
     }
 
     /// Short, single-line dictations without anything to fix ("Sounds good.") are pasted as-is: faster,
@@ -153,6 +155,7 @@ public final class DictationPipeline {
         public var text: String
         public var unresolved: Bool
         public var action: DictationCommands.Action?
+        public var usedScreenTerms: [String] = []
     }
 
     public func postProcess(_ raw: String, language: DictationLanguage, style: OutputStyle? = .plain,
@@ -169,8 +172,11 @@ public final class DictationPipeline {
         guard !text.isEmpty else { return .init(text: "", unresolved: false, action: command.action) }
         // The user's dictionary first, then names on screen: "Deva" → "Divya".
         let names = contextTerms.isEmpty ? dictionary : PersonalDictionary(dictionary.terms + contextTerms)
+        var usedScreenTerms: [String] = []
         if !names.isEmpty {
-            text = names.apply(text) { Self.knownWords.contains($0) }
+            let r = names.applyReporting(text) { Self.knownWords.contains($0) }
+            text = r.text
+            usedScreenTerms = r.used.filter { contextTerms.contains($0) && !dictionary.terms.contains($0) }
         }
         var result = DictationRules.apply(text) // corrections, fillers, stutters
         if let style {
@@ -181,7 +187,7 @@ public final class DictationPipeline {
         }
         let cased = DictationCommands.applyCasing(command.casing, to: result.text)
         return Processed(text: Snippets.unmask(cased, masked.restore), unresolved: result.unresolved,
-                         action: command.action)
+                         action: command.action, usedScreenTerms: usedScreenTerms)
     }
 
     /// Runs NeMo ITN line by line, leaving list markers alone and keeping ordinals used as words

@@ -4,7 +4,7 @@ import AppKit
 /// for pasting): window title, labels, chat headers, recipients, and the text around the cursor.
 /// Used only to spot names for the current dictation; nothing is stored. Password fields are skipped.
 enum ScreenText {
-    static func capture(maxElements: Int = 1_500, budget: TimeInterval = 0.25) -> [String] {
+    static func capture(maxElements: Int = 2_500, budget: TimeInterval = 0.35) -> [String] {
         let deadline = Date().addingTimeInterval(budget)
         let system = AXUIElementCreateSystemWide()
         AXUIElementSetMessagingTimeout(system, 0.05)
