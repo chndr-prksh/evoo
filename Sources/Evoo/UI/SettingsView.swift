@@ -152,7 +152,7 @@ struct SettingsView: View {
                 if SystemInfo.canRunSmartCleanup {
                     Toggle("Polish every dictation with local AI", isOn: $settings.smartCleanup)
                         .disabled(!controller.refinerInstalled)
-                    Text("A local model tidies what you said — corrections, grammar, messy phrasing — after Evoo's rules. Adds about a second on 16 GB Macs. Also enables rewrite by voice: select text, hold fn, say “make this more formal”, “shorten this”, “translate to Hindi”. Runs entirely on this Mac.")
+                    Text("A local model tidies what you said — corrections, grammar, messy phrasing — after Evoo's rules. Also enables rewrite by voice: select text, hold fn, say “make this more formal”, “shorten this”, “translate to Hindi”. Runs entirely on this Mac." + (SystemInfo.isLowMemory ? " On this Mac (\(Int(SystemInfo.memoryGB.rounded())) GB) expect a few seconds per dictation." : " Adds about a second."))
                         .font(.caption).foregroundStyle(.secondary)
                     Picker("Model", selection: $settings.refinerModel) {
                         Text(RefinerModel.qwen3_4b.title).tag(RefinerModel.qwen3_4b)

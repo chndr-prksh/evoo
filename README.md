@@ -25,6 +25,10 @@ one-line install below. Evoo updates itself after that.
 - History: search and copy your recent dictations (menu → History…), kept only on your Mac.
 - **Welcome tour** on first launch: privacy & offline, what you can do, and a step-by-step permissions guide
   that ticks off each step live. Afterwards, a small tip by the pill now and then introduces one feature at a time.
+- **Class Notes** (🎓 on the pill, or say "start class notes"): drop the professor's PDF (optional), start the
+  class, and Evoo listens, follows the slides, and writes notes beside each one with a local AI — formulas in
+  LaTeX, worked examples, ★ for what's stressed. Every class is saved with its date and time; say
+  "search note Bayes theorem" to find where something was said. Export to Markdown.
 - **Voice commands** (say the whole command as one dictation; anything else is typed as usual):
   - Apps & web: "open Slack", "switch to Chrome", "open github.com", "search Google for …", "ask ChatGPT …",
     "YouTube …", "new Google doc", "new email about …" — every installed app, plus your own in Settings → Apps

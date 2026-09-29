@@ -55,6 +55,7 @@ final class PillModel: ObservableObject {
     /// The pill's frame in the hosting view's coordinates (top-left origin).
     var pillRect: CGRect = .zero
     var showLanguageMenu: () -> Void = {}
+    var openClassNotes: () -> Void = {}
 }
 
 /// A fixed-size, transparent, non-activating panel at the bottom-center of the screen.

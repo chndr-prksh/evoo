@@ -39,6 +39,15 @@ final class AudioRecorder {
         isRecording = true
     }
 
+    /// Hands over what was recorded since the last call and forgets it — for long recordings (class notes).
+    func take() -> [Float] {
+        lock.withLock {
+            let out = samples
+            samples.removeAll(keepingCapacity: true)
+            return out
+        }
+    }
+
     /// Everything recorded so far, while still recording (for speculative transcription).
     func snapshot() -> [Float] {
         lock.withLock { samples }

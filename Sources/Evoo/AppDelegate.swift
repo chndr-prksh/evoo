@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var settingsWindow: NSWindow?
     private var historyWindow: NSWindow?
     private var welcomeWindow: NSWindow?
+    private var classWindow: NSWindow?
     private var cancellables: Set<AnyCancellable> = []
 
     func applicationDidFinishLaunching(_: Notification) {
@@ -35,6 +36,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .store(in: &cancellables)
 
         controller.onOpenHistory = { [weak self] in self?.openHistory() }
+        controller.onOpenClassNotes = { [weak self] query in self?.openClassNotes(query: query) }
+        PillModel.shared.openClassNotes = { [weak self] in self?.openClassNotes(query: nil) }
+        ClassNotesModel.shared.makeRecorder = { [weak self] session, pdf in
+            self?.controller.makeClassRecorder(session: session, pdf: pdf)
+        }
+        ClassNotesModel.shared.microphone = { AppSettings.shared.microphoneUID }
         controller.bootstrap()
         updater.start()
         updater.$state
@@ -100,6 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(pillItem)
 
         menu.addItem(.separator())
+        menu.addItem(item("Class Notes…", #selector(openClassNotesFromMenu)))
         menu.addItem(item("History & Notes…", #selector(openHistory), key: "y"))
         menu.addItem(item("Transcribe a File…", #selector(transcribeFile)))
         addUpdateItems(to: menu)
@@ -139,6 +147,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func transcribeFile() { controller.transcribeFile() }
+
+    @objc private func openClassNotesFromMenu() { openClassNotes(query: nil) }
+
+    func openClassNotes(query: String?) {
+        if let query {
+            ClassNotesModel.shared.query = query
+        }
+        if classWindow == nil {
+            let view = ClassNotesView(model: .shared, store: .shared, controller: controller)
+            let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+            window.title = "Class Notes"
+            window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
+            window.isReleasedWhenClosed = false
+            window.setContentSize(NSSize(width: 1100, height: 700))
+            window.center()
+            classWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        classWindow?.makeKeyAndOrderFront(nil)
+    }
 
     @objc func showWelcomeTour() { openWelcome(page: 0) }
 

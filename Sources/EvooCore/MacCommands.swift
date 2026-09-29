@@ -40,6 +40,8 @@ public enum MacCommand: Equatable, Sendable {
     case readAloud
     case stopReading
     case transcribeFile
+    case searchClassNotes(String)
+    case openClassNotes
 
     public enum Media: String, Sendable { case playPause, next, previous }
 }
@@ -117,11 +119,18 @@ public enum MacCommands {
                 return .event(title: capitalizedFirst(title.trimmingCharacters(in: .whitespaces)), start: date, minutes: minutes)
             }
         }
+        // Class notes: "search note Bayes theorem", "search my class notes for variance", "start class notes"
+        if let m = match(#"(?:search|find|look up)(?: in)? (?:my |the )?(?:class |lecture )?notes?(?: for| about)? (.+)"#) {
+            return .searchClassNotes(m[1])
+        }
+        if match(#"(?:start|open|take|begin)(?: a| my)? (?:class|lecture)(?: notes| mode)?|class (?:notes|mode)"#) != nil {
+            return .openClassNotes
+        }
         // Notes & asking your history
         if let m = match(#"(?:note(?: to self)?|take a note|make a note|save a note|jot down)[,:]? (?:that )?(.+)"#) {
             return .note(capitalizedFirst(m[1]))
         }
-        if let m = match(#"(?:what did I (?:say|write|dictate|note|tell \w+)|find (?:my |the )?(?:note|dictation|message)s?|search my (?:notes|history|dictations)(?: for)?) (?:about |on |for )?(.+)"#) {
+        if let m = match(#"(?:what did I (?:say|write|dictate|note|tell \w+)|find (?:my |the )?(?:note|dictation|message)s?|search my (?:history|dictations)(?: for)?) (?:about |on |for )?(.+)"#) {
             return .askHistory(m[1])
         }
         // Audio

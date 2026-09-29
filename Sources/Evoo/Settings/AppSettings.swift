@@ -71,7 +71,7 @@ final class AppSettings: ObservableObject {
         language = value("language", .english)
         engine = value("engine", .automatic)
         refinementEnabled = bool("refinementEnabled", true)
-        refinerModel = value("refinerModel", SystemInfo.canRunSmartCleanup ? .qwen3_4b : .qwen3_1_7b)
+        refinerModel = value("refinerModel", .qwen3_4b) // quality first
         smartCleanup = bool("smartCleanup", false) && SystemInfo.canRunSmartCleanup
         microphoneUID = UserDefaults.standard.string(forKey: "microphoneUID")
         showPill = bool("showPill", true)

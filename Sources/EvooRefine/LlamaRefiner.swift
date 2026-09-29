@@ -103,6 +103,18 @@ public final class LlamaRefiner: @unchecked Sendable {
         return out.isEmpty ? nil : out
     }
 
+    /// Student-style notes for what the professor just said (see `ClassNotePrompt`).
+    public func classNotes(slide: String?, transcript: String) async throws -> String? {
+        let raw = try await run { [self] in
+            try primePrefix(ClassNotePrompt.prefix)
+            let suffix = ClassNotePrompt.suffix(slide: slide, transcript: String(transcript.suffix(4_000)),
+                                                thinkBlock: loadedModel?.usesThinkBlock ?? true)
+            return try generate(suffix: suffix, maxTokens: 350)
+        }
+        let out = RewritePrompt.sanitize(raw)
+        return out.isEmpty ? nil : out
+    }
+
     /// "Make this more formal" applied to selected text. Returns nil if the model produced nothing usable.
     public func rewrite(_ text: String, instruction: String) async throws -> String? {
         let raw = try await run { [self] in

@@ -25,6 +25,22 @@ public enum SemanticSearch {
         return scored.filter { $0.1 >= threshold }.sorted { $0.1 > $1.1 }.prefix(limit).map(\.0)
     }
 
+    /// Relevance of `query` to each text (same scoring as `rank`, unfiltered, in input order).
+    public static func scores(_ query: String, in texts: [String]) -> [Double] {
+        let q = query.lowercased()
+        let qWords = Set(q.split { !$0.isLetter && !$0.isNumber }.map(String.init).filter { $0.count > 3 })
+        let embedding = NLEmbedding.sentenceEmbedding(for: .english)
+        let qVector = embedding?.vector(for: String(q.suffix(1_500)))
+        return texts.map { text in
+            let lower = text.lowercased()
+            var score = 0.0
+            if let qVector, let v = embedding?.vector(for: String(lower.prefix(1_500))) { score += cosine(qVector, v) }
+            let words = Set(lower.split { !$0.isLetter && !$0.isNumber }.map(String.init))
+            if !qWords.isEmpty { score += Double(qWords.intersection(words).count) / Double(qWords.count) }
+            return score
+        }
+    }
+
     static func cosine(_ a: [Double], _ b: [Double]) -> Double {
         var dot = 0.0, na = 0.0, nb = 0.0
         for i in 0 ..< min(a.count, b.count) {

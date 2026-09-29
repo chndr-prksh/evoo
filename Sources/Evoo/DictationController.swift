@@ -1,4 +1,5 @@
 import AppKit
+import PDFKit
 import Combine
 import EvooCore
 import EvooRefine
@@ -47,6 +48,8 @@ final class DictationController: ObservableObject {
     private var targetApp: String?
     /// Opens the History & Notes window (owned by the app delegate).
     var onOpenHistory: (() -> Void)?
+    /// Opens the Class Notes window, optionally searching for something.
+    var onOpenClassNotes: ((String?) -> Void)?
     /// Text selected when fn went down — the target of "rewrite by voice".
     private var selectionAtStart: String?
 
@@ -428,6 +431,7 @@ final class DictationController: ObservableObject {
         case .askHistory: markUsed("history")
         case .readAloud: markUsed("readAloud")
         case .transcribeFile: markUsed("transcribe")
+        case .searchClassNotes, .openClassNotes: markUsed("classNotes")
         default: break
         }
         switch command {
@@ -465,6 +469,12 @@ final class DictationController: ObservableObject {
         case .stopReading:
             Assistant.stopReading()
             phase = .idle
+        case let .searchClassNotes(query):
+            phase = .idle
+            onOpenClassNotes?(query)
+        case .openClassNotes:
+            phase = .idle
+            onOpenClassNotes?(nil)
         case .transcribeFile:
             phase = .idle
             transcribeFile()
@@ -521,6 +531,45 @@ final class DictationController: ObservableObject {
             markUsed("shortcuts")
         }
         if !settings.personalWords.isEmpty { markUsed("dictionary") }
+    }
+
+    // MARK: - Class notes
+
+    /// The model class notes use: the best local one, on any Mac (quality over speed).
+    static let notesModel = RefinerModel.qwen3_4b
+
+    var notesModelInstalled: Bool { ModelDownloader.isInstalled(Self.notesModel) }
+
+    func downloadNotesModel() {
+        guard refinerDownloadProgress == nil else { return }
+        refinerDownloadProgress = 0
+        Task {
+            do {
+                try await ModelDownloader.download(Self.notesModel) { p in
+                    Task { @MainActor in self.refinerDownloadProgress = p }
+                }
+            } catch {
+                show("Download failed: \(error.localizedDescription)")
+            }
+            refinerDownloadProgress = nil
+        }
+    }
+
+    /// A recorder wired to the speech engine and the local notes model.
+    func makeClassRecorder(session: ClassSession, pdf: PDFDocument?) -> ClassRecorder? {
+        guard engines.ready(settings.resolvedEngine) != nil else {
+            show("Speech model is still preparing — try again shortly")
+            return nil
+        }
+        let refiner = self.refiner
+        let writer: ((String?, String) async -> String?)? = notesModelInstalled ? { slide, transcript in
+            if refiner.loadedModel != Self.notesModel { try? await refiner.load(Self.notesModel) }
+            return try? await refiner.classNotes(slide: slide, transcript: transcript)
+        } : nil
+        return ClassRecorder(session: session, pdf: pdf, transcribe: { [weak self] samples in
+            guard let engine = await self?.engines.ready(.parakeet) else { return "" }
+            return try await engine.transcribe(samples, language: .english)
+        }, writeNotes: writer)
     }
 
     func transcribeFile() {

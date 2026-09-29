@@ -27,7 +27,7 @@ struct PillView: View {
     private var size: CGSize {
         switch look {
         case .idle: CGSize(width: 40, height: 8)
-        case .hover: CGSize(width: Features.multilingual ? 124 : 56, height: 34)
+        case .hover: CGSize(width: Features.multilingual ? 154 : 90, height: 34)
         case .recording: CGSize(width: 176, height: 38)
         case .working: CGSize(width: 64, height: 34)
         case .message: CGSize(width: 320, height: 46)
@@ -86,6 +86,7 @@ struct PillView: View {
                     RoundButton(symbol: "globe", help: "Language: \(settings.language.title)",
                                 action: model.showLanguageMenu)
                 }
+                RoundButton(symbol: "graduationcap.fill", help: "Class notes", action: model.openClassNotes)
                 Button(action: controller.toggleFromUI) {
                     Image(systemName: "mic.fill")
                         .font(.system(size: 12, weight: .semibold))

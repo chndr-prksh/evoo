@@ -698,3 +698,40 @@ import Testing
         #expect(d.applyReporting("Hi Divya.") { known.contains($0) }.used.isEmpty) // already right
     }
 }
+
+@Suite struct ClassNotesTests {
+    @Test func voiceCommands() {
+        #expect(MacCommands.parse("Search note Bayes theorem.") == .searchClassNotes("Bayes theorem"))
+        #expect(MacCommands.parse("search my class notes for variance") == .searchClassNotes("variance"))
+        #expect(MacCommands.parse("Start class notes") == .openClassNotes)
+        #expect(MacCommands.parse("What did I say about the invoice?") == .askHistory("the invoice"))
+    }
+
+    @Test func tracksSlides() {
+        var t = SlideTracker(pages: [
+            "Introduction to probability. Sample spaces and events.",
+            "Conditional probability. P of A given B. Bayes theorem.",
+            "Random variables. Expectation and variance.",
+        ])
+        #expect(t.update(with: "so today we start with what a sample space is and what an event is") == 0)
+        #expect(t.update(with: "now the probability of A given B, and this leads to Bayes theorem") == 1)
+        #expect(t.update(with: "let's go to slide 3") == 2)
+    }
+
+    @Test func writesBulletsWithoutAI() {
+        let notes = LectureNotes.bullets(from: "Okay so um the variance measures how spread out the values are. Right? This is important for the exam, the variance of a sum of independent variables is the sum of variances.")
+        #expect(notes.first == "- The variance measures how spread out the values are.")
+        #expect(notes.contains { $0.hasPrefix("- ★ This is important for the exam") })
+        #expect(!notes.contains { $0.contains("Right?") })
+    }
+
+    @Test func searchesAcrossClasses() {
+        var a = ClassSession(title: "Probability 3")
+        a.segments = [.init(time: 120, page: 1, text: "Bayes theorem lets us flip conditional probabilities.")]
+        var b = ClassSession(title: "Probability 4")
+        b.segments = [.init(time: 60, page: 0, text: "Random variables map outcomes to numbers.")]
+        let hits = ClassSearch.search("Bayes theorem", in: [a, b])
+        #expect(hits.first?.sessionID == a.id)
+        #expect(hits.first?.time == 120)
+    }
+}

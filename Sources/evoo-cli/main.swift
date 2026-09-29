@@ -231,6 +231,29 @@ case "cloud":
       latency: p50 \(Int(sorted[n / 2])) ms · p90 \(Int(sorted[n * 9 / 10])) ms · max \(Int(sorted.last!)) ms · within budget \(inBudget)/\(n)
     """)
 
+case "class-notes":
+    // Simulates Class Notes on a recorded lecture: transcribes it in chunks, then writes notes with the local
+    // model every ~120 words, like the app does live.  evoo-cli class-notes lecture.m4a [--slide "slide text"]
+    let slide = option("--slide")
+    let engine = ParakeetEngine()
+    try await engine.load { _ in }
+    try await refiner.load(.qwen3_4b)
+    for path in inputs {
+        let samples = try AudioConverter().resampleAudioFile(path: path)
+        var transcript = ""
+        for start in stride(from: 0, to: samples.count, by: 20 * 16000) {
+            let chunk = Array(samples[start ..< min(start + 20 * 16000, samples.count)])
+            if let r = AudioStats.speechRange(chunk) {
+                transcript += " " + (try await engine.transcribe(Array(chunk[r]), language: .english))
+            }
+        }
+        print("TRANSCRIPT:\n\(transcript.trimmingCharacters(in: .whitespaces))\n")
+        let t0 = clock.now
+        let notes = try await refiner.classNotes(slide: slide, transcript: transcript) ?? "(none)"
+        print("NOTES (\((clock.now - t0).formatted(.units(allowed: [.seconds])))):\n\(notes)")
+    }
+    await engine.unload()
+
 case "transcribe":
     // Transcribes audio files with Parakeet: prints the text and writes <name>.srt next to each file.
     //   evoo-cli transcribe interview.m4a
