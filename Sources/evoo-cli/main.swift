@@ -152,6 +152,8 @@ case "cloud":
     let cloud = CloudCorrector(provider: provider, apiKey: key, model: option("--model-name"))
     let budget = Double(option("--budget-ms") ?? "300") ?? 300
     let quietCloud = flag("--quiet")
+    // Free tiers allow ~8,000 tokens/minute (~8 of these requests); pace to stay under it.
+    let paceMs = Int(option("--pace-ms") ?? "0") ?? 0
     let path = inputs.first ?? "Benchmarks/corrections.tsv"
     let cases = try String(contentsOfFile: path, encoding: .utf8).split(separator: "\n")
         .filter { !$0.hasPrefix("#") && $0.contains("\t") }
@@ -163,6 +165,7 @@ case "cloud":
     for c in cases {
         let (input, expected) = (c[0], c[1])
         let rules = pipeline.postProcess(input, language: .english, style: nil).text
+        if paceMs > 0 { try await Task.sleep(for: .milliseconds(paceMs)) }
         let t0 = clock.now
         var answer = "error"
         do { answer = try await cloud.answer(for: TextCleaner.clean(input)) } catch {

@@ -78,7 +78,12 @@ public final class CloudCorrector: @unchecked Sendable {
             messages.append(["role": "assistant", "content": ex.answer])
         }
         messages.append(["role": "user", "content": CorrectionPrompt.numbered(text)])
-        let body: [String: Any] = ["model": model, "messages": messages, "temperature": 0, "max_tokens": 12]
+        var body: [String: Any] = ["model": model, "messages": messages, "temperature": 0, "max_tokens": 12]
+        if model.contains("gpt-oss") {
+            // Reasoning models spend tokens thinking first; keep it minimal and leave room for the answer.
+            body["reasoning_effort"] = "low"
+            body["max_tokens"] = 256
+        }
 
         var request = URLRequest(url: provider.baseURL.appendingPathComponent("chat/completions"))
         request.httpMethod = "POST"
