@@ -3,7 +3,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/chndr-prksh/evoo/main/install.sh | bash
 #
 # Downloading with curl (instead of a browser) means macOS doesn't quarantine the app, so it opens
-# without the "Apple could not verify…" prompt. Later updates happen inside Evoo (menu → Install Update).
+# without the "Apple could not verify" prompt. Later updates happen inside Evoo (menu > Install Update).
 set -euo pipefail
 
 REPO="chndr-prksh/evoo"
@@ -17,11 +17,11 @@ if [ "$(uname -m)" != "arm64" ]; then
   exit 1
 fi
 
-echo "→ Downloading the latest Evoo…"
+echo "==> Downloading the latest Evoo..."
 curl -fsSL "$BASE/Evoo.zip" -o "$WORK/Evoo.zip"
 curl -fsSL "$BASE/Evoo.zip.sha256" -o "$WORK/Evoo.zip.sha256"
 
-echo "→ Verifying…"
+echo "==> Verifying..."
 expected="$(tr -d '[:space:]' < "$WORK/Evoo.zip.sha256")"
 actual="$(shasum -a 256 "$WORK/Evoo.zip" | awk '{print $1}')"
 if [ "$expected" != "$actual" ]; then
@@ -29,7 +29,7 @@ if [ "$expected" != "$actual" ]; then
   exit 1
 fi
 
-echo "→ Installing to $APP…"
+echo "==> Installing to ${APP}..."
 pkill -x Evoo 2>/dev/null || true
 ditto -x -k "$WORK/Evoo.zip" "$WORK"
 rm -rf "$APP"
@@ -37,6 +37,6 @@ mv "$WORK/Evoo.app" "$APP"
 xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
 
 open "$APP"
-echo "✓ Evoo is installed and running (look for the waveform in the menu bar)."
+echo "Done: Evoo is installed and running (look for the waveform in the menu bar)."
 echo "  First run: grant Microphone, Input Monitoring and Accessibility when asked, and set"
-echo "  System Settings › Keyboard › “Press 🌐 key to” → Do Nothing."
+echo "  System Settings > Keyboard > 'Press globe key to' > Do Nothing."
