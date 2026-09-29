@@ -15,7 +15,6 @@ final class ClassNotesModel: ObservableObject {
     @Published var draftTitle = ""
     @Published var draftSubject = UserDefaults.standard.string(forKey: "lastClassSubject") ?? ""
     @Published var makingStudyPack: UUID?
-    let player = LecturePlayer()
     /// Supplied by the dictation controller.
     var makeRecorder: ((ClassSession) -> ClassRecorder?)?
     var ai: () -> ClassAI? = { nil }
@@ -32,7 +31,6 @@ final class ClassNotesModel: ObservableObject {
         guard let rec = makeRecorder?(session) else { return }
         do {
             try rec.start(microphone: microphone())
-            player.stop()
             recorder = rec
             selectedID = session.id
             draftTitle = ""
@@ -53,14 +51,14 @@ final class ClassNotesModel: ObservableObject {
     func newClass() {
         selectedID = nil
         focusTime = nil
-        player.stop()
     }
 
     /// Summary, key terms, questions, flashcards and to-dos, made by the local AI from the notes.
     func makeStudyPack(for session: ClassSession) {
-        guard let ai = ai(), makingStudyPack == nil, !session.notes.isEmpty else { return }
+        let latest = ClassStore.shared.sessions.first(where: { $0.id == session.id }) ?? session
+        let notes = latest.notesText
+        guard let ai = ai(), makingStudyPack == nil, !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         makingStudyPack = session.id
-        let notes = session.notes.map { $0.mine == true ? "My note: " + $0.text : $0.text }.joined(separator: "\n")
         Task {
             if let pack = await ai.studyPack(session.subject, notes),
                var latest = ClassStore.shared.sessions.first(where: { $0.id == session.id })
@@ -181,7 +179,7 @@ struct ClassNotesView: View {
         if let rec = model.recorder, rec.session.id == model.selectedID {
             LiveClassView(recorder: rec, stop: model.stopClass)
         } else if let id = model.selectedID, let session = store.sessions.first(where: { $0.id == id }) {
-            ReviewClassView(session: session, model: model, player: model.player)
+            ReviewClassView(session: session, model: model)
                 .id(session.id)
         } else {
             startPanel
@@ -192,7 +190,7 @@ struct ClassNotesView: View {
         VStack(spacing: 20) {
             Image(systemName: "graduationcap.fill").font(.system(size: 44)).foregroundStyle(.tint)
             Text("Take notes in class").font(.system(size: 26, weight: .bold))
-            Text("Evoo listens to the lecture and writes structured notes as it goes — on this Mac, nothing uploaded.")
+            Text("Evoo listens and jots down what matters, like a sharp classmate — you can edit the notes as they appear. On this Mac; no audio is kept.")
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 6) {
                 Text("What's the subject?").font(.headline)
@@ -222,7 +220,7 @@ struct ClassNotesView: View {
             .controlSize(.large)
             HStack(spacing: 18) {
                 Label("Flag moments", systemImage: "star")
-                Label("Replay any note", systemImage: "play.circle")
+                Label("Edit as it writes", systemImage: "square.and.pencil")
                 Label("Flashcards", systemImage: "rectangle.on.rectangle")
                 Label("Ask your lecture", systemImage: "questionmark.bubble")
             }
@@ -257,8 +255,6 @@ struct ClassNotesView: View {
 private struct LiveClassView: View {
     @ObservedObject var recorder: ClassRecorder
     let stop: () -> Void
-    @State private var myNote = ""
-    @FocusState private var noteFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -275,44 +271,26 @@ private struct LiveClassView: View {
                     .font(.system(.title3, design: .rounded).monospacedDigit())
                 LevelMeter(level: recorder.level).frame(width: 60, height: 14)
                 Spacer()
-                ForEach(ClassSession.Mark.Kind.allCases, id: \.self) { kind in
-                    Button {
-                        recorder.mark(kind)
-                    } label: {
-                        Text("\(kind.symbol) \(kind.label)")
-                    }
-                    .keyboardShortcut(KeyEquivalent(Character(String(ClassSession.Mark.Kind.allCases.firstIndex(of: kind)! + 1))),
-                                      modifiers: .command)
-                    .help("Flag this moment (⌘\(ClassSession.Mark.Kind.allCases.firstIndex(of: kind)! + 1))")
+                ForEach(Array(ClassSession.Mark.Kind.allCases.enumerated()), id: \.offset) { i, kind in
+                    Button("\(kind.symbol) \(kind.label)") { recorder.mark(kind) }
+                        .keyboardShortcut(KeyEquivalent(Character(String(i + 1))), modifiers: .command)
+                        .help("Flag this moment (⌘\(i + 1)) — the notes will stress it")
                 }
                 Button("Stop class", action: stop).buttonStyle(.borderedProminent).tint(.red)
             }
             .padding(12)
             Divider()
-            NotesWebView(items: noteItems(recorder.session, focusTime: nil), transcript: [], scrollTo: nil)
+            NotesEditor(document: recorder.document)
             Divider()
-            HStack(spacing: 8) {
-                Image(systemName: "square.and.pencil").foregroundStyle(.tint)
-                TextField("Add your own note — pinned to this moment (⏎)", text: $myNote)
-                    .textFieldStyle(.plain)
-                    .focused($noteFocused)
-                    .onSubmit {
-                        recorder.addNote(myNote)
-                        myNote = ""
-                    }
-            }
-            .padding(10)
-            .background(Color.secondary.opacity(0.06))
             HStack(spacing: 8) {
                 Image(systemName: "waveform").foregroundStyle(.secondary)
                 Text(recorder.live.isEmpty ? "Listening…" : recorder.live).lineLimit(1).foregroundStyle(.secondary)
                 Spacer()
-                if recorder.notesPending > 0 {
+                if recorder.writing {
                     ProgressView().controlSize(.small)
-                    Text("Writing notes…").foregroundStyle(.secondary)
-                }
-                if let marks = recorder.session.marks, !marks.isEmpty {
-                    Text(marks.map(\.kind.symbol).suffix(8).joined()).help("Moments you flagged")
+                    Text("Taking notes…").foregroundStyle(.secondary)
+                } else {
+                    Text("Click anywhere in the notes to edit").foregroundStyle(.tertiary)
                 }
             }
             .font(.callout)
@@ -340,12 +318,26 @@ private struct LevelMeter: View {
 private struct ReviewClassView: View {
     let session: ClassSession
     @ObservedObject var model: ClassNotesModel
-    @ObservedObject var player: LecturePlayer
     @StateObject private var exporter = NotesExporter()
+    @StateObject private var document: ClassDocument
     @State private var tab = Tab.notes
+    @State private var reading = false
 
     enum Tab: String, CaseIterable {
         case notes = "Notes", transcript = "Transcript", study = "Study", flashcards = "Flashcards", ask = "Ask"
+    }
+
+    init(session: ClassSession, model: ClassNotesModel) {
+        self.session = session
+        self.model = model
+        let doc = ClassDocument(text: session.notesText)
+        let id = session.id
+        doc.onChange = { text in
+            guard var latest = ClassStore.shared.sessions.first(where: { $0.id == id }), latest.document != text else { return }
+            latest.document = text
+            ClassStore.shared.save(latest)
+        }
+        _document = StateObject(wrappedValue: doc)
     }
 
     var body: some View {
@@ -355,27 +347,39 @@ private struct ReviewClassView: View {
             Group {
                 switch tab {
                 case .notes:
-                    NotesWebView(items: noteItems(session, focusTime: model.focusTime), transcript: [],
-                                 scrollTo: focusedNoteID, exporter: exporter, onSeek: seek)
-                case .transcript: TranscriptView(session: session, player: player, seek: seek)
+                    if reading {
+                        NotesWebView(items: [readItem], transcript: [], scrollTo: nil, exporter: exporter)
+                    } else {
+                        NotesEditor(document: document, find: findText)
+                    }
+                case .transcript: TranscriptView(session: session)
                 case .study: StudyView(session: session, model: model)
                 case .flashcards: FlashcardsView(cards: session.studyPack?.flashcards ?? [], makePack: {
+                        document.flush()
                         model.makeStudyPack(for: session)
                     }, making: model.makingStudyPack == session.id)
-                case .ask: AskView(session: session, ai: model.ai(), seek: seek)
+                case .ask: AskView(session: session, ai: model.ai())
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            if player.isAvailable {
-                Divider()
-                PlayerBar(player: player, marks: session.marks ?? [])
-            }
         }
-        .onAppear {
-            player.load(session.audioFile.map { ClassStore.shared.folder(for: session).appendingPathComponent($0) })
-            if model.focusTime != nil { tab = .notes }
-        }
-        .onChange(of: model.focusTime) { _, t in if t != nil { tab = .notes } }
+        .onAppear { if model.focusTime != nil { tab = .notes; reading = false } }
+        .onChange(of: model.focusTime) { _, t in if t != nil { tab = .notes; reading = false } }
+        .onDisappear { document.flush() }
+    }
+
+    private var readItem: NotesWebView.Item {
+        var i = NotesWebView.Item(id: "doc", label: "", text: document.text, focused: false, time: -1)
+        i.section = true
+        return i
+    }
+
+    /// The first line of the note a search result points to.
+    private var findText: String? {
+        guard let f = model.focusTime else { return nil }
+        let note = session.notes.last(where: { $0.time <= f + 1 }) ?? session.notes.first
+        return note?.text.split(separator: "\n").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "-#★ ")) }
+            .first { $0.count > 3 }
     }
 
     private var header: some View {
@@ -387,18 +391,36 @@ private struct ReviewClassView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
+            if tab == .notes {
+                Picker("", selection: $reading) {
+                    Text("Edit").tag(false)
+                    Text("Read").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 110)
+                .help("Read shows formulas typeset")
+            }
             Picker("", selection: $tab) {
                 ForEach(Tab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: 420)
+            .frame(width: 400)
+            .onChange(of: tab) { _, _ in document.flush() }
             Menu {
                 Button("PDF (with formulas)…") {
+                    document.flush()
                     tab = .notes
-                    exporter.exportPDF(named: session.title)
+                    reading = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { exporter.exportPDF(named: session.title) }
                 }
-                Button("Markdown…") { exportMarkdown(session) }
+                Button("Markdown…") {
+                    document.flush()
+                    var s = session
+                    s.document = document.text
+                    exportMarkdown(s)
+                }
             } label: {
                 Label("Export", systemImage: "square.and.arrow.up")
             }
@@ -407,49 +429,27 @@ private struct ReviewClassView: View {
         }
         .padding(12)
     }
-
-    private var focusedNoteID: String? {
-        guard let f = model.focusTime, let note = session.notes.last(where: { $0.time <= f }) ?? session.notes.first else {
-            return nil
-        }
-        return String(Int(note.time * 1000))
-    }
-
-    private func seek(_ t: TimeInterval) {
-        guard player.isAvailable else { return }
-        player.play(from: max(0, t - 2)) // a beat of context before the moment
-    }
 }
 
 private struct TranscriptView: View {
     let session: ClassSession
-    @ObservedObject var player: LecturePlayer
-    let seek: (TimeInterval) -> Void
 
     var body: some View {
-        ScrollViewReader { proxy in
-            List(Array(session.segments.enumerated()), id: \.offset) { i, segment in
-                let next = i + 1 < session.segments.count ? session.segments[i + 1].time : .infinity
-                let playing = player.isPlaying && player.time >= segment.time && player.time < next
-                let marks = (session.marks ?? []).filter { $0.time >= segment.time && $0.time < next }
-                HStack(alignment: .top, spacing: 10) {
-                    Button(clock(segment.time)) { seek(segment.time) }
-                        .buttonStyle(.plain)
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.tint)
-                        .frame(width: 48, alignment: .leading)
-                    Text(segment.text).textSelection(.enabled)
-                    Spacer(minLength: 0)
-                    if !marks.isEmpty { Text(marks.map(\.kind.symbol).joined()) }
-                }
-                .padding(.vertical, 3)
-                .listRowBackground(playing ? Color.accentColor.opacity(0.12) : Color.clear)
-                .id(i)
+        List(Array(session.segments.enumerated()), id: \.offset) { i, segment in
+            let next = i + 1 < session.segments.count ? session.segments[i + 1].time : .infinity
+            let marks = (session.marks ?? []).filter { $0.time >= segment.time && $0.time < next }
+            HStack(alignment: .top, spacing: 10) {
+                Text(clock(segment.time)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    .frame(width: 48, alignment: .leading)
+                Text(segment.text).textSelection(.enabled)
+                Spacer(minLength: 0)
+                if !marks.isEmpty { Text(marks.map(\.kind.symbol).joined()) }
             }
-            .listStyle(.plain)
-            .overlay {
-                if session.segments.isEmpty { Text("No transcript yet.").foregroundStyle(.secondary) }
-            }
+            .padding(.vertical, 3)
+        }
+        .listStyle(.plain)
+        .overlay {
+            if session.segments.isEmpty { Text("No transcript yet.").foregroundStyle(.secondary) }
         }
     }
 }
@@ -460,41 +460,17 @@ private struct StudyView: View {
 
     var body: some View {
         if let pack = session.studyPack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    section("Summary", "text.alignleft") { Text(pack.summary).textSelection(.enabled) }
-                    if !pack.terms.isEmpty {
-                        section("Key terms", "character.book.closed") {
-                            ForEach(Array(pack.terms.enumerated()), id: \.offset) { _, t in
-                                (Text(t.term).bold() + Text(" — " + t.meaning)).textSelection(.enabled)
-                            }
-                        }
-                    }
-                    if !pack.questions.isEmpty {
-                        section("Practice questions", "questionmark.circle") {
-                            ForEach(Array(pack.questions.enumerated()), id: \.offset) { i, q in
-                                Text("\(i + 1). \(q)").textSelection(.enabled)
-                            }
-                        }
-                    }
-                    if !pack.todos.isEmpty {
-                        section("To do", "checklist") {
-                            ForEach(pack.todos, id: \.self) { Label($0, systemImage: "circle") }
-                        }
-                    }
-                    let flagged = (session.marks ?? []).filter { $0.kind != .important }
-                    if !flagged.isEmpty {
-                        section("Moments you flagged", "flag") {
-                            ForEach(Array(flagged.enumerated()), id: \.offset) { _, m in
-                                Text("\(m.kind.symbol) \(m.kind.label) at \(clock(m.time))")
-                            }
-                        }
-                    }
-                    Button("Regenerate study pack") { model.makeStudyPack(for: session) }
+            VStack(spacing: 0) {
+                NotesWebView(items: sheet(pack), transcript: [], scrollTo: nil)
+                Divider()
+                HStack {
+                    Text("Made on this Mac from your notes").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Regenerate") { model.makeStudyPack(for: session) }
                         .disabled(model.makingStudyPack != nil)
+                    if model.makingStudyPack == session.id { ProgressView().controlSize(.small) }
                 }
-                .padding(24)
-                .frame(maxWidth: 760, alignment: .leading)
+                .padding(10)
             }
         } else {
             VStack(spacing: 14) {
@@ -507,17 +483,41 @@ private struct StudyView: View {
                 } else {
                     Button("Make study pack") { model.makeStudyPack(for: session) }
                         .buttonStyle(.borderedProminent)
-                        .disabled(session.notes.isEmpty || model.ai() == nil)
+                        .disabled(session.notesText.isEmpty || model.ai() == nil)
                 }
             }
         }
     }
 
-    private func section(_ title: String, _ icon: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(title, systemImage: icon).font(.headline)
-            VStack(alignment: .leading, spacing: 6) { content() }
+    /// Summary and formulas open; the longer parts folded so the sheet isn't a wall of text.
+    private func sheet(_ pack: ClassSession.StudyPack) -> [NotesWebView.Item] {
+        func item(_ id: String, _ label: String, _ text: String, collapsed: Bool = false) -> NotesWebView.Item {
+            var i = NotesWebView.Item(id: id, label: label, text: text, focused: false, time: -1)
+            i.section = true
+            i.collapsed = collapsed
+            return i
         }
+        var items: [NotesWebView.Item] = []
+        if !pack.summary.isEmpty { items.append(item("sum", "Summary", pack.summary)) }
+        if let f = pack.formulas, !f.isEmpty {
+            items.append(item("f", "Key formulas", f.map { "- " + $0 }.joined(separator: "\n")))
+        }
+        if !pack.terms.isEmpty {
+            items.append(item("t", "Key terms · \(pack.terms.count)",
+                              pack.terms.map { "- **\($0.term)** — \($0.meaning)" }.joined(separator: "\n")))
+        }
+        if !pack.questions.isEmpty {
+            items.append(item("q", "Practice questions · \(pack.questions.count)",
+                              pack.questions.map { "- " + $0 }.joined(separator: "\n"), collapsed: true))
+        }
+        if !pack.todos.isEmpty { items.append(item("todo", "To do", pack.todos.map { "- ☐ " + $0 }.joined(separator: "\n"))) }
+        let flagged = (session.marks ?? []).filter { $0.kind != .important }
+        if !flagged.isEmpty {
+            items.append(item("m", "Moments you flagged · \(flagged.count)",
+                              flagged.map { "- \($0.kind.symbol) \($0.kind.label) at \(clock($0.time))" }.joined(separator: "\n"),
+                              collapsed: true))
+        }
+        return items
     }
 }
 
@@ -541,16 +541,14 @@ private struct FlashcardsView: View {
         } else {
             VStack(spacing: 20) {
                 Text("Card \(index + 1) of \(cards.count) · \(known.count) known").foregroundStyle(.secondary)
-                ZStack {
-                    RoundedRectangle(cornerRadius: 20).fill(flipped ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08))
-                    VStack(spacing: 10) {
-                        Text(flipped ? "Answer" : "Question").font(.caption.bold()).foregroundStyle(.secondary)
-                        Text(flipped ? cards[index].back : cards[index].front)
-                            .font(.title3).multilineTextAlignment(.center).padding(.horizontal, 30)
-                    }
-                }
-                .frame(width: 520, height: 260)
-                .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { flipped.toggle() } }
+                NotesWebView(items: [face], transcript: [], scrollTo: nil,
+                             onSeek: { _ in withAnimation(.easeInOut(duration: 0.15)) { flipped.toggle() } })
+                    .frame(width: 560, height: 240)
+                    .background(RoundedRectangle(cornerRadius: 18)
+                        .fill(flipped ? Color.accentColor.opacity(0.10) : Color.secondary.opacity(0.07)))
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                Button(flipped ? "Show question" : "Show answer") { flipped.toggle() }
+                    .keyboardShortcut(.space, modifiers: [])
                 Text("Click the card to flip").font(.caption).foregroundStyle(.secondary)
                 HStack(spacing: 14) {
                     Button { go(-1) } label: { Label("Back", systemImage: "chevron.left") }
@@ -565,6 +563,13 @@ private struct FlashcardsView: View {
         }
     }
 
+    private var face: NotesWebView.Item {
+        var i = NotesWebView.Item(id: "c\(index)\(flipped)", label: flipped ? "Answer" : "Question",
+                                  text: flipped ? cards[index].back : cards[index].front, focused: false, time: 0)
+        i.section = true
+        return i
+    }
+
     private func go(_ step: Int) {
         flipped = false
         index = (index + step + cards.count) % cards.count
@@ -574,7 +579,6 @@ private struct FlashcardsView: View {
 private struct AskView: View {
     let session: ClassSession
     let ai: ClassAI?
-    let seek: (TimeInterval) -> Void
     @State private var question = ""
     @State private var answer: String?
     @State private var thinking = false
@@ -626,57 +630,7 @@ private struct AskView: View {
     }
 }
 
-private struct PlayerBar: View {
-    @ObservedObject var player: LecturePlayer
-    let marks: [ClassSession.Mark]
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Button { player.skip(-15) } label: { Image(systemName: "gobackward.15") }.buttonStyle(.plain)
-            Button { player.toggle() } label: {
-                Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill").font(.system(size: 26))
-            }
-            .buttonStyle(.plain)
-            .keyboardShortcut(.space, modifiers: [])
-            Button { player.skip(15) } label: { Image(systemName: "goforward.15") }.buttonStyle(.plain)
-            Text(clock(player.time)).font(.caption.monospacedDigit()).frame(width: 44)
-            ZStack(alignment: .leading) {
-                Slider(value: Binding(get: { player.time }, set: { player.seek($0) }), in: 0 ... max(1, player.duration))
-                GeometryReader { g in
-                    ForEach(Array(marks.enumerated()), id: \.offset) { _, m in
-                        Text(m.kind.symbol).font(.system(size: 10))
-                            .position(x: g.size.width * CGFloat(m.time / max(1, player.duration)), y: -4)
-                            .onTapGesture { player.play(from: max(0, m.time - 5)) }
-                    }
-                }
-                .frame(height: 10)
-            }
-            Text(clock(player.duration)).font(.caption.monospacedDigit()).frame(width: 44)
-            Picker("", selection: $player.rate) {
-                Text("1×").tag(Float(1))
-                Text("1.25×").tag(Float(1.25))
-                Text("1.5×").tag(Float(1.5))
-                Text("2×").tag(Float(2))
-            }
-            .labelsHidden()
-            .frame(width: 80)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-    }
-}
-
 // MARK: - Helpers
-
-@MainActor
-private func noteItems(_ session: ClassSession, focusTime: TimeInterval?) -> [NotesWebView.Item] {
-    session.notes.enumerated().map { i, note in
-        let next = i + 1 < session.notes.count ? session.notes[i + 1].time : .infinity
-        let focused = focusTime.map { $0 >= note.time && $0 < next } ?? false
-        return NotesWebView.Item(id: String(Int(note.time * 1000)), label: clock(note.time), text: note.text,
-                                 focused: focused, mine: note.mine == true, time: note.time)
-    }
-}
 
 private func clock(_ t: TimeInterval) -> String {
     Duration.seconds(t).formatted(.time(pattern: t >= 3600 ? .hourMinuteSecond : .minuteSecond))

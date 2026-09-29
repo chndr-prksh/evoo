@@ -1,17 +1,19 @@
-import AVFoundation
 import EvooCore
 import Foundation
 
 /// The local AI behind class notes (Qwen3 4B on every Mac — quality first).
 struct ClassAI {
-    var notes: (_ subject: String?, _ topic: String?, _ transcript: String, _ marks: [ClassSession.Mark.Kind]) async -> String?
+    /// subject, current topic, the end of the notes so far, what was said, flags, and a callback with the notes as
+    /// they're written.
+    var notes: (_ subject: String?, _ topic: String?, _ recent: String, _ transcript: String,
+                _ marks: [ClassSession.Mark.Kind], _ onText: (@Sendable (String) -> Void)?) async -> String?
     var studyPack: (_ subject: String?, _ notes: String) async -> ClassSession.StudyPack?
     var answer: (_ question: String, _ excerpts: String) async -> String?
 }
 
-/// Records a lecture: saves the audio, transcribes in pause-bounded chunks on this Mac, and writes structured
-/// notes for the class's subject about once a minute — in the background, so recording never waits. The student
-/// can flag moments (important / confusing / exam) and add their own notes; both steer the AI's notes.
+/// Listens to a lecture, transcribes it in pause-bounded chunks on this Mac, and about once a minute has the local
+/// AI jot down what mattered — typed into the notes document word by word, while the student can edit it. No audio
+/// is kept.
 @MainActor
 final class ClassRecorder: ObservableObject {
     @Published private(set) var session: ClassSession
@@ -19,13 +21,13 @@ final class ClassRecorder: ObservableObject {
     @Published private(set) var elapsed: TimeInterval = 0
     /// The last thing heard, for the live line at the bottom of the window.
     @Published private(set) var live = ""
-    @Published private(set) var notesPending = 0
+    @Published private(set) var writing = false
     @Published private(set) var level: Float = 0
+    let document: ClassDocument
 
     private let recorder = AudioRecorder()
     private let transcribe: ([Float]) async throws -> String
     private let ai: ClassAI?
-    private var audioFile: AVAudioFile?
     private var loop: Task<Void, Never>?
     private var buffer: [Float] = []
     private var bufferStart: TimeInterval = 0
@@ -33,19 +35,25 @@ final class ClassRecorder: ObservableObject {
     private var pendingStart: TimeInterval = 0
     private var startedAt = Date()
     private var busy = false
-    /// Notes are written one after another in the background, in order.
+    /// Notes are written one stretch after another, in order.
     private var notesChain: Task<Void, Never>?
+    private var queued = 0
 
     init(session: ClassSession, transcribe: @escaping ([Float]) async throws -> String, ai: ClassAI?) {
         self.session = session
         self.transcribe = transcribe
         self.ai = ai
+        document = ClassDocument(text: session.notesText)
+        document.onChange = { [weak self] text in
+            guard let self else { return }
+            self.session.document = text
+            ClassStore.shared.save(self.session)
+        }
     }
 
     func start(microphone: String?) throws {
         recorder.onLevel = { [weak self] l in Task { @MainActor in self?.level = l } }
         try recorder.start(deviceUID: microphone)
-        openAudioFile()
         isRecording = true
         startedAt = Date().addingTimeInterval(-elapsed)
         loop = Task { [weak self] in
@@ -58,54 +66,28 @@ final class ClassRecorder: ObservableObject {
 
     func stop() async {
         loop?.cancel()
-        let rest = recorder.take()
-        write(rest)
-        buffer += rest
+        buffer += recorder.take()
         _ = recorder.stop()
         isRecording = false
-        audioFile = nil // closes the file
         session.duration = elapsed
         await transcribeBuffer()
         flushNotes()
         await notesChain?.value
-        ClassStore.shared.save(session)
+        document.flush()
+        save()
     }
 
-    /// A flagged moment: "Important" / "Confusing" / "On the exam".
+    /// A flagged moment: "Important" / "Confusing" / "On the exam" — steers the next notes.
     func mark(_ kind: ClassSession.Mark.Kind) {
         var marks = session.marks ?? []
         marks.append(.init(time: elapsed, kind: kind))
         session.marks = marks
+        save()
+    }
+
+    private func save() {
+        session.document = document.text
         ClassStore.shared.save(session)
-    }
-
-    /// The student's own note, pinned to this moment.
-    func addNote(_ text: String) {
-        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { return }
-        session.notes.append(.init(time: elapsed, page: nil, text: t, mine: true))
-        ClassStore.shared.save(session)
-    }
-
-    // MARK: - Audio
-
-    /// AAC at 16 kHz mono: about 15 MB per hour.
-    private func openAudioFile() {
-        let url = ClassStore.shared.folder(for: session).appendingPathComponent("lecture.m4a")
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let settings: [String: Any] = [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: AudioRecorder.sampleRate,
-                                       AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 32_000]
-        audioFile = try? AVAudioFile(forWriting: url, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
-        if audioFile != nil { session.audioFile = "lecture.m4a" }
-    }
-
-    private func write(_ samples: [Float]) {
-        guard let file = audioFile, !samples.isEmpty,
-              let pcm = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(samples.count))
-        else { return }
-        pcm.frameLength = AVAudioFrameCount(samples.count)
-        samples.withUnsafeBufferPointer { src in pcm.floatChannelData![0].update(from: src.baseAddress!, count: samples.count) }
-        try? file.write(from: pcm)
     }
 
     // MARK: - Transcription & notes
@@ -113,9 +95,7 @@ final class ClassRecorder: ObservableObject {
     private func tick() async {
         elapsed = Date().timeIntervalSince(startedAt)
         if buffer.isEmpty { bufferStart = elapsed }
-        let fresh = recorder.take()
-        write(fresh)
-        buffer += fresh
+        buffer += recorder.take()
         let seconds = Double(buffer.count) / AudioRecorder.sampleRate
         // Cut at a natural pause after 8 s, or at 25 s regardless.
         let cut = (seconds >= 8 && AudioStats.endsInPause(buffer, seconds: 0.4)) || seconds >= 25
@@ -136,8 +116,8 @@ final class ClassRecorder: ObservableObject {
         live = text
         if pending.isEmpty { pendingStart = time }
         pending += (pending.isEmpty ? "" : " ") + text
-        if pending.split(separator: " ").count >= 150 { flushNotes() } // about a minute of lecture
-        ClassStore.shared.save(session)
+        if pending.split(separator: " ").count >= 140 { flushNotes() } // about a minute of lecture
+        save()
     }
 
     /// Queues the pending transcript to become notes (written in order, in the background).
@@ -148,21 +128,40 @@ final class ClassRecorder: ObservableObject {
         // Flags the student set during this stretch (and a few seconds after) steer the AI.
         let marks = (session.marks ?? []).filter { $0.time >= time - 5 && $0.time <= end + 5 }.map(\.kind)
         let previous = notesChain
-        notesPending += 1
+        queued += 1
+        writing = true
         notesChain = Task { [weak self] in
             await previous?.value
             guard let self else { return }
-            let topic = ClassNotePrompt.lastTopic(in: self.session.notes.filter { $0.mine != true }.map(\.text))
+            defer {
+                self.queued -= 1
+                self.writing = self.queued > 0
+            }
+            // The notes as the student has them now (they may have edited), so the AI continues from there.
+            let current = self.document.text
+            let topic = ClassNotePrompt.lastTopic(in: [current])
+            let recent = String(current.suffix(600))
+            let doc = self.document
+            let id = doc.begin()
             var notes: String?
-            if let ai = self.ai { notes = await ai.notes(self.session.subject, topic, text, marks) }
-            if notes?.isEmpty ?? true { notes = LectureNotes.bullets(from: text).joined(separator: "\n") }
-            self.notesPending -= 1
-            guard let notes, !notes.isEmpty else { return }
-            // Keep notes in time order even if the student typed one meanwhile.
-            let note = ClassSession.Note(time: time, page: nil, text: notes)
-            let index = self.session.notes.firstIndex { $0.time > time } ?? self.session.notes.endIndex
-            self.session.notes.insert(note, at: index)
-            ClassStore.shared.save(self.session)
+            if let ai = self.ai {
+                let raw = await ai.notes(self.session.subject, topic, recent, text, marks) { partial in
+                    DispatchQueue.main.async { MainActor.assumeIsolated { doc.stream(partial, chunk: id) } }
+                }
+                if let raw {
+                    notes = ClassNotePrompt.tidy(raw, lastTopic: topic, existing: current, heard: text,
+                                                 flagged: marks.contains { $0 != .confusing })
+                }
+            } else {
+                notes = LectureNotes.bullets(from: text).map { "- " + $0 }.joined(separator: "\n")
+            }
+            doc.finish(notes ?? "", chunk: id)
+            if let notes, !notes.isEmpty {
+                // Timed copy for search ("search note …" finds when it was said).
+                let index = self.session.notes.firstIndex { $0.time > time } ?? self.session.notes.endIndex
+                self.session.notes.insert(.init(time: time, page: nil, text: notes), at: index)
+            }
+            self.save()
         }
     }
 }

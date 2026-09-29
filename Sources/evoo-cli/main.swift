@@ -254,6 +254,35 @@ case "class-notes":
     }
     await engine.unload()
 
+case "class-replay":
+    // Re-writes a saved class's notes and study pack from its transcript, like the app does live.
+    //   evoo-cli class-replay ~/Library/Application\ Support/Evoo/Classes/<id>/session.json [--subject X]
+    try await refiner.load(.qwen3_4b)
+    for path in inputs {
+        let session = try JSONDecoder().decode(ClassSession.self, from: Data(contentsOf: URL(fileURLWithPath: path)))
+        let subject = option("--subject") ?? session.subject
+        var chunk = "", notes: [String] = [], topic: String?
+        let t0 = clock.now
+        for (i, seg) in session.segments.enumerated() {
+            chunk += " " + seg.text
+            guard chunk.split(separator: " ").count >= 140 || i == session.segments.count - 1 else { continue }
+            let recent = String(notes.joined(separator: "\n").suffix(600))
+            if let raw = try await refiner.classNotes(subject: subject, lastTopic: topic, recent: recent, transcript: chunk) {
+                let n = ClassNotePrompt.tidy(raw, lastTopic: topic, existing: notes.joined(separator: "\n"), heard: chunk)
+                if !n.isEmpty { notes.append(n); topic = ClassNotePrompt.lastTopic(in: [n]) ?? topic; print(n + "\n") }
+            }
+            chunk = ""
+        }
+        print("── notes took \((clock.now - t0).formatted(.units(allowed: [.seconds])))\n")
+        do { let pack = try await refiner.studyPack(subject: subject, notes: notes.joined(separator: "\n"))
+            print("SUMMARY\n\(pack.summary)\nFORMULAS \(pack.formulas ?? [])\nTERMS")
+            pack.terms.forEach { print("- \($0.term) — \($0.meaning)") }
+            print("QUESTIONS"); pack.questions.forEach { print("- " + $0) }
+            print("CARDS"); pack.flashcards.forEach { print("- \($0.front) | \($0.back)") }
+            print("TODO \(pack.todos)")
+        }
+    }
+
 case "transcribe":
     // Transcribes audio files with Parakeet: prints the text and writes <name>.srt next to each file.
     //   evoo-cli transcribe interview.m4a

@@ -12,6 +12,10 @@ if let i = CommandLine.arguments.firstIndex(of: "--snapshot-pill"), i + 1 < Comm
 #endif
 
 #if DEBUG
+if let i = CommandLine.arguments.firstIndex(of: "--snapshot-editor"), i + 1 < CommandLine.arguments.count {
+    MainActor.assumeIsolated { EditorSnapshot.run(out: URL(fileURLWithPath: CommandLine.arguments[i + 1])) }
+    NSApplication.shared.run()
+}
 if let i = CommandLine.arguments.firstIndex(of: "--snapshot-notes"), i + 1 < CommandLine.arguments.count {
     let app = NSApplication.shared
     MainActor.assumeIsolated {

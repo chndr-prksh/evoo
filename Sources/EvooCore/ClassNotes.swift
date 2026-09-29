@@ -79,6 +79,8 @@ public struct ClassSession: Codable, Identifiable, Equatable, Sendable {
         public var questions: [String] = []
         public var flashcards: [Card] = []
         public var todos: [String] = []
+        /// "Label: $$formula$$" lines (packs made before this existed have none).
+        public var formulas: [String]? = nil
     }
 
     public var id = UUID()
@@ -91,8 +93,11 @@ public struct ClassSession: Codable, Identifiable, Equatable, Sendable {
     public var segments: [Segment] = []
     public var notes: [Note] = []
     public var marks: [Mark]? = []
-    /// Recording of the lecture (file name in the class folder), for replaying any moment.
+    /// Recording of the lecture (older classes only — Evoo no longer records audio).
     public var audioFile: String?
+    /// The notes as one Markdown document the student can edit; the AI appends to it as the lecture goes.
+    /// Classes from before this existed are built from `notes`.
+    public var document: String?
     public var studyPack: StudyPack?
     public var duration: TimeInterval?
 
@@ -103,11 +108,19 @@ public struct ClassSession: Codable, Identifiable, Equatable, Sendable {
         self.pdfFile = pdfFile
     }
 
+    /// The notes document (the edited one, or the AI's notes joined for older classes).
+    public var notesText: String {
+        document ?? notes.map { $0.mine == true ? "> ✍️ " + $0.text : $0.text }.joined(separator: "\n\n")
+    }
+
     /// Notes as Markdown (the notes carry their own topic headings).
     public func markdown() -> String {
         var out = "# \(title)\n\n_\(subject.map { $0 + " · " } ?? "")\(started.formatted(date: .complete, time: .shortened))_\n\n"
         if let pack = studyPack, !pack.summary.isEmpty { out += "## Summary\n\n\(pack.summary)\n\n" }
-        out += notes.map { $0.mine == true ? "> ✍️ " + $0.text : $0.text }.joined(separator: "\n\n") + "\n"
+        if let formulas = studyPack?.formulas, !formulas.isEmpty {
+            out += "## Key formulas\n\n" + formulas.map { "- " + $0 }.joined(separator: "\n") + "\n\n"
+        }
+        out += notesText + "\n"
         if let pack = studyPack {
             if !pack.terms.isEmpty {
                 out += "\n## Key terms\n\n" + pack.terms.map { "- **\($0.term)** — \($0.meaning)" }.joined(separator: "\n") + "\n"
@@ -159,31 +172,50 @@ public enum LectureNotes {
 
 /// Prompt for the local LLM to write structured notes the way a strong student in that subject would.
 public enum ClassNotePrompt {
+    /// Written the way a good student takes notes by hand: listen, decide what matters, write the point in as few
+    /// words as possible. Most of what's said is never written down.
     static let system = """
-    You take structured lecture notes for a student. You get the subject, the topic you were last writing \
-    about, and what the professor just said. Write clear, well-organized notes of it:
-    - Start a new topic with a heading line "## Topic name" — only when the professor moves to a new topic; \
-    otherwise continue the current one without a heading.
-    - Use short "- " bullets, indented "  - " for details. Put key terms in **bold**; write a definition as \
-    "**Term** — meaning".
-    - Keep worked examples with their actual numbers or specifics, labelled "Example:".
-    - Mark anything the professor stresses as important, or says is on the exam, with "★".
-    - Write it the way notes in this subject are normally written: math, statistics, physics, engineering → \
-    formulas in LaTeX between $…$ ($$…$$ for important ones), steps of derivations; programming → code in \
-    backticks, complexity; history, politics → dates, people, cause → effect; law → rules, cases, tests; \
-    biology, chemistry, medicine → mechanisms, processes as steps, terminology; economics, business → \
-    models, definitions, graphs described in words; languages, literature → quotes, themes, examples.
-    - Only what was actually said — never invent facts. Skip filler, jokes and logistics unless they matter \
-    (like exam dates). If nothing substantive was said, output nothing.
+    You are a sharp student taking notes by hand in a lecture. You hear about a minute at a time. Like a real \
+    note-taker, you don't transcribe — you decide what matters and jot it down in as few words as possible.
+    Write down:
+    - definitions and new terms; formulas; lists, steps, types, rules
+    - the key numbers, dates, names that matter
+    - cause → effect, comparisons (X vs Y), the one-line point of an example or story
+    - anything the professor stresses, repeats, writes on the board, or says is on the exam (mark ★)
+    - homework, readings, deadlines, exam dates
+    Skip: greetings, introductions, jokes, anecdote details, repetition, "as I said", rhetorical questions, \
+    tangents, filler. If nothing new and important was said, write nothing at all.
+    How it looks:
+    - Usually 1–4 lines for a minute of lecture. Lines start with "- ". Indent a sub-point with "  - ".
+    - Fragments, not sentences: drop "the", "a", "is"; abbreviate (w/, b/c, e.g., ≈, def, ex); symbols =, ≠, →, vs.
+    - "## Topic" only when a new topic begins — never repeat the current topic.
+    - **bold** a new term the first time: "**term** — meaning".
+    - Formulas in LaTeX: $…$ inline, $$…$$ for a key formula. Code in `backticks`.
+    - Fit the subject: math/science → formulas, derivation steps; history/politics → date — event, cause → \
+    effect; law → rule, case, test; biology/medicine → process steps; business/economics → concept + example; \
+    literature → quote, theme.
+    - Only what was said. Never explain, interpret, or comment on the lecture or the transcript.
+    Example — Subject: Probability. Heard: "okay so, um, good morning, hope the weekend was good. Today, \
+    conditional probability. Probability of A given B, we write P of A given B, equals P of A and B over P of B. \
+    Really important, it'll be on the midterm. So like, you roll a die and I tell you it's even, what's the chance \
+    it's a six? One in three. Right, one in three, because only three outcomes are left."
+    Notes:
+    ## Conditional probability
+    - $$P(A\\mid B)=\\frac{P(A\\cap B)}{P(B)}$$ ★ midterm
+    - ex: die even → P(6) = 1/3 (3 outcomes left)
     """
 
     public static var prefix: String { "<|im_start|>system\n\(system)<|im_end|>\n" }
 
-    public static func suffix(subject: String?, lastTopic: String?, transcript: String, marks: [ClassSession.Mark.Kind] = [],
-                              thinkBlock: Bool) -> String
+    public static func suffix(subject: String?, lastTopic: String?, recent: String = "", transcript: String,
+                              marks: [ClassSession.Mark.Kind] = [], thinkBlock: Bool) -> String
     {
         var user = "Subject: \(subject?.isEmpty == false ? subject! : "General")\n"
         if let lastTopic { user += "Current topic: \(lastTopic)\n" }
+        let recent = recent.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !recent.isEmpty {
+            user += "The end of your notes so far (continue from here; don't repeat anything already written):\n\(recent)\n"
+        }
         for kind in Set(marks) {
             switch kind {
             case .important: user += "The student flagged this part as IMPORTANT — mark its key point with ★.\n"
@@ -191,8 +223,88 @@ public enum ClassNotePrompt {
             case .confusing: user += "The student found this part CONFUSING — add a bullet starting \"❓ In plain words:\" that explains it simply.\n"
             }
         }
-        user += "\nProfessor said:\n\(transcript)"
+        user += "\nHeard:\n\(transcript)"
         return "<|im_start|>user\n\(user)<|im_end|>\n<|im_start|>assistant\n" + (thinkBlock ? "<think>\n\n</think>\n\n" : "")
+    }
+
+    /// Cleans the model's notes: drops a repeated heading for the current topic, commentary about the lecture,
+    /// and ★ lines that only editorialize; keeps it to a handful of bullets.
+    /// Also drops lines already in the notes (`existing`), and ★ that the lecture never earned: a star stays only
+    /// if the professor said something like "important" / "exam" in `heard`, or the student flagged the moment.
+    public static func tidy(_ notes: String, lastTopic: String?, existing: String = "", heard: String? = nil,
+                            flagged: Bool = false) -> String
+    {
+        var text = tidy(notes, lastTopic: lastTopic)
+        let stressed = flagged || heard.map { $0.range(of: stressCue, options: [.regularExpression, .caseInsensitive]) != nil } ?? true
+        if !stressed {
+            text = text.replacingOccurrences(of: #"\s*\(?★[^\n)]*\)?"#, with: "", options: .regularExpression)
+        }
+        let seen = Set(existing.split(separator: "\n").map { key(String($0)) }.filter { $0.count >= 8 })
+        let seenWords = existing.split(separator: "\n").map { words(String($0)) }.filter { $0.count >= 3 }
+        var out: [String] = []
+        var keptBullet = false
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.hasPrefix("-") {
+                let k = key(t), w = words(t)
+                let repeated = seen.contains(k) || (w.count >= 3 && seenWords.contains { overlap(w, $0) >= 0.75 })
+                if repeated || t.range(of: #"(?i)\b(?:likely|probably|presumably|perhaps|possibly)\b|\(note:"#,
+                                         options: .regularExpression) != nil { continue }
+                keptBullet = true
+            }
+            out.append(line)
+        }
+        // A heading with nothing under it is just noise.
+        if !keptBullet { return "" }
+        return out.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static let stressCue = #"\b(?:important|exam|final|midterm|quiz|test|remember|write (?:this|that) down|key (?:point|idea|thing)|crucial|must know|make sure|don'?t forget|pay attention|will come up|going to (?:ask|come up))\b"#
+
+    static func key(_ line: String) -> String {
+        let body = line.components(separatedBy: "★").first ?? line
+        return body.lowercased().filter { $0.isLetter || $0.isNumber }
+    }
+
+    static func words(_ line: String) -> Set<String> {
+        Set(line.lowercased().split { !($0.isLetter || $0.isNumber) }.map(String.init).filter { $0.count > 2 })
+    }
+
+    static func overlap(_ a: Set<String>, _ b: Set<String>) -> Double {
+        Double(a.intersection(b).count) / Double(max(1, min(a.count, b.count)))
+    }
+
+    static func tidy(_ notes: String, lastTopic: String?) -> String {
+        let commentary = #"(?i)^(?:[-*•★]\s*)*(?:key point|this (?:illustrates|shows|reflects|highlights|case|event|segment)|the (?:speaker|professor|lecturer) (?:describes|emphasi[sz]es|notes|introduces|plans|discusses|explains|highlights|mentions|says)|no substantive|note:|\(likely|likely a typo|in summary|overall,)"#
+        var out: [String] = []
+        var bullets = 0
+        for raw in notes.split(separator: "\n", omittingEmptySubsequences: false) {
+            var line = String(raw).replacingOccurrences(of: #"\s+$"#, with: "", options: .regularExpression)
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("#") {
+                let title = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+                if let lastTopic, same(title, lastTopic) { continue }
+                out.append("## " + title)
+                continue
+            }
+            if trimmed.range(of: commentary, options: .regularExpression) != nil { continue }
+            if trimmed.lowercased().hasPrefix("example:") && trimmed.count < 10 { continue } // empty "Example:" label
+            if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") || trimmed.hasPrefix("• ") {
+                if !line.hasPrefix(" ") { bullets += 1 }
+                if bullets > 8 { continue }
+                line = line.replacingOccurrences(of: #"^(\s*)[*•] "#, with: "$1- ", options: .regularExpression)
+            }
+            out.append(line)
+        }
+        // Collapse blank runs and trim.
+        return out.joined(separator: "\n").replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func same(_ a: String, _ b: String) -> Bool {
+        let norm = { (s: String) in s.lowercased().filter { $0.isLetter || $0 == " " }.split(separator: " ").joined(separator: " ") }
+        let x = norm(a), y = norm(b)
+        return x == y || x.hasPrefix(y) || y.hasPrefix(x)
     }
 
     /// The last "## Topic" heading in the notes so far.
@@ -216,19 +328,20 @@ public enum ClassNotePrompt {
 /// After class: summary, key terms, practice questions, flashcards and to-dos from the notes.
 public enum StudyPackPrompt {
     static let system = """
-    You turn a student's lecture notes into a study pack. Use only what's in the notes. Output exactly these \
-    sections, in this order, with these headings:
+    You turn a student's lecture notes into a short study sheet. Use only what's in the notes. Be brief — \
+    fragments, not paragraphs. Output exactly these sections, in this order, with these headings:
     ## Summary
-    3–5 sentences covering the lecture's main ideas.
+    - 3 bullets, each at most 20 words: the lecture's main ideas.
+    ## Key formulas
+    - Short label: $$formula$$   (every important formula, in LaTeX; write "- None" if there are none)
     ## Key terms
-    - **Term** — one-line meaning
+    - **Term** — meaning in at most 12 words   (at most 6 terms)
     ## Practice questions
-    - A question a professor could ask on an exam (5–8 of them).
+    - An exam-style question   (3–5 of them)
     ## Flashcards
-    - Q: question | A: short answer   (8–15 of them)
+    - Q: short question | A: answer in at most 10 words   (6–10 of them; formulas in $…$)
     ## To do
     - Assignments, readings, deadlines or exam dates mentioned (write "- None" if there are none).
-    Keep formulas in LaTeX between $…$.
     """
 
     public static var prefix: String { "<|im_start|>system\n\(system)<|im_end|>\n" }
@@ -252,7 +365,9 @@ public enum StudyPackPrompt {
             guard !line.isEmpty else { continue }
             let item = line.replacingOccurrences(of: #"^(?:[-*•]|\d+[.)])\s*"#, with: "", options: .regularExpression)
             switch true {
-            case section.hasPrefix("summary"): summary.append(line)
+            case section.hasPrefix("summary"): summary.append(item)
+            case section.hasPrefix("key formula"), section.hasPrefix("formula"):
+                if item.lowercased() != "none" { pack.formulas = (pack.formulas ?? []) + [item] }
             case section.hasPrefix("key term"):
                 let parts = item.components(separatedBy: " — ").count > 1 ? item.components(separatedBy: " — ")
                     : item.components(separatedBy: " - ")
@@ -273,7 +388,7 @@ public enum StudyPackPrompt {
             default: break
             }
         }
-        pack.summary = summary.joined(separator: " ")
+        pack.summary = summary.map { "- " + $0 }.joined(separator: "\n")
         return pack
     }
 }

@@ -32,3 +32,40 @@ final class NotesSnapshot: NSObject, WKNavigationDelegate {
     }
 }
 #endif
+
+#if DEBUG
+import SwiftUI
+
+/// `Evoo --snapshot-editor out.png`: the notes editor with the AI typing into it, rendered off-screen.
+@MainActor
+enum EditorSnapshot {
+    static func run(out: URL) {
+        let doc = ClassDocument(text: "## Conditional probability\n- **P(A|B)** — prob. of A, given B\n- $$P(A\\mid B)=\\frac{P(A\\cap B)}{P(B)}$$ ★ midterm\n")
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 420), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.appearance = NSAppearance(named: .aqua)
+        window.contentView = NSHostingView(rootView: NotesEditor(document: doc).frame(width: 720, height: 420).background(Color.white))
+        Task { @MainActor in
+            // Simulate the AI streaming a new stretch word by word, with a repeated heading the tidy pass removes.
+            let final = "## Bayes' theorem\n- flips conditional: $P(A|B)$ from $P(B|A)$\n  - ex: disease test → 16.7%"
+            let id = doc.begin()
+            var partial = ""
+            for word in final.split(separator: " ", omittingEmptySubsequences: false) {
+                partial += (partial.isEmpty ? "" : " ") + word
+                doc.stream(partial, chunk: id)
+                try? await Task.sleep(for: .milliseconds(10))
+            }
+            doc.finish(final, chunk: id)
+            try? await Task.sleep(for: .milliseconds(300))
+            let view = window.contentView!
+            view.layoutSubtreeIfNeeded()
+            if let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                view.cacheDisplay(in: view.bounds, to: rep)
+                try? rep.representation(using: .png, properties: [:])?.write(to: out)
+            }
+            print(doc.text)
+            exit(0)
+        }
+    }
+}
+#endif

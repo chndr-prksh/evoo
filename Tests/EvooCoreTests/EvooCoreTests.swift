@@ -728,7 +728,7 @@ import Testing
         ## To do
         - None
         """)
-        #expect(pack.summary.hasPrefix("Conditional probability updates"))
+        #expect(pack.summary.hasPrefix("- Conditional probability updates"))
         #expect(pack.terms.map(\.term) == ["Conditional probability", "Independence"])
         #expect(pack.questions == ["State Bayes' theorem."])
         #expect(pack.flashcards.first?.back == "$P(A\\cap B)/P(B)$")
@@ -775,4 +775,17 @@ import Testing
     #expect(c.command && c.shift && c.key == "t")
     #expect(MacCommands.parse("Click Send") == .click("Send"))
     #expect(MacCommands.parse("I turned the volume up to thirty at the party yesterday") == nil)
+}
+
+@Test func notesTidyDropsRepeatsAndUnearnedStars() {
+    let existing = "## Bayes\n- $$P(A\\mid B)=\\frac{P(B\\mid A)P(A)}{P(B)}$$ ★ final\n- **prior** — P(A) before evidence"
+    let fresh = "## Bayes\n- $$P(A\\mid B)=\\frac{P(B\\mid A)P(A)}{P(B)}$$\n- **posterior** — P(A|B) after evidence ★ exam\n- slide likely covers failures"
+    let out = ClassNotePrompt.tidy(fresh, lastTopic: "Bayes", existing: existing, heard: "the posterior is P of A given B after")
+    #expect(out == "- **posterior** — P(A|B) after evidence")
+    // Stars stay when the professor stressed it.
+    let starred = ClassNotePrompt.tidy("- **posterior** — after evidence ★ exam", lastTopic: nil, existing: "",
+                                       heard: "this will be on the exam")
+    #expect(starred.contains("★"))
+    // Nothing new → nothing written.
+    #expect(ClassNotePrompt.tidy("## Bayes\n- **prior** — P(A) before evidence", lastTopic: nil, existing: existing, heard: "") == "")
 }

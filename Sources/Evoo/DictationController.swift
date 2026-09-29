@@ -562,9 +562,11 @@ final class DictationController: ObservableObject {
             if refiner.loadedModel != Self.notesModel { try? await refiner.load(Self.notesModel) }
         }
         return ClassAI(
-            notes: { subject, topic, transcript, marks in
+            notes: { subject, topic, recent, transcript, marks, onText in
                 await ready()
-                return try? await refiner.classNotes(subject: subject, lastTopic: topic, transcript: transcript, marks: marks)
+                return try? await refiner.classNotes(subject: subject, lastTopic: topic, recent: recent,
+                                                     transcript: transcript, marks: marks,
+                                                     onText: onText)
             },
             studyPack: { subject, notes in
                 await ready()

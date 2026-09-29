@@ -104,15 +104,16 @@ public final class LlamaRefiner: @unchecked Sendable {
     }
 
     /// Student-style notes for what the professor just said (see `ClassNotePrompt`).
-    public func classNotes(subject: String?, lastTopic: String?, transcript: String,
-                           marks: [ClassSession.Mark.Kind] = []) async throws -> String?
+    /// `onText` gets the notes so far as they're written, for showing them word by word.
+    public func classNotes(subject: String?, lastTopic: String?, recent: String = "", transcript: String,
+                           marks: [ClassSession.Mark.Kind] = [], onText: (@Sendable (String) -> Void)? = nil) async throws -> String?
     {
         let raw = try await run { [self] in
             try primePrefix(ClassNotePrompt.prefix)
-            let suffix = ClassNotePrompt.suffix(subject: subject, lastTopic: lastTopic,
+            let suffix = ClassNotePrompt.suffix(subject: subject, lastTopic: lastTopic, recent: recent,
                                                 transcript: String(transcript.suffix(4_000)), marks: marks,
                                                 thinkBlock: loadedModel?.usesThinkBlock ?? true)
-            return try generate(suffix: suffix, maxTokens: 450)
+            return try generate(suffix: suffix, maxTokens: 450, onText: onText)
         }
         let out = RewritePrompt.sanitize(raw)
         return out.isEmpty ? nil : out
@@ -171,7 +172,7 @@ public final class LlamaRefiner: @unchecked Sendable {
         cachedPrefix = tokens
     }
 
-    private func generate(suffix: String, maxTokens: Int) throws -> String {
+    private func generate(suffix: String, maxTokens: Int, onText: (@Sendable (String) -> Void)? = nil) throws -> String {
         guard let context, let vocab, let sampler else { throw RefinerError.notLoaded }
         llama_sampler_reset(sampler)
 
@@ -186,7 +187,10 @@ public final class LlamaRefiner: @unchecked Sendable {
             var token = llama_sampler_sample(sampler, context, -1)
             if llama_vocab_is_eog(vocab, token) { break }
             let n = llama_token_to_piece(vocab, token, &piece, Int32(piece.count), 0, false)
-            if n > 0 { bytes.append(contentsOf: piece[0 ..< Int(n)].map { UInt8(bitPattern: $0) }) }
+            if n > 0 {
+                bytes.append(contentsOf: piece[0 ..< Int(n)].map { UInt8(bitPattern: $0) })
+                if let onText, let text = String(bytes: bytes, encoding: .utf8) { onText(text) }
+            }
             guard llama_decode(context, llama_batch_get_one(&token, 1)) == 0 else { throw RefinerError.decodeFailed }
         }
         return String(decoding: bytes, as: UTF8.self)
