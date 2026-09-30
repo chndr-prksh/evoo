@@ -78,8 +78,9 @@ final class AppSettings: ObservableObject {
         engine = value("engine", .automatic)
         refinementEnabled = bool("refinementEnabled", true)
         // Dictation polish: the 4B model polishes ~4 words/s on an 8 GB Mac — slower than people speak — so smaller
-        // Macs use the 1.7B (~1.3 s a sentence). Class notes always use the 4B.
-        refinerModel = value("refinerModel", SystemInfo.isLowMemory ? .qwen3_1_7b : .qwen3_4b)
+        // Macs use a small model. Class notes always use the 4B.
+        // Measured on an 8 GB M1: 0.6B polishes a sentence in ~0.76 s vs 1.7 s for the 1.7B, same golden score (68/69).
+        refinerModel = value("refinerModel", SystemInfo.isLowMemory ? .qwen3_0_6b : .qwen3_4b)
         smartCleanup = bool("smartCleanup", false) && SystemInfo.canRunSmartCleanup
         microphoneUID = UserDefaults.standard.string(forKey: "microphoneUID")
         showPill = bool("showPill", true)

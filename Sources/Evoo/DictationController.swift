@@ -117,8 +117,8 @@ final class DictationController: ObservableObject {
         recorder.onEngineReset = { [weak self] in
             DispatchQueue.main.async {
                 guard let self else { return }
-                let device = self.settings.microphoneUID
-                self.micQueue.async { [recorder = self.recorder] in recorder.restartStandby(deviceUID: device) }
+                self.log.notice("mic: audio engine was reset by macOS — restarting standby")
+                self.updateMicStandby()
             }
         }
         settings.$fastestModel.dropFirst()
@@ -457,6 +457,7 @@ final class DictationController: ObservableObject {
         let samples = micQueue.sync { recorder.detach() }
         let tDetach = (ContinuousClock.now - releasedAt).ms
         micQueue.async { [recorder] in recorder.shutDown() } // the slow part, off the main thread
+        rearmMicIfNeeded()
         let seconds = Double(samples.count) / AudioRecorder.sampleRate
         let voiced = AudioStats.voicedSeconds(samples)
         let tVoiced = (ContinuousClock.now - releasedAt).ms
@@ -1021,16 +1022,32 @@ final class DictationController: ObservableObject {
 
     /// Keeps the mic running between dictations when the user chose that (instant start, plus the 0.3 s before
     /// fn). macOS shows its orange microphone dot while it's on.
-    func updateMicStandby() {
+    func updateMicStandby(retry: Bool = true) {
+        permissions.refresh()
         let want = settings.keepMicReady && permissions.granted[.microphone] == true
         let device = settings.microphoneUID
-        micQueue.async { [recorder] in
-            if want {
-                if recorder.inStandby { recorder.restartStandby(deviceUID: device) }
-                else { try? recorder.startStandby(deviceUID: device) }
-            } else {
-                recorder.stopStandby()
+        micQueue.async { [recorder, log] in
+            guard want else { return recorder.stopStandby() }
+            do {
+                if recorder.inStandby, !recorder.isStandbyLive { recorder.restartStandby(deviceUID: device) }
+                else { try recorder.startStandby(deviceUID: device) }
+                log.notice("mic: ready (standby \(recorder.inStandby ? "on" : "off", privacy: .public))")
+            } catch {
+                log.error("mic: standby failed: \(error.localizedDescription, privacy: .public)")
+                // Often the device is still settling after a change or wake: try once more.
+                if retry {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.updateMicStandby(retry: false) }
+                }
             }
+        }
+    }
+
+    /// After each dictation: if the mic should be ready but isn't (macOS reset it), start it again.
+    private func rearmMicIfNeeded() {
+        guard settings.keepMicReady else { return }
+        micQueue.async { [recorder] in
+            guard !recorder.isStandbyLive else { return }
+            DispatchQueue.main.async { [weak self] in self?.updateMicStandby() }
         }
     }
 }

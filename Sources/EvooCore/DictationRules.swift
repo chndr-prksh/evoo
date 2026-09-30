@@ -68,6 +68,24 @@ public enum DictationRules {
         var out = text
         // Mid-sentence: "…to, like, give…" → "…to give…"
         out = out.replacingOccurrences(of: "(?i),\\s*" + fillers + ",\\s*", with: " ", options: .regularExpression)
+        // "You know we still need…" / "…the report, you know." — "you know" leading into a sentence, or trailing it.
+        if let lead = try? NSRegularExpression(pattern: "(?i)(^|[.!?]\\s+)you know,?\\s+((?:we|i|they|he|she|there|so|my|our)\\b)") {
+            for m in lead.matches(in: out, range: NSRange(out.startIndex..., in: out)).reversed() {
+                guard let r = Range(m.range, in: out), let a = Range(m.range(at: 1), in: out),
+                      let b = Range(m.range(at: 2), in: out) else { continue }
+                let next = String(out[b])
+                out.replaceSubrange(r, with: String(out[a]) + next.prefix(1).uppercased() + next.dropFirst())
+            }
+        }
+        out = out.replacingOccurrences(of: "(?i),\\s*you know(?=[.!?]|$)", with: "", options: .regularExpression)
+        // "…to like give you…" → "…to give you…" ("I'd like to" keeps its "like").
+        if let re = try? NSRegularExpression(pattern: "(?i)\\bto like (\\w+)") {
+            for m in re.matches(in: out, range: NSRange(out.startIndex..., in: out)).reversed() {
+                guard let r = Range(m.range, in: out), let w = Range(m.range(at: 1), in: out),
+                      DictationFormatter.isVerb(String(out[w])) else { continue }
+                out.replaceSubrange(r, with: "to " + out[w])
+            }
+        }
         // Sentence start: "Like, engineering…" → "Engineering…"
         guard let re = try? NSRegularExpression(pattern: "(?i)(^|[.!?]\\s+)" + fillers + ",?\\s+(\\w)") else { return out }
         for m in re.matches(in: out, range: NSRange(out.startIndex..., in: out)).reversed() {

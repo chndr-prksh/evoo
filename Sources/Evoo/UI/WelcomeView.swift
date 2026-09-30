@@ -166,7 +166,7 @@ struct WelcomeView: View {
                      detail: controller.modelStatus
                          ?? "Off is recommended: the standard model hears short commands and names better, and long dictations are transcribed while you speak either way.",
                      state: controller.modelStatus != nil ? .working : applied ? .done : .off, isOn: $wantFast, locked: false)
-            SetupRow(icon: "sparkles", title: SystemInfo.isLowMemory ? "Local AI models (3.6 GB, once)" : "Local AI model (Qwen3 4B · 2.5 GB, once)",
+            SetupRow(icon: "sparkles", title: SystemInfo.isLowMemory ? "Local AI models (3.1 GB, once)" : "Local AI model (Qwen3 4B · 2.5 GB, once)",
                      detail: "Powers class notes, rewrite by voice (“make this more formal”), replies and translation.",
                      state: aiState, isOn: $wantAI, locked: false, progress: controller.refinerDownloadProgress)
             SetupRow(icon: "wand.and.stars", title: "Polish every dictation with AI",
@@ -200,7 +200,7 @@ struct WelcomeView: View {
         settings.appCommands = true
         settings.keepHistory = true
         settings.showTips = true
-        settings.refinerModel = SystemInfo.isLowMemory ? .qwen3_1_7b : DictationController.notesModel
+        settings.refinerModel = SystemInfo.isLowMemory ? .qwen3_0_6b : DictationController.notesModel
         if wantLogin, !LoginItem.isEnabled { try? LoginItem.set(true) }
         if wantAI {
             if controller.refinerInstalled {

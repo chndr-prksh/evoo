@@ -872,6 +872,11 @@ import Testing
     #expect(DictationRules.removeCommaFillers("I like it a lot.") == "I like it a lot.")
     #expect(DictationRules.removeCommaFillers("You know the answer.") == "You know the answer.")
     #expect(DictationRules.removeCommaFillers("It looks like rain.") == "It looks like rain.")
+    #expect(DictationRules.removeCommaFillers("Done. You know we still need it.").hasSuffix("We still need it."))
+    #expect(DictationRules.removeCommaFillers("I wanted to like give you an update.") == "I wanted to give you an update.")
+    #expect(DictationRules.removeCommaFillers("Send it tonight, you know.") == "Send it tonight.")
+    #expect(DictationRules.removeCommaFillers("I would like to go.") == "I would like to go.")
+    #expect(DictationRules.removeCommaFillers("Do you know the answer?") == "Do you know the answer?")
     // "I mean" is a correction cue, handled elsewhere.
     #expect(DictationRules.apply("Let's meet tomorrow, I mean, Friday.").text.contains("Friday"))
 }

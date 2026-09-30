@@ -25,6 +25,8 @@ final class AudioRecorder {
     /// (in memory, never processed), so a dictation starts instantly — including the moment just before fn.
     var inStandby: Bool { lock.withLock { standby } }
     private var standby = false
+    /// Standby and the engine really running (macOS can stop it underneath us: device change, sleep).
+    var isStandbyLive: Bool { inStandby && engine.isRunning }
     private var preRoll: [Float] = []
     static let preRollSeconds = 0.3
     /// Called when macOS reset the audio engine (device change, sleep) while in standby.
@@ -41,7 +43,8 @@ final class AudioRecorder {
 
     /// Starts the mic without recording (see `inStandby`).
     func startStandby(deviceUID: String?) throws {
-        guard !inStandby, !isRecording else { return }
+        guard !isRecording else { return }
+        if inStandby, engine.isRunning { return }
         try startEngine(deviceUID: deviceUID)
         lock.withLock {
             standby = true
@@ -70,7 +73,7 @@ final class AudioRecorder {
 
     /// After a device change or sleep: the engine stopped; start standby again.
     func restartStandby(deviceUID: String?) {
-        guard inStandby, !isRecording else { return }
+        guard !isRecording else { return }
         stopStandby()
         try? startStandby(deviceUID: deviceUID)
     }
@@ -96,11 +99,12 @@ final class AudioRecorder {
     func start(deviceUID: String?) throws {
         guard !isRecording else { return }
         gotAudio = false
+        let alive = engine.isRunning
         let warm = lock.withLock { () -> Bool in
             // In standby the mic is already live: start from the audio just before fn went down.
-            samples = standby ? preRoll : []
+            samples = standby && alive ? preRoll : []
             preRoll.removeAll(keepingCapacity: true)
-            return standby
+            return standby && alive
         }
         if !warm { try startEngine(deviceUID: deviceUID) }
         lock.withLock { recording = true }
