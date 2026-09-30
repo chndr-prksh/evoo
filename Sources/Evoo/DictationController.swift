@@ -477,7 +477,7 @@ final class DictationController: ObservableObject {
             return
         }
         let tCheck = (ContinuousClock.now - releasedAt).ms
-        play("Pop")
+        // No sound on release: a "done" sound before the text lands made the wait feel longer.
         let tSound = (ContinuousClock.now - releasedAt).ms
         phase = .transcribing
         let tPhase = (ContinuousClock.now - releasedAt).ms
