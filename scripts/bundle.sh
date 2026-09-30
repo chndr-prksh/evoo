@@ -28,6 +28,8 @@ if [ -n "${EVOO_REPO:-}" ]; then
 fi
 ditto "$BIN/llama.framework" "$APP/Contents/Frameworks/llama.framework"
 ditto Resources/katex "$APP/Contents/Resources/katex" # math rendering for class notes (MIT)
+mkdir -p "$APP/Contents/Resources/trainer" # personal model (Layer 2): MLX LoRA training + GGUF conversion
+cp scripts/train_personal_lora.py scripts/mlx_lora_to_gguf.py "$APP/Contents/Resources/trainer/"
 for bundle in "$BIN"/*.bundle; do
   [ -e "$bundle" ] && ditto "$bundle" "$APP/Contents/Resources/$(basename "$bundle")"
 done

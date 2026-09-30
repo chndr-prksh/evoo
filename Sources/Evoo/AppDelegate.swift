@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [controller] in
             controller.warmUp()
             controller.cleanScreenLearned()
+            PersonalModel.shared.schedule(controller: controller)
         }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil,
                                                           queue: .main) { [controller] _ in
@@ -73,6 +74,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             MainActor.assumeIsolated {
                 self?.controller.debugDryRun = true
                 self?.controller.toggleFromUI()
+            }
+        }
+        // Debug: run the whole personal-model flow on a pairs file (object = path), with a short training.
+        DistributedNotificationCenter.default().addObserver(forName: .init("app.evoo.debug.train"), object: nil,
+                                                            queue: .main) { [weak self] note in
+            guard let path = note.object as? String else { return }
+            MainActor.assumeIsolated {
+                guard let self, let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+                      let pairs = try? JSONDecoder().decode([StylePair].self, from: data) else { return }
+                Task { await PersonalModel.shared.train(controller: self.controller, pairs: pairs, iters: 5) }
             }
         }
         // Debug: open the welcome tour on its last (try-it) page.

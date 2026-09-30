@@ -85,8 +85,8 @@
   h2 { font-size: clamp(30px, 4.2vw, 42px); letter-spacing: -.025em; line-height: 1.12; margin: 0 0 14px; font-weight: 720; }
   .lead { color: var(--ink-2); font-size: 18px; max-width: 620px; margin: 0 0 40px; }
 
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-  @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  @media (max-width: 1000px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
   .card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; }
   .card .ico { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: var(--soft); border: 1px solid var(--line); margin-bottom: 14px; font-size: 19px; }
@@ -239,6 +239,10 @@
         <div class="ex">“open GitHub in Chrome” · “volume thirty” · “new tab”</div></div>
       <div class="card"><div class="ico">🎓</div><h3>Class Notes</h3><p>Listens to a lecture and jots down what matters — formulas, definitions, what's on the exam. Edit as it writes.</p>
         <div class="ex">Study sheet, flashcards and Q&amp;A after class</div></div>
+      <div class="card"><div class="ico">✎</div><h3>Learns how you write</h3><p>Evoo notices how you edit what it typed and starts writing your way. With enough edits it trains a personal model overnight, on your Mac.</p>
+        <div class="ex">"going to" → <b>gonna</b> · no full stop in chats</div></div>
+      <div class="card"><div class="ico">↻</div><h3>Rewrite by voice</h3><p>Select any text, hold fn, and say what to change. Works in every app.</p>
+        <div class="ex">"make this more formal" · "shorten this"</div></div>
       <div class="card"><div class="ico">⏱</div><h3>Reminders &amp; notes</h3><p>Add reminders and calendar events, save notes, or search what you said before — by meaning.</p>
         <div class="ex">“remind me to call Raj tomorrow at 5”</div></div>
     </div>

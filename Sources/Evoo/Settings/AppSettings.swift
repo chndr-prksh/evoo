@@ -58,6 +58,8 @@ final class AppSettings: ObservableObject {
     @Published var keepHistory: Bool { didSet { save(keepHistory, "keepHistory") } }
     /// Learn how the user writes from their edits (Layer 1: examples + style in the polish prompt).
     @Published var learnStyle: Bool { didSet { save(learnStyle, "learnStyle") } }
+    /// Use the add-on fine-tuned on this Mac from the user's edits (Layer 2), when there is one.
+    @Published var usePersonalModel: Bool { didSet { save(usePersonalModel, "usePersonalModel") } }
     @Published var habits: LearnedHabits {
         didSet { defaults.set(try? JSONEncoder().encode(habits), forKey: "habits") }
     }
@@ -97,6 +99,7 @@ final class AppSettings: ObservableObject {
             .flatMap { try? JSONDecoder().decode([Snippet].self, from: $0) } ?? []
         keepHistory = bool("keepHistory", true)
         learnStyle = bool("learnStyle", true)
+        usePersonalModel = bool("usePersonalModel", true)
         showTips = bool("showTips", true)
         learnFromScreen = bool("learnFromScreen", true)
         screenLexicon = UserDefaults.standard.data(forKey: "screenLexicon")

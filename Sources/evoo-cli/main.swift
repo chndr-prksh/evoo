@@ -69,6 +69,7 @@ case "golden", "stress":
     pipeline.dictionary = PersonalDictionary(["Divya", "Aarav", "Kubernetes", "Priya", "Rahul"])
     if polish {
         try await refiner.load(option("--polish-model").flatMap(RefinerModel.init(rawValue:)) ?? .qwen3_4b, language: .english)
+        if let a = option("--adapter") { print("adapter loaded: \(try await refiner.setAdapter(path: a))") }
     }
     if command == "golden" {
         try await runGolden(engine: engine, pipeline: pipeline, polish: polish, json: json)
@@ -87,6 +88,69 @@ case "voiced":
         let samples = try AudioConverter().resampleAudioFile(path: path)
         print(String(format: "%.2f s voiced of %.2f s  %@", AudioStats.voicedSeconds(samples), Double(samples.count) / 16000,
                      URL(fileURLWithPath: path).lastPathComponent))
+    }
+
+case "eval-style":
+    // Held-out pairs: how close the polish gets to what the person actually sent, with and without an adapter.
+    //   evoo-cli eval-style --model qwen3_1_7b --pairs test-pairs.json [--adapter personal.gguf]
+    guard let pairsPath = option("--pairs") else { print("usage: evoo-cli eval-style --pairs file.json"); exit(2) }
+    let adapterPath = option("--adapter")
+    let pairs = try JSONDecoder().decode([StylePair].self, from: Data(contentsOf: URL(fileURLWithPath: pairsPath)))
+    try await loadRefiner()
+    if let adapterPath { _ = try await refiner.setAdapter(path: adapterPath) }
+    func distance(_ a: String, _ b: String) -> Double { // character edit distance, normalized
+        let x = Array(a), y = Array(b)
+        guard !x.isEmpty || !y.isEmpty else { return 0 }
+        var d = Array(0 ... y.count)
+        for i in 1 ... max(1, x.count) where !x.isEmpty {
+            var prev = d[0]; d[0] = i
+            for j in stride(from: 1, through: y.count, by: 1) {
+                let cur = d[j]; d[j] = min(d[j] + 1, d[j - 1] + 1, prev + (x[i - 1] == y[j - 1] ? 0 : 1)); prev = cur
+            }
+        }
+        return Double(d[y.count]) / Double(max(x.count, y.count))
+    }
+    var exact = 0, total = 0.0, baseline = 0.0, ms = 0
+    for p in pairs {
+        var out = ""
+        let t = try await clock.measure { out = try await refiner.refine(p.evoo, language: .english) }
+        ms += t.ms
+        let d = distance(out, p.sent)
+        total += d; baseline += distance(p.evoo, p.sent)
+        if out == p.sent { exact += 1 }
+        print("  \(d == 0 ? "✓" : " ") \(p.evoo)\n     want: \(p.sent)\n     got:  \(out)")
+    }
+    let n = Double(max(1, pairs.count))
+    print(String(format: "\n%@: exact %d/%d · avg distance to what they sent %.1f%% (Evoo's text unchanged: %.1f%%) · %d ms avg",
+                 adapterPath == nil ? "base" : "adapter", exact, pairs.count, total / n * 100, baseline / n * 100, ms / max(1, pairs.count)))
+
+case "export-train":
+    // Edit pairs → MLX LoRA training data, using the exact prompt the app polishes with.
+    //   evoo-cli export-train --pairs style-pairs.json --out dir [--valid 0.1] [--test 0.15]
+    guard let pairsPath = option("--pairs"), let outDir = option("--out") else {
+        print("usage: evoo-cli export-train --pairs file.json --out dir"); exit(2)
+    }
+    let pairs = try JSONDecoder().decode([StylePair].self, from: Data(contentsOf: URL(fileURLWithPath: pairsPath)))
+        .filter(PersonalStyle.isUsable)
+    let validShare = Double(option("--valid") ?? "0.1") ?? 0.1, testShare = Double(option("--test") ?? "0.15") ?? 0.15
+    let think = RefinerModel.qwen3_1_7b.usesThinkBlock
+    func record(_ p: StylePair) -> [String: String] {
+        ["prompt": RefinePrompt.prefix(language: .english) + RefinePrompt.suffix(transcript: p.evoo, thinkBlock: think),
+         "completion": p.sent + "<|im_end|>"]
+    }
+    var shuffled = pairs
+    var rng = SystemRandomNumberGenerator()
+    shuffled.shuffle(using: &rng)
+    let nTest = Int(Double(shuffled.count) * testShare), nValid = max(1, Int(Double(shuffled.count) * validShare))
+    let splits = ["test": Array(shuffled.prefix(nTest)), "valid": Array(shuffled.dropFirst(nTest).prefix(nValid)),
+                  "train": Array(shuffled.dropFirst(nTest + nValid))]
+    try FileManager.default.createDirectory(atPath: outDir, withIntermediateDirectories: true)
+    for (name, rows) in splits {
+        let lines = try rows.map { String(data: try JSONSerialization.data(withJSONObject: record($0), options: [.sortedKeys]), encoding: .utf8)! }
+        try lines.joined(separator: "\n").write(toFile: outDir + "/\(name).jsonl", atomically: true, encoding: .utf8)
+        // The raw pairs too, for evaluation.
+        try JSONEncoder().encode(rows).write(to: URL(fileURLWithPath: outDir + "/\(name)-pairs.json"))
+        print("\(name): \(rows.count)")
     }
 
 case "bench":
@@ -338,7 +402,12 @@ case "post":
 case "refine":
     let pairsFile = option("--pairs")
     let styleApp = option("--app")
+    let adapterPath = option("--adapter")
     try await loadRefiner()
+    if let adapterPath {
+        let ok = try await refiner.setAdapter(path: adapterPath)
+        print(ok ? "loaded adapter \(adapterPath)\n" : "adapter failed to load: \(adapterPath)\n")
+    }
     for input in inputs {
         var output = ""
         // --pairs file.json [--app bundle.id]: polish with that person's style (Layer 1).

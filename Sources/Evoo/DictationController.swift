@@ -187,10 +187,46 @@ final class DictationController: ObservableObject {
         refinerLoading = true
         Task {
             defer { refinerLoading = false }
-            do { try await refiner.load(model, language: settings.language) } catch {
+            do {
+                try await refiner.load(model, language: settings.language)
+                // Layer 2: the add-on fine-tuned on this person's edits, if there is one for this model.
+                let personal = PersonalModel.shared
+                if settings.learnStyle, settings.usePersonalModel, personal.hasAdapter(for: model) {
+                    let ok = try await refiner.setAdapter(path: personal.adapter(for: model).path)
+                    log.notice("personal add-on \(ok ? "loaded" : "failed to load", privacy: .public)")
+                }
+            } catch {
                 log.error("Refiner load failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    /// Frees the polish model's memory while the personal model trains (dictation still works, unpolished).
+    func pauseRefinerForTraining() {
+        refiner.unload()
+    }
+
+    struct AdapterScore { var distance: Double; var exact: Int }
+
+    /// How close polish gets to what the person actually sent, without and with a trained add-on.
+    func evaluateAdapter(_ url: URL, on pairs: [StylePair]) async throws -> (base: AdapterScore, adapter: AdapterScore) {
+        let model = settings.refinerModel
+        if refiner.loadedModel != model { try await refiner.load(model, language: .english) }
+        func score() async throws -> AdapterScore {
+            var total = 0.0, exact = 0
+            for p in pairs {
+                let out = try await refiner.refine(p.evoo, language: .english)
+                total += PersonalTraining.distance(out, p.sent)
+                if out == p.sent { exact += 1 }
+            }
+            return AdapterScore(distance: total / Double(max(1, pairs.count)), exact: exact)
+        }
+        _ = try await refiner.setAdapter(path: nil)
+        let base = try await score()
+        guard try await refiner.setAdapter(path: url.path) else { throw RefinerError.loadFailed }
+        let adapter = try await score()
+        _ = try await refiner.setAdapter(path: nil)
+        return (base, adapter)
     }
 
     func downloadRefiner(enableCleanup: Bool = true, thenNotesModel: Bool = false) {

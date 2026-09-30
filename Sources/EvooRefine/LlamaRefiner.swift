@@ -15,6 +15,7 @@ public final class LlamaRefiner: @unchecked Sendable {
     public private(set) var loadedModel: RefinerModel?
     /// Tokens of the static prompt prefix currently held in the KV cache.
     private var cachedPrefix: [llama_token] = []
+    private var adapter: OpaquePointer?
 
     private static let contextSize: UInt32 = 4096
 
@@ -157,6 +158,34 @@ public final class LlamaRefiner: @unchecked Sendable {
         return out.isEmpty ? nil : out
     }
 
+    /// A personal LoRA add-on (see scripts/mlx_lora_to_gguf.py) on top of the loaded model; nil removes it.
+    /// Returns false if the file couldn't be loaded for this model.
+    @discardableResult
+    public func setAdapter(path: String?, scale: Float = 1.0) async throws -> Bool {
+        try await run { [self] in
+            guard let model, let context else { throw RefinerError.notLoaded }
+            if let adapter { llama_adapter_lora_free(adapter); self.adapter = nil }
+            var ok = true
+            if let path {
+                if let a = llama_adapter_lora_init(model, path) {
+                    adapter = a
+                    var list: [OpaquePointer?] = [a]
+                    var scales = [scale]
+                    _ = llama_set_adapters_lora(context, &list, 1, &scales)
+                } else {
+                    ok = false
+                    _ = llama_set_adapters_lora(context, nil, 0, nil)
+                }
+            } else {
+                _ = llama_set_adapters_lora(context, nil, 0, nil)
+            }
+            // The cached prompt was computed without (or with a different) add-on.
+            llama_memory_clear(llama_get_memory(context), true)
+            cachedPrefix = []
+            return ok
+        }
+    }
+
     // MARK: - llama.cpp
 
     /// Ensures the KV cache holds exactly `prefix`, evaluating it only when it changed (e.g. new language).
@@ -219,6 +248,8 @@ public final class LlamaRefiner: @unchecked Sendable {
     }
 
     private func freeAll() {
+        if let adapter { llama_adapter_lora_free(adapter) }
+        adapter = nil
         if let sampler { llama_sampler_free(sampler) }
         if let context { llama_free(context) }
         if let model { llama_model_free(model) }

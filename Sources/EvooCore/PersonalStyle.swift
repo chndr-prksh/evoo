@@ -183,3 +183,75 @@ public enum StyleRewrites {
         return out
     }
 }
+
+/// Layer 2: turning edit pairs into fine-tuning data, and judging a trained add-on.
+public enum PersonalTraining {
+    /// Edited pairs needed before training is worth it.
+    public static let minPairs = 150
+
+    /// The MLX copy of each polish model that the trainer fine-tunes (same weights as the GGUF Evoo runs).
+    public static func mlxModel(for model: RefinerModel) -> String {
+        switch model {
+        case .qwen3_0_6b: "mlx-community/Qwen3-0.6B-4bit"
+        case .qwen3_1_7b: "mlx-community/Qwen3-1.7B-4bit"
+        case .qwen3_4b: "mlx-community/Qwen3-4B-Instruct-2507-4bit"
+        }
+    }
+
+    public struct Split: Sendable {
+        public var train: [StylePair], valid: [StylePair], test: [StylePair]
+    }
+
+    /// Usable pairs, shuffled with a fixed seed so the held-back test set is stable between runs.
+    public static func split(_ pairs: [StylePair], validShare: Double = 0.1, testShare: Double = 0.15) -> Split {
+        var rng = SeededGenerator(seed: 42)
+        let usable = pairs.filter(PersonalStyle.isUsable).shuffled(using: &rng)
+        let nTest = max(1, Int(Double(usable.count) * testShare)), nValid = max(1, Int(Double(usable.count) * validShare))
+        return Split(train: Array(usable.dropFirst(nTest + nValid)), valid: Array(usable.dropFirst(nTest).prefix(nValid)),
+                     test: Array(usable.prefix(nTest)))
+    }
+
+    /// One JSONL line: Evoo's exact polish prompt, and what the person sent.
+    public static func record(_ pair: StylePair, model: RefinerModel) -> String {
+        let row = ["prompt": RefinePrompt.prefix(language: .english)
+            + RefinePrompt.suffix(transcript: pair.evoo, thinkBlock: model.usesThinkBlock),
+            "completion": pair.sent + "<|im_end|>"]
+        let data = (try? JSONSerialization.data(withJSONObject: row, options: [.sortedKeys])) ?? Data()
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    /// Character edit distance, 0 (identical) … 1.
+    public static func distance(_ a: String, _ b: String) -> Double {
+        let x = Array(a), y = Array(b)
+        if x.isEmpty || y.isEmpty { return x.count == y.count ? 0 : 1 }
+        var d = Array(0 ... y.count)
+        for i in 1 ... x.count {
+            var prev = d[0]
+            d[0] = i
+            for j in 1 ... y.count {
+                let cur = d[j]
+                d[j] = min(d[j] + 1, d[j - 1] + 1, prev + (x[i - 1] == y[j - 1] ? 0 : 1))
+                prev = cur
+            }
+        }
+        return Double(d[y.count]) / Double(max(x.count, y.count))
+    }
+
+    /// Keep a new add-on only if it's clearly closer to what the person sends, and not worse on exact matches.
+    public static func accept(baseDistance: Double, adapterDistance: Double, baseExact: Int, adapterExact: Int) -> Bool {
+        adapterDistance <= baseDistance * 0.8 && adapterExact >= baseExact
+    }
+}
+
+/// Deterministic shuffling (SplitMix64).
+public struct SeededGenerator: RandomNumberGenerator {
+    private var state: UInt64
+    public init(seed: UInt64) { state = seed }
+    public mutating func next() -> UInt64 {
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
+    }
+}

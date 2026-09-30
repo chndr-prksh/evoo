@@ -7,6 +7,7 @@ struct SettingsView: View {
     @ObservedObject var permissions: Permissions
     @State private var launchAtLogin = LoginItem.isEnabled
     @ObservedObject private var style = StyleStore.shared
+    @ObservedObject private var personal = PersonalModel.shared
     @State private var microphones = AudioDevices.inputs()
     @State private var loginError: String?
     @State private var newWord = ""
@@ -217,6 +218,29 @@ struct SettingsView: View {
                 }
                 Button("Erase what Evoo learned about my style", role: .destructive) { style.erase() }
                     .disabled(style.pairs.isEmpty)
+            }
+
+            Section("Personal model (trained on this Mac)") {
+                Text("With enough of your edits, Evoo fine-tunes a small add-on for its AI at night while your Mac is plugged in — so polish writes the way you do. It's tested on edits it hasn't seen and only used if it's clearly closer to you. Nothing leaves this Mac.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Toggle("Use my personal model", isOn: $settings.usePersonalModel)
+                LabeledContent("Your edits", value: "\(personal.editedPairs) of \(PersonalTraining.minPairs) needed")
+                if let result = personal.result { LabeledContent("In use", value: result) }
+                switch personal.status {
+                case let .working(text): HStack { ProgressView().controlSize(.small); Text(text) }
+                case let .failed(text): Text(text).font(.caption).foregroundStyle(.orange)
+                case .idle: EmptyView()
+                }
+                HStack {
+                    Button("Train now") { Task { await personal.train(controller: controller) } }
+                        .disabled(personal.isBusy || personal.editedPairs < PersonalTraining.minPairs)
+                    if personal.hasAdapter(for: settings.refinerModel) {
+                        Button("Remove personal model", role: .destructive) {
+                            personal.remove(for: settings.refinerModel)
+                            controller.prepareRefiner()
+                        }
+                    }
+                }
             }
 
             Section("Learning") {

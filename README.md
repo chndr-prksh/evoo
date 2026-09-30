@@ -36,6 +36,11 @@ one-line install below. Evoo updates itself after that.
   class: a one-screen study sheet (summary, key formulas, terms, practice questions), flashcards, and Q&A about
   the lecture. No audio is kept. Classes are grouped by subject; say "search note Bayes theorem" to find
   something. Export to PDF or Markdown.
+- **Learns how you write** (all on your Mac): Evoo keeps what it typed next to what you actually sent. Word swaps
+  you keep making in an app ("going to" → "gonna") are applied instantly; once you have ~150 edits, it fine-tunes a
+  small add-on for its AI overnight (MLX LoRA, while plugged in), tests it on edits it hasn't seen, and only uses it
+  if it's clearly closer to you. On a test persona: plain model 0/28 messages written their way, personal add-on
+  24/28. Settings › Your writing style / Personal model — view, turn off, or erase any time.
 - **Voice commands** (say the whole command as one dictation; anything else is typed as usual):
   - Apps & web: "open Slack", "switch to Chrome", "open github.com", "search Google for …", "ask ChatGPT …",
     "YouTube …", "new Google doc", "new email about …" — every installed app, plus your own in Settings → Apps
