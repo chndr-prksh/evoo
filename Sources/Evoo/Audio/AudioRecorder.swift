@@ -7,6 +7,9 @@ final class AudioRecorder {
 
     /// Called on the audio thread with a 0…1 level for the pill's waveform.
     var onLevel: ((Float) -> Void)?
+    /// Called once per recording, on the audio thread, when the first audio arrives (to measure mic start).
+    var onFirstAudio: (() -> Void)?
+    private var gotAudio = false
 
     private let engine = AVAudioEngine()
     private let lock = NSLock()
@@ -15,14 +18,18 @@ final class AudioRecorder {
     private let outputFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate,
                                              channels: 1, interleaved: false)!
 
-    private(set) var isRecording = false
-    /// Sample index until which input is replaced by silence (see `mute(for:)`).
-    private var muteUntil = 0
-
-    /// Records silence for the next `seconds` — while Evoo's own start sound plays.
-    func mute(for seconds: Double) {
-        lock.withLock { muteUntil = samples.count + Int(seconds * Self.sampleRate) }
-    }
+    /// Recording for a dictation. Read by the audio thread, so behind `lock`.
+    var isRecording: Bool { lock.withLock { recording } }
+    private var recording = false
+    /// "Keep the microphone ready": the mic runs between dictations and only the last `preRollSeconds` are kept
+    /// (in memory, never processed), so a dictation starts instantly — including the moment just before fn.
+    var inStandby: Bool { lock.withLock { standby } }
+    private var standby = false
+    private var preRoll: [Float] = []
+    static let preRollSeconds = 0.3
+    /// Called when macOS reset the audio engine (device change, sleep) while in standby.
+    var onEngineReset: (() -> Void)?
+    private var resetObserver: NSObjectProtocol?
 
     /// Creates the audio input ahead of time (without turning the microphone on), so the first fn press doesn't
     /// pay for it — that can take 0.3–4 s on a busy Mac.
@@ -32,26 +39,71 @@ final class AudioRecorder {
         _ = input.outputFormat(forBus: 0)
     }
 
-    func start(deviceUID: String?) throws {
-        guard !isRecording else { return }
+    /// Starts the mic without recording (see `inStandby`).
+    func startStandby(deviceUID: String?) throws {
+        guard !inStandby, !isRecording else { return }
+        try startEngine(deviceUID: deviceUID)
+        lock.withLock {
+            standby = true
+            preRoll.removeAll(keepingCapacity: true)
+        }
+        if resetObserver == nil {
+            resetObserver = NotificationCenter.default.addObserver(
+                forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil) { [weak self] _ in
+                self?.onEngineReset?()
+            }
+        }
+    }
+
+    /// Turns the mic off again (unless a dictation is using it — then it stops when the dictation ends).
+    func stopStandby() {
+        let wasRecording = lock.withLock { () -> Bool in
+            standby = false
+            preRoll.removeAll()
+            return recording
+        }
+        guard !wasRecording, engine.isRunning else { return }
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
+        engine.prepare()
+    }
+
+    /// After a device change or sleep: the engine stopped; start standby again.
+    func restartStandby(deviceUID: String?) {
+        guard inStandby, !isRecording else { return }
+        stopStandby()
+        try? startStandby(deviceUID: deviceUID)
+    }
+
+    private func startEngine(deviceUID: String?) throws {
         let input = engine.inputNode
         if let uid = deviceUID, let id = AudioDevices.deviceID(forUID: uid), let unit = input.audioUnit {
             var deviceID = id
             AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
                                  &deviceID, UInt32(MemoryLayout<AudioDeviceID>.size))
         }
-
         let inputFormat = input.outputFormat(forBus: 0)
         guard inputFormat.sampleRate > 0 else { throw RecorderError.noInputDevice }
         converter = AVAudioConverter(from: inputFormat, to: outputFormat)
-
-        lock.withLock { samples.removeAll(keepingCapacity: true) } // a mute set just before start still applies
+        input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
             self?.process(buffer)
         }
         engine.prepare()
         try engine.start()
-        isRecording = true
+    }
+
+    func start(deviceUID: String?) throws {
+        guard !isRecording else { return }
+        gotAudio = false
+        let warm = lock.withLock { () -> Bool in
+            // In standby the mic is already live: start from the audio just before fn went down.
+            samples = standby ? preRoll : []
+            preRoll.removeAll(keepingCapacity: true)
+            return standby
+        }
+        if !warm { try startEngine(deviceUID: deviceUID) }
+        lock.withLock { recording = true }
     }
 
     /// Hands over what was recorded since the last call and forgets it — for long recordings (class notes).
@@ -82,20 +134,21 @@ final class AudioRecorder {
         return samples
     }
 
-    /// Stops collecting audio and returns it — fast (the engine keeps running until `shutDown`).
+    /// Stops collecting audio and returns it — fast. In standby the mic keeps running for the next dictation.
     func detach() -> [Float] {
-        guard isRecording else { return [] }
-        engine.inputNode.removeTap(onBus: 0)
-        isRecording = false
-        return lock.withLock {
-            muteUntil = 0
-            return samples
+        let (was, keep, out) = lock.withLock { () -> (Bool, Bool, [Float]) in
+            let was = recording
+            recording = false
+            return (was, standby, samples)
         }
+        guard was else { return [] }
+        if !keep { engine.inputNode.removeTap(onBus: 0) }
+        return out
     }
 
-    /// Stops the audio engine (can take 100+ ms) and pre-allocates for the next start.
+    /// Stops the audio engine (can take 100+ ms) and pre-allocates for the next start — unless in standby.
     func shutDown() {
-        guard !isRecording, engine.isRunning else { return }
+        guard !isRecording, !inStandby, engine.isRunning else { return }
         engine.stop()
         engine.prepare()
     }
@@ -118,14 +171,22 @@ final class AudioRecorder {
             return buffer
         }
         guard error == nil, let channel = out.floatChannelData?[0] else { return }
-        var chunk = Array(UnsafeBufferPointer(start: channel, count: Int(out.frameLength)))
-        lock.withLock {
-            // Evoo's own start sound is playing: keep silence instead, or the mic hears it ("Yeah").
-            let start = samples.count
-            if muteUntil > start {
-                for i in 0 ..< min(chunk.count, muteUntil - start) { chunk[i] = 0 }
+        let chunk = Array(UnsafeBufferPointer(start: channel, count: Int(out.frameLength)))
+        let isRecording = lock.withLock { () -> Bool in
+            if recording {
+                samples.append(contentsOf: chunk)
+            } else if standby {
+                // Between dictations: keep only the last moment, for the next fn press.
+                preRoll.append(contentsOf: chunk)
+                let keep = Int(Self.preRollSeconds * Self.sampleRate)
+                if preRoll.count > keep { preRoll.removeFirst(preRoll.count - keep) }
             }
-            samples.append(contentsOf: chunk)
+            return recording
+        }
+        guard isRecording else { return }
+        if !gotAudio {
+            gotAudio = true
+            onFirstAudio?()
         }
 
         var sum: Float = 0

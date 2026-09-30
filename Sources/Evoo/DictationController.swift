@@ -39,7 +39,6 @@ final class DictationController: ObservableObject {
     private let recorder = AudioRecorder()
     /// The mic starts and stops here, so a key press never waits on CoreAudio.
     private let micQueue = DispatchQueue(label: "app.evoo.mic", qos: .userInteractive)
-    private var startSound: Task<Void, Never>?
     private var refinerLoading = false
     private var charBeforeCursor: Task<String?, Never>?
     private var selectionTask: Task<String?, Never>?
@@ -111,6 +110,17 @@ final class DictationController: ObservableObject {
             .debounce(for: .milliseconds(200), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.prepareSpeechModel() }
             .store(in: &cancellables)
+        // "Keep the microphone ready": switched on/off, or a different microphone chosen.
+        settings.$keepMicReady.combineLatest(settings.$microphoneUID).dropFirst()
+            .sink { [weak self] _ in DispatchQueue.main.async { self?.updateMicStandby() } }
+            .store(in: &cancellables)
+        recorder.onEngineReset = { [weak self] in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                let device = self.settings.microphoneUID
+                self.micQueue.async { [recorder = self.recorder] in recorder.restartStandby(deviceUID: device) }
+            }
+        }
         settings.$fastestModel.dropFirst()
             .sink { [weak self] fastest in
                 self?.engines.setParakeetVersion(fastest ? .tdtCtc110m : .v3)
@@ -287,10 +297,7 @@ final class DictationController: ObservableObject {
 
     private func updateProvisional() {
         let tap = if case .tapPending = gesture.phase { true } else { false }
-        let wasTap = provisional
         provisional = tap && phase == .recording
-        // Second tap → hands-free: now it's real, so give the start sound.
-        if wasTap, !provisional, phase == .recording { playStartSound() }
     }
 
     private func apply(_ action: HotkeyAction?) {
@@ -348,6 +355,10 @@ final class DictationController: ObservableObject {
         provisional = false
         mark("pillShown")
         let device = settings.microphoneUID
+        let pressedAt = ContinuousClock.now
+        recorder.onFirstAudio = { [log] in
+            log.notice("mic: first audio \((ContinuousClock.now - pressedAt).ms, privacy: .public) ms after fn")
+        }
         micQueue.async { [recorder, weak self] in
             do { try recorder.start(deviceUID: device) } catch {
                 DispatchQueue.main.async {
@@ -368,13 +379,10 @@ final class DictationController: ObservableObject {
         if smartCleanupReady {
             selectionTask = Task.detached(priority: .userInitiated) { ScreenText.selectedText() }
         }
-        // The start sound only for a real hold — a quick tap stays silent.
-        startSound?.cancel()
-        startSound = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(180))
-            guard !Task.isCancelled, let self, self.phase == .recording, !self.provisional else { return }
-            self.playStartSound()
-        }
+        // The start tick plays right now, while the mic is still starting: it's 45 ms long, so it's over before
+        // any audio is recorded. (The old 0.56 s chime played 180 ms in and had to be blanked out of the
+        // recording — which swallowed the first word when you started talking right away.)
+        playStartSound()
         // Read names on screen (chat header, recipients…) in the background while the user speaks.
         screenNames = settings.useScreenContext && permissions.granted[.accessibility] == true
             ? Task.detached(priority: .userInitiated) {
@@ -508,7 +516,7 @@ final class DictationController: ObservableObject {
     }
 
     private func endRecordingSession() {
-        startSound?.cancel()
+
         maxDurationTimer?.cancel()
         speculationLoop?.cancel()
         gesture.reset()
@@ -982,16 +990,16 @@ final class DictationController: ObservableObject {
     }
 
     /// Loaded once — loading a sound on the fn press delays the pill.
-    private lazy var sounds: [String: NSSound] = Dictionary(uniqueKeysWithValues: ["Tink", "Pop"].compactMap { name in
-        NSSound(named: NSSound.Name(name)).map { (name, $0) }
-    })
+    private lazy var sounds: [String: NSSound] = {
+        var all: [String: NSSound] = [:]
+        all["Pop"] = NSSound(named: NSSound.Name("Pop"))
+        all["start"] = Bundle.main.url(forResource: "start", withExtension: "wav")
+            .flatMap { NSSound(contentsOf: $0, byReference: true) } ?? NSSound(named: NSSound.Name("Tink"))
+        return all
+    }()
 
-    /// The start chime, with the mic muted while it plays (plus a little for the speaker-to-mic delay).
-    private func playStartSound() {
-        guard settings.playSounds, let sound = sounds["Tink"] else { return }
-        recorder.mute(for: sound.duration + 0.15)
-        play("Tink")
-    }
+    /// The start tick (Resources/start.wav, 45 ms).
+    private func playStartSound() { play("start") }
 
     private func play(_ name: String) {
         guard settings.playSounds, let sound = sounds[name] else { return }
@@ -1008,6 +1016,22 @@ final class DictationController: ObservableObject {
     func warmUp() {
         recorder.warmUp()
         _ = sounds
+        updateMicStandby()
+    }
+
+    /// Keeps the mic running between dictations when the user chose that (instant start, plus the 0.3 s before
+    /// fn). macOS shows its orange microphone dot while it's on.
+    func updateMicStandby() {
+        let want = settings.keepMicReady && permissions.granted[.microphone] == true
+        let device = settings.microphoneUID
+        micQueue.async { [recorder] in
+            if want {
+                if recorder.inStandby { recorder.restartStandby(deviceUID: device) }
+                else { try? recorder.startStandby(deviceUID: device) }
+            } else {
+                recorder.stopStandby()
+            }
+        }
     }
 }
 

@@ -19,6 +19,8 @@ final class AppSettings: ObservableObject {
     @Published var microphoneUID: String? { didSet { save(microphoneUID, "microphoneUID") } }
     @Published var showPill: Bool { didSet { save(showPill, "showPill") } }
     @Published var playSounds: Bool { didSet { save(playSounds, "playSounds") } }
+    /// Mic runs between dictations so fn starts instantly (and keeps the 0.3 s before the press).
+    @Published var keepMicReady: Bool { didSet { save(keepMicReady, "keepMicReady") } }
     @Published var restoreClipboard: Bool { didSet { save(restoreClipboard, "restoreClipboard") } }
     /// Names and terms to recognize correctly ("Divya", "Kubernetes").
     @Published var personalWords: [String] { didSet { save(personalWords, "personalWords") } }
@@ -82,6 +84,7 @@ final class AppSettings: ObservableObject {
         microphoneUID = UserDefaults.standard.string(forKey: "microphoneUID")
         showPill = bool("showPill", true)
         playSounds = bool("playSounds", true)
+        keepMicReady = bool("keepMicReady", false)
         restoreClipboard = bool("restoreClipboard", true)
         personalWords = UserDefaults.standard.stringArray(forKey: "personalWords") ?? []
         if !Features.multilingual {

@@ -8,7 +8,17 @@ struct SettingsView: View {
     @State private var launchAtLogin = LoginItem.isEnabled
     @ObservedObject private var style = StyleStore.shared
     @ObservedObject private var personal = PersonalModel.shared
-    @State private var pillPosition = PillModel.shared.position
+    @State private var pillPlace = Self.currentPillPlace
+
+    static let pillPlaces: [(name: String, x: Double, y: Double)] = [
+        ("Bottom left", 0.12, 0), ("Bottom center", 0.5, 0), ("Bottom right", 0.88, 0),
+        ("Left side", 0.0, 0.5), ("Right side", 1.0, 0.5),
+    ]
+
+    static var currentPillPlace: String {
+        let x = PillModel.shared.position, y = PillModel.shared.positionY
+        return pillPlaces.first { abs($0.x - x) < 0.02 && abs($0.y - y) < 0.02 }?.name ?? "Custom (dragged)"
+    }
     @State private var microphones = AudioDevices.inputs()
     @State private var loginError: String?
     @State private var newWord = ""
@@ -62,6 +72,9 @@ struct SettingsView: View {
                     Text("Say “…buy bread, eggs, milk” for bullets, “first… second… third…” for steps, “new line” / “new paragraph” for breaks. Styled per app: Markdown in Notion, editors and browsers; • bullets in Mail, Notes and Slack; always one line in Terminal.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                Toggle("Keep the microphone ready", isOn: $settings.keepMicReady)
+                Text("Dictation starts the instant you press fn, including the moment just before it — so your first word is never cut. The mic stays on between dictations (macOS shows its orange dot); only the last 0.3 seconds are kept in memory, and nothing is transcribed or saved until you press fn.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Picker("Microphone", selection: $settings.microphoneUID) {
                     Text("System default").tag(String?.none)
                     ForEach(microphones) { Text($0.name).tag(Optional($0.id)) }
@@ -266,14 +279,14 @@ struct SettingsView: View {
             Section("General") {
                 Toggle("Show floating pill", isOn: $settings.showPill)
                 Picker("Pill position", selection: Binding(
-                    get: { pillPosition },
-                    set: { pillPosition = $0; PillModel.shared.position = $0 })) {
-                    Text("Left").tag(0.12)
-                    Text("Center").tag(0.5)
-                    Text("Right").tag(0.88)
-                    if ![0.12, 0.5, 0.88].contains(pillPosition) { Text("Custom (dragged)").tag(pillPosition) }
+                    get: { pillPlace },
+                    set: { pillPlace = $0
+                        if let p = Self.pillPlaces.first(where: { $0.name == pillPlace }) { PillModel.shared.place(x: p.x, y: p.y) }
+                    })) {
+                    ForEach(Self.pillPlaces, id: \.name) { Text($0.name).tag($0.name) }
+                    if !Self.pillPlaces.contains(where: { $0.name == pillPlace }) { Text("Custom (dragged)").tag(pillPlace) }
                 }
-                Text("Or drag the pill left or right along the bottom of the screen.")
+                Text("Or drag the pill anywhere along the bottom, or up the left or right side of the screen.")
                     .font(.caption).foregroundStyle(.secondary)
                 Toggle("Show occasional tips about features", isOn: $settings.showTips)
                 Toggle("Play sounds", isOn: $settings.playSounds)

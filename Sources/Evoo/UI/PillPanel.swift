@@ -67,8 +67,23 @@ final class PillModel: ObservableObject {
         }
     }
 
-    /// Set by the panel: move it horizontally by `dx` points (while dragging), and remember where it ended.
-    var dragBy: (CGFloat) -> Void = { _ in }
+    /// Height on the screen: 0 = bottom (default) … 1 = as high as the pill can go (the sides of the screen).
+    var positionY: Double {
+        get { UserDefaults.standard.object(forKey: "pillPositionY") as? Double ?? 0 }
+        set {
+            UserDefaults.standard.set(min(1, max(0, newValue)), forKey: "pillPositionY")
+            reposition()
+        }
+    }
+
+    /// Settings presets: bottom left/center/right, or halfway up the left or right side.
+    func place(x: Double, y: Double) {
+        UserDefaults.standard.set(y, forKey: "pillPositionY")
+        position = x
+    }
+
+    /// Set by the panel: move it by `dx`, `dy` points (while dragging), and remember where it ended.
+    var dragBy: (CGFloat, CGFloat) -> Void = { _, _ in }
     var dragEnded: () -> Void = {}
     var reposition: () -> Void = {}
 }
@@ -107,7 +122,7 @@ final class PillPanel: NSPanel {
         contentView = hosting
 
         model.showLanguageMenu = { [weak self] in self?.popUpLanguageMenu() }
-        model.dragBy = { [weak self] dx in self?.slide(by: dx) }
+        model.dragBy = { [weak self] dx, dy in self?.slide(by: dx, dy) }
         model.dragEnded = { [weak self] in self?.savePosition() }
         model.reposition = { [weak self] in self?.reposition() }
 
@@ -131,7 +146,13 @@ final class PillPanel: NSPanel {
     @objc func reposition() {
         guard let area = currentArea else { return }
         let x = area.minX + area.width * model.position - Self.size.width / 2
-        setFrameOrigin(NSPoint(x: clampX(x, in: area), y: area.minY + 6))
+        let y = area.minY + 6 + maxLift(in: area) * model.positionY
+        setFrameOrigin(NSPoint(x: clampX(x, in: area), y: y))
+    }
+
+    /// How far above the bottom the panel can go and stay on screen (the pill sits at its bottom edge).
+    private func maxLift(in area: NSRect) -> CGFloat {
+        max(0, area.height - Self.size.height - 6)
     }
 
     private var currentArea: NSRect? {
@@ -144,14 +165,17 @@ final class PillPanel: NSPanel {
         return min(max(x, area.minX - half + pill / 2 + margin), area.maxX - half - pill / 2 - margin)
     }
 
-    private func slide(by dx: CGFloat) {
+    private func slide(by dx: CGFloat, _ dy: CGFloat) {
         guard let area = currentArea else { return }
-        setFrameOrigin(NSPoint(x: clampX(frame.minX + dx, in: area), y: frame.minY))
+        let y = min(max(frame.minY + dy, area.minY + 6), area.minY + 6 + maxLift(in: area))
+        setFrameOrigin(NSPoint(x: clampX(frame.minX + dx, in: area), y: y))
     }
 
     private func savePosition() {
         guard let area = currentArea, area.width > 0 else { return }
         UserDefaults.standard.set(Double((frame.midX - area.minX) / area.width), forKey: "pillPosition")
+        let lift = maxLift(in: area)
+        UserDefaults.standard.set(lift > 0 ? Double((frame.minY - area.minY - 6) / lift) : 0, forKey: "pillPositionY")
     }
 
     private func updateHover() {
