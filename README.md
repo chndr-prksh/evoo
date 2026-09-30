@@ -36,6 +36,12 @@ one-line install below. Evoo updates itself after that.
   class: a one-screen study sheet (summary, key formulas, terms, practice questions), flashcards, and Q&A about
   the lecture. No audio is kept. Classes are grouped by subject; say "search note Bayes theorem" to find
   something. Export to PDF or Markdown.
+- **Instant start:** the pill appears the moment you press fn. Optional *Keep the microphone ready* (Settings) keeps
+  the mic on between dictations, holding only the last 0.3 s in memory, so recording starts instantly and includes
+  the moment before the press. Drag the pill anywhere along the bottom or up the left/right side (it stands upright
+  there), or pick a spot in Settings › Pill position.
+- **Long dictations stay fast:** while you speak, finished sentences are transcribed and, if they need it, polished
+  in the background — a 42 s filler-heavy dictation is ready ~0.3 s after release on an 8 GB M1.
 - **Learns how you write** (all on your Mac): Evoo keeps what it typed next to what you actually sent. Word swaps
   you keep making in an app ("going to" → "gonna") are applied instantly; once you have ~150 edits, it fine-tunes a
   small add-on for its AI overnight (MLX LoRA, while plugged in), tests it on edits it hasn't seen, and only uses it
