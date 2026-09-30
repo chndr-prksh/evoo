@@ -59,6 +59,18 @@ func loadRefiner() async throws {
 }
 
 switch command {
+case "download":
+    // Downloads AI models the benchmark needs (verified, same place the app uses): evoo-cli download qwen3_1_7b …
+    for name in inputs {
+        guard let m = RefinerModel(rawValue: name) else { print("unknown model \(name)"); exit(2) }
+        if ModelDownloader.isInstalled(m) { print("\(name): already installed"); continue }
+        print("\(name): downloading…")
+        try await ModelDownloader.download(m) { p in
+            if Int(p * 100) % 10 == 0 { print("  \(Int(p * 100))%") }
+        }
+        print("\(name): done")
+    }
+
 case "golden", "stress":
     let versions: [String: AsrModelVersion] = ["v2": .v2, "v3": .v3, "110m": .tdtCtc110m]
     let engine = ParakeetEngine(version: option("--parakeet").flatMap { versions[$0] } ?? .tdtCtc110m)

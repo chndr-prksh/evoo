@@ -36,6 +36,7 @@ jobs:
         run: |
           scripts/bundle.sh
           scripts/package.sh
+          scripts/package-bench.sh
 
       - name: Publish release
         env:
@@ -45,5 +46,5 @@ jobs:
           printf '%s\n\n%s\n' "${COMMIT_MESSAGE:-Manual build}" \
             "Install or update: see the README. Already installed? Evoo menu → Install Update." > notes.md
           cp build/Evoo.zip build/Evoo-update.zip && cp build/Evoo.zip.sha256 build/Evoo-update.zip.sha256
-          gh release create "build-${{ github.run_number }}" build/Evoo.zip build/Evoo.zip.sha256 build/Evoo-update.zip build/Evoo-update.zip.sha256 \
+          gh release create "build-${{ github.run_number }}" build/Evoo.zip build/Evoo.zip.sha256 build/Evoo-update.zip build/Evoo-update.zip.sha256 build/evoo-bench.tar.gz \
             --title "Evoo build ${{ github.run_number }}" --notes-file notes.md --latest
