@@ -36,6 +36,7 @@ struct PillView: View {
 
     /// Quick and bounce-free: the pill should feel like it's already there.
     private let spring = Animation.easeOut(duration: 0.13)
+    @State private var dragX: CGFloat?
 
     var body: some View {
         VStack(spacing: 8) {
@@ -70,6 +71,21 @@ struct PillView: View {
         }
         .frame(width: size.width, height: size.height)
         .shadow(color: .black.opacity(look == .idle ? 0 : 0.3), radius: 8, y: 3)
+        // Drag the pill left or right along the bottom of the screen. Screen coordinates, because the window
+        // moves under the pointer while dragging.
+        .highPriorityGesture(DragGesture(minimumDistance: 3)
+            .onChanged { _ in
+                let x = NSEvent.mouseLocation.x
+                if let last = dragX { model.dragBy(x - last) }
+                dragX = x
+            }
+            .onEnded { _ in
+                dragX = nil
+                model.dragEnded()
+            })
+        .onHover { inside in
+            if inside, look == .idle || look == .hover { NSCursor.openHand.set() } else { NSCursor.arrow.set() }
+        }
         .background(GeometryReader { proxy in
             Color.clear
                 .onAppear { model.pillRect = proxy.frame(in: .global) }

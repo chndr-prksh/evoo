@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var launchAtLogin = LoginItem.isEnabled
     @ObservedObject private var style = StyleStore.shared
     @ObservedObject private var personal = PersonalModel.shared
+    @State private var pillPosition = PillModel.shared.position
     @State private var microphones = AudioDevices.inputs()
     @State private var loginError: String?
     @State private var newWord = ""
@@ -264,6 +265,16 @@ struct SettingsView: View {
 
             Section("General") {
                 Toggle("Show floating pill", isOn: $settings.showPill)
+                Picker("Pill position", selection: Binding(
+                    get: { pillPosition },
+                    set: { pillPosition = $0; PillModel.shared.position = $0 })) {
+                    Text("Left").tag(0.12)
+                    Text("Center").tag(0.5)
+                    Text("Right").tag(0.88)
+                    if ![0.12, 0.5, 0.88].contains(pillPosition) { Text("Custom (dragged)").tag(pillPosition) }
+                }
+                Text("Or drag the pill left or right along the bottom of the screen.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Toggle("Show occasional tips about features", isOn: $settings.showTips)
                 Toggle("Play sounds", isOn: $settings.playSounds)
                 Toggle("Restore clipboard after pasting", isOn: $settings.restoreClipboard)

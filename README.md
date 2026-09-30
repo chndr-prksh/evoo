@@ -112,7 +112,7 @@ The LLM only runs when a correction cue can't be resolved by rules, or for Hingl
 | `Esc` while recording | Cancel |
 | `fn` + any other key | Ignored (so Fn+arrows / F-keys keep working) |
 
-The floating pill at the bottom of the screen shows state; hover it to switch language or start hands-free.
+The floating pill at the bottom of the screen shows state; hover it to start hands-free or open Class Notes. Drag it left or right to move it along the bottom of the screen (or Settings › Pill position).
 
 **One-time setup:** System Settings › Keyboard › "Press 🌐 key to" → **Do Nothing**. Then grant Evoo
 **Microphone**, **Input Monitoring** (to see `fn`) and **Accessibility** (to paste). Don't run Evoo and

@@ -56,6 +56,21 @@ final class PillModel: ObservableObject {
     var pillRect: CGRect = .zero
     var showLanguageMenu: () -> Void = {}
     var openClassNotes: () -> Void = {}
+
+    /// Where the pill sits along the bottom of the screen: 0 = left edge, 0.5 = center, 1 = right edge.
+    /// Drag the pill to move it; Settings has Left / Center / Right.
+    var position: Double {
+        get { UserDefaults.standard.object(forKey: "pillPosition") as? Double ?? 0.5 }
+        set {
+            UserDefaults.standard.set(min(1, max(0, newValue)), forKey: "pillPosition")
+            reposition()
+        }
+    }
+
+    /// Set by the panel: move it horizontally by `dx` points (while dragging), and remember where it ended.
+    var dragBy: (CGFloat) -> Void = { _ in }
+    var dragEnded: () -> Void = {}
+    var reposition: () -> Void = {}
 }
 
 /// A fixed-size, transparent, non-activating panel at the bottom-center of the screen.
@@ -92,6 +107,9 @@ final class PillPanel: NSPanel {
         contentView = hosting
 
         model.showLanguageMenu = { [weak self] in self?.popUpLanguageMenu() }
+        model.dragBy = { [weak self] dx in self?.slide(by: dx) }
+        model.dragEnded = { [weak self] in self?.savePosition() }
+        model.reposition = { [weak self] in self?.reposition() }
 
         // Track the pointer ourselves: while click-through, the panel gets no hover events.
         let track: (NSEvent) -> Void = { [weak self] _ in self?.updateHover() }
@@ -111,10 +129,29 @@ final class PillPanel: NSPanel {
     }
 
     @objc func reposition() {
-        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main
-        else { return }
-        let area = screen.visibleFrame
-        setFrameOrigin(NSPoint(x: area.midX - Self.size.width / 2, y: area.minY + 6))
+        guard let area = currentArea else { return }
+        let x = area.minX + area.width * model.position - Self.size.width / 2
+        setFrameOrigin(NSPoint(x: clampX(x, in: area), y: area.minY + 6))
+    }
+
+    private var currentArea: NSRect? {
+        (NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? screen ?? NSScreen.main)?.visibleFrame
+    }
+
+    /// Keeps the pill (not the whole transparent panel) on screen, with a little margin.
+    private func clampX(_ x: CGFloat, in area: NSRect) -> CGFloat {
+        let half = Self.size.width / 2, pill: CGFloat = 90, margin: CGFloat = 8
+        return min(max(x, area.minX - half + pill / 2 + margin), area.maxX - half - pill / 2 - margin)
+    }
+
+    private func slide(by dx: CGFloat) {
+        guard let area = currentArea else { return }
+        setFrameOrigin(NSPoint(x: clampX(frame.minX + dx, in: area), y: frame.minY))
+    }
+
+    private func savePosition() {
+        guard let area = currentArea, area.width > 0 else { return }
+        UserDefaults.standard.set(Double((frame.midX - area.minX) / area.width), forKey: "pillPosition")
     }
 
     private func updateHover() {
