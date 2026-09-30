@@ -170,7 +170,7 @@ final class DictationController: ObservableObject {
         }
     }
 
-    func downloadRefiner() {
+    func downloadRefiner(enableCleanup: Bool = true) {
         let model = settings.refinerModel
         guard refinerDownloadProgress == nil else { return }
         refinerDownloadProgress = 0
@@ -180,7 +180,7 @@ final class DictationController: ObservableObject {
                     Task { @MainActor in self.refinerDownloadProgress = p }
                 }
                 refinerDownloadProgress = nil
-                if SystemInfo.canRunSmartCleanup { settings.smartCleanup = true } // downloaded to use it
+                if enableCleanup, SystemInfo.canRunSmartCleanup { settings.smartCleanup = true } // downloaded to use it
                 prepareRefiner()
             } catch {
                 refinerDownloadProgress = nil

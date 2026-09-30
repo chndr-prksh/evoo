@@ -72,7 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Debug: open the welcome tour on its last (try-it) page.
         DistributedNotificationCenter.default().addObserver(forName: .init("app.evoo.debug.welcomeTry"), object: nil,
                                                             queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.openWelcome(page: 3) }
+            MainActor.assumeIsolated { self?.openWelcome(page: 4) }
         }
         #endif
         if !UserDefaults.standard.bool(forKey: "onboarded") {
@@ -185,7 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func openWelcome(page: Int = 0) {
         if welcomeWindow == nil || page != 0 {
             welcomeWindow?.close()
-            let view = WelcomeView(permissions: controller.permissions, finish: { [weak self] in
+            let view = WelcomeView(permissions: controller.permissions, controller: controller, settings: controller.settings, finish: { [weak self] in
                 UserDefaults.standard.set(true, forKey: "onboarded")
                 self?.welcomeWindow?.close()
                 self?.controller.startHotkeysIfPossible()

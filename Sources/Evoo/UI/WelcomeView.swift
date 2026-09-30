@@ -5,13 +5,19 @@ import SwiftUI
 /// Skippable at any point; reopen it from the menu (Welcome Tour…).
 struct WelcomeView: View {
     @ObservedObject var permissions: Permissions
+    @ObservedObject var controller: DictationController
+    @ObservedObject var settings: AppSettings
     let finish: () -> Void
 
     @State var page = 0
     @State private var tryText = ""
     @State private var drag: CGFloat = 0
     @FocusState private var tryFocused: Bool
-    private let pages = 4
+    @State private var wantAI = true
+    @State private var wantPolish = !SystemInfo.isLowMemory
+    @State private var wantLogin = true
+    @State private var applied = false
+    private let pages = 5
     private let refresh = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -30,6 +36,7 @@ struct WelcomeView: View {
                 case 0: trust
                 case 1: features
                 case 2: setup
+                case 3: configure
                 default: ready
                 }
             }
@@ -61,7 +68,8 @@ struct WelcomeView: View {
                     }
                 }
                 Spacer()
-                Button(page == pages - 1 ? "Start using Evoo" : "Next") {
+                Button(page == pages - 1 ? "Start using Evoo" : page == 3 && !applied ? "Set up & continue" : "Next") {
+                    if page == 3, !applied { applyRecommended() }
                     if page == pages - 1 { finish() } else { withAnimation { go(page + 1) } }
                 }
                 .keyboardShortcut(.defaultAction)
@@ -73,6 +81,7 @@ struct WelcomeView: View {
         .onKeyPress(.rightArrow) { withAnimation { go(page + 1) }; return .handled }
         .onKeyPress(.leftArrow) { withAnimation { go(page - 1) }; return .handled }
         .onReceive(refresh) { _ in if page == 2 { permissions.refresh() } }
+        .onChange(of: wantAI) { _, on in if !on { wantPolish = false } }
     }
 
     private func go(_ p: Int) { page = min(max(p, 0), pages - 1) }
@@ -146,6 +155,60 @@ struct WelcomeView: View {
         }
     }
 
+    /// One screen for everything that used to mean a trip to Settings: the AI model download and the switches.
+    private var configure: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Set up Evoo").font(.system(size: 26, weight: .bold))
+            Text("We've picked the best settings. Click Set up & continue — downloads run in the background, and you can change anything later in Settings.")
+                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            SetupRow(icon: "waveform", title: "Speech model",
+                     detail: controller.modelStatus ?? "Ready — dictation works now, even offline.",
+                     state: controller.modelStatus == nil ? .done : .working, isOn: .constant(true), locked: true)
+            SetupRow(icon: "sparkles", title: "Local AI model (Qwen3 4B · 2.5 GB, once)",
+                     detail: "Powers class notes, rewrite by voice (“make this more formal”), replies and translation.",
+                     state: aiState, isOn: $wantAI, locked: false, progress: controller.refinerDownloadProgress)
+            SetupRow(icon: "wand.and.stars", title: "Polish every dictation with AI",
+                     detail: SystemInfo.isLowMemory
+                         ? "Fixes grammar and messy phrasing. On this Mac (\(Int(SystemInfo.memoryGB.rounded())) GB) it adds a few seconds per dictation — you can turn it on later."
+                         : "Fixes grammar and messy phrasing after Evoo's rules. Adds about a second.",
+                     state: settings.smartCleanup ? .done : .off, isOn: $wantPolish, locked: false)
+                .disabled(!wantAI)
+            SetupRow(icon: "brain", title: "Learn names and words",
+                     detail: "From your screen and your corrections — kept only on this Mac.",
+                     state: applied ? .done : .off, isOn: .constant(true), locked: true)
+            SetupRow(icon: "power", title: "Start Evoo when you log in",
+                     detail: "So fn dictation is always there.",
+                     state: LoginItem.isEnabled ? .done : .off, isOn: $wantLogin, locked: false)
+        }
+    }
+
+    private var aiState: SetupRow.State {
+        if controller.refinerDownloadProgress != nil { return .working }
+        return controller.notesModelInstalled ? .done : .off
+    }
+
+    /// Turns on the recommended switches and starts the AI download (continues after the tour closes).
+    private func applyRecommended() {
+        applied = true
+        settings.formatText = true
+        settings.useScreenContext = true
+        settings.learnFromScreen = true
+        settings.learnFromEdits = true
+        settings.appCommands = true
+        settings.keepHistory = true
+        settings.showTips = true
+        settings.refinerModel = DictationController.notesModel
+        if wantLogin, !LoginItem.isEnabled { try? LoginItem.set(true) }
+        if wantAI {
+            if controller.notesModelInstalled {
+                settings.smartCleanup = wantPolish
+                controller.prepareRefiner()
+            } else {
+                controller.downloadRefiner(enableCleanup: wantPolish)
+            }
+        }
+    }
+
     private var ready: some View {
         VStack(spacing: 18) {
             Image(systemName: permissions.allGranted ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
@@ -165,7 +228,49 @@ struct WelcomeView: View {
                 .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.secondary.opacity(0.3)))
             Text("Try: “Let's meet tomorrow, no, day after tomorrow.”")
                 .font(.callout).foregroundStyle(.secondary)
+            if let p = controller.refinerDownloadProgress {
+                ProgressView(value: p) {
+                    Text("Downloading the local AI model… \(Int(p * 100))% — dictation already works; you can close this window.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
         }
+    }
+}
+
+private struct SetupRow: View {
+    enum State { case off, working, done }
+    let icon: String
+    let title: String
+    let detail: String
+    let state: State
+    @Binding var isOn: Bool
+    let locked: Bool
+    var progress: Double?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon).font(.system(size: 17)).foregroundStyle(.tint).frame(width: 26).padding(.top, 2)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.headline)
+                Text(detail).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                if let progress {
+                    ProgressView(value: progress).frame(maxWidth: 260)
+                    Text("Downloading \(Int(progress * 100))%").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 8)
+            switch state {
+            case .done: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).font(.system(size: 18))
+            case .working: ProgressView().controlSize(.small)
+            case .off:
+                if locked { Image(systemName: "checkmark.circle").foregroundStyle(.secondary) } else {
+                    Toggle("", isOn: $isOn).labelsHidden().toggleStyle(.switch)
+                }
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.06)))
     }
 }
 

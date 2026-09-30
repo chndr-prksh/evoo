@@ -12,8 +12,10 @@ enum PillSnapshots {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let permissions = Permissions()
         permissions.refresh()
-        for page in 0 ..< 4 {
-            let view = WelcomeView(permissions: permissions, finish: {}, page: page)
+        let controller = DictationController()
+        for page in 0 ..< 5 {
+            let view = WelcomeView(permissions: permissions, controller: controller, settings: controller.settings,
+                                   finish: {}, page: page)
                 .background(Color(nsColor: .windowBackgroundColor))
             let renderer = ImageRenderer(content: view)
             renderer.scale = 1.5
