@@ -108,7 +108,7 @@ struct PillView: View {
             HStack(spacing: 6) {
                 RoundButton(symbol: "xmark", help: "Cancel (esc)", action: controller.cancel)
                 RecordingDot()
-                Waveform(levels: controller.levels)
+                LiveWaveform(meter: controller.meter)
                     .frame(width: 80, height: 28)
                 RoundButton(symbol: "checkmark", help: "Finish", filled: true, action: controller.stop)
             }
@@ -281,6 +281,12 @@ private struct RoundButton: View {
         .onHover { hovering = $0 }
         .help(help)
     }
+}
+
+/// Watches only the level meter, so the rest of the pill isn't redrawn 30 times a second.
+private struct LiveWaveform: View {
+    @ObservedObject var meter: LevelMeterModel
+    var body: some View { Waveform(levels: meter.levels) }
 }
 
 private struct Waveform: View {

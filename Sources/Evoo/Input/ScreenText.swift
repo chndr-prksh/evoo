@@ -50,13 +50,14 @@ enum ScreenText {
     /// until an assistive app asks for it. This is the documented switch (the same one screen readers and
     /// Wispr Flow use); without it, WhatsApp Web's message box and names are invisible to Evoo.
     static func enableWebAccessibility(for pid: pid_t) {
-        guard !enabledPIDs.contains(pid) else { return }
-        enabledPIDs.insert(pid)
+        // Called from background reads at the same time (cursor, selection, names): the set needs a lock.
+        guard pidLock.withLock({ enabledPIDs.insert(pid).inserted }) else { return }
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
     }
 
     nonisolated(unsafe) private static var enabledPIDs: Set<pid_t> = []
+    private static let pidLock = NSLock()
 
     /// The text field that has keyboard focus, unless it's a password field.
     static func focusedField() -> AXUIElement? {

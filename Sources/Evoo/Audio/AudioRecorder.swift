@@ -16,6 +16,13 @@ final class AudioRecorder {
                                              channels: 1, interleaved: false)!
 
     private(set) var isRecording = false
+    /// Sample index until which input is replaced by silence (see `mute(for:)`).
+    private var muteUntil = 0
+
+    /// Records silence for the next `seconds` — while Evoo's own start sound plays.
+    func mute(for seconds: Double) {
+        lock.withLock { muteUntil = samples.count + Int(seconds * Self.sampleRate) }
+    }
 
     /// Creates the audio input ahead of time (without turning the microphone on), so the first fn press doesn't
     /// pay for it — that can take 0.3–4 s on a busy Mac.
@@ -38,7 +45,7 @@ final class AudioRecorder {
         guard inputFormat.sampleRate > 0 else { throw RecorderError.noInputDevice }
         converter = AVAudioConverter(from: inputFormat, to: outputFormat)
 
-        lock.withLock { samples.removeAll(keepingCapacity: true) }
+        lock.withLock { samples.removeAll(keepingCapacity: true) } // a mute set just before start still applies
         input.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
             self?.process(buffer)
         }
@@ -73,7 +80,10 @@ final class AudioRecorder {
         engine.stop()
         engine.prepare() // pre-allocate so the next fn press starts capturing sooner
         isRecording = false
-        return lock.withLock { samples }
+        return lock.withLock {
+            muteUntil = 0
+            return samples
+        }
     }
 
     private func process(_ buffer: AVAudioPCMBuffer) {
@@ -94,8 +104,15 @@ final class AudioRecorder {
             return buffer
         }
         guard error == nil, let channel = out.floatChannelData?[0] else { return }
-        let chunk = Array(UnsafeBufferPointer(start: channel, count: Int(out.frameLength)))
-        lock.withLock { samples.append(contentsOf: chunk) }
+        var chunk = Array(UnsafeBufferPointer(start: channel, count: Int(out.frameLength)))
+        lock.withLock {
+            // Evoo's own start sound is playing: keep silence instead, or the mic hears it ("Yeah").
+            let start = samples.count
+            if muteUntil > start {
+                for i in 0 ..< min(chunk.count, muteUntil - start) { chunk[i] = 0 }
+            }
+            samples.append(contentsOf: chunk)
+        }
 
         var sum: Float = 0
         for s in chunk { sum += s * s }

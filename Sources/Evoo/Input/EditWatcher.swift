@@ -49,21 +49,45 @@ final class EditWatcher {
             for _ in 0 ..< 120 { // 30 s at 4 Hz
                 try? await Task.sleep(for: .milliseconds(250))
                 guard !Task.isCancelled, let self else { return }
-                self.snapshot()
+                await self.snapshotInBackground()
             }
             self?.observe()
         }
     }
 
     private func snapshot() {
-        guard let p = pending, let value = ScreenText.value(of: p.field), !value.isEmpty, value.hasPrefix(p.prefix)
-        else { return }
+        guard let p = pending, let value = ScreenText.value(of: p.field) else { return }
+        keep(value, for: p)
+    }
+
+    /// Reads the text box off the main thread: in a big Chrome/Notion field one read can take 100+ ms, and
+    /// doing it 4× a second on the main thread made the pill and waveform stutter.
+    private func snapshotInBackground() async {
+        guard let p = pending else { return }
+        nonisolated(unsafe) let field = p.field
+        let value = await Task.detached(priority: .utility) { ScreenText.value(of: field) }.value
+        guard let value, pending?.inserted == p.inserted else { return }
+        keep(value, for: p)
+    }
+
+    private func keep(_ value: String, for p: Pending) {
+        guard !value.isEmpty, value.hasPrefix(p.prefix) else { return }
         pending?.latest = value
+    }
+
+    /// `observe()` for the start of a dictation: the last look happens off the main thread.
+    func observeInBackground() async {
+        await snapshotInBackground()
+        compareAndReport()
     }
 
     /// Compares the last snapshot with what Evoo typed, and reports what was learned.
     func observe() {
         snapshot() // one last look, in case the field still has the text
+        compareAndReport()
+    }
+
+    private func compareAndReport() {
         guard let p = pending else { return }
         pending = nil
         poller?.cancel()

@@ -19,8 +19,10 @@ final class DictationController: ObservableObject {
     }
 
     @Published private(set) var phase: Phase = .idle
-    /// Recent input levels (0…1) for the pill waveform, newest last.
-    @Published private(set) var levels: [Float] = Array(repeating: 0, count: 18)
+    /// Recent input levels for the pill waveform — its own object, so a level update redraws only the waveform,
+    /// not everything that watches the controller.
+    let meter = LevelMeterModel()
+    var levels: [Float] { meter.levels }
     @Published private(set) var lastText: String?
     @Published private(set) var lastTimings: String?
     /// Human-readable model status, e.g. "Downloading Whisper… 42%".
@@ -39,6 +41,13 @@ final class DictationController: ObservableObject {
     private let micQueue = DispatchQueue(label: "app.evoo.mic", qos: .userInteractive)
     private var startSound: Task<Void, Never>?
     private var refinerLoading = false
+    private var charBeforeCursor: Task<String?, Never>?
+    private var selectionTask: Task<String?, Never>?
+    private var mainStall: Duration = .zero
+    #if DEBUG
+    /// Debug toggle: record and report, never transcribe or paste.
+    var debugDryRun = false
+    #endif
     /// A quick fn tap: still recording for a moment (in case a second tap makes it hands-free), but the pill
     /// already looks idle — a tap shouldn't leave anything on screen.
     @Published private(set) var provisional = false
@@ -239,7 +248,7 @@ final class DictationController: ObservableObject {
         let wasTap = provisional
         provisional = tap && phase == .recording
         // Second tap → hands-free: now it's real, so give the start sound.
-        if wasTap, !provisional, phase == .recording { play("Tink") }
+        if wasTap, !provisional, phase == .recording { playStartSound() }
     }
 
     private func apply(_ action: HotkeyAction?) {
@@ -292,7 +301,7 @@ final class DictationController: ObservableObject {
         }
         // The pill opens on the very next frame; the mic starts in the background (40–200 ms) and the audio
         // from that moment on is kept. Nothing on the main thread waits for it.
-        levels = levels.map { _ in 0 }
+        meter.reset()
         phase = .recording
         provisional = false
         mark("pillShown")
@@ -308,16 +317,21 @@ final class DictationController: ObservableObject {
             }
         }
         // Everything else waits until the pill is on screen.
-        DispatchQueue.main.async { [self] in
-            editWatcher.observe() // did the user edit the last dictation? (learning)
-            selectionAtStart = smartCleanupReady ? ScreenText.selectedText() : nil
+        // Whether to add a space before the text: read now, in the background, never after release.
+        charBeforeCursor = Task.detached(priority: .userInitiated) { ScreenText.characterBeforeCursor().map(String.init) }
+        // Reading other apps' text boxes can be slow (Chrome, big documents): never on the main thread, which
+        // draws the pill.
+        Task { await editWatcher.observeInBackground() } // did the user edit the last dictation? (learning)
+        selectionAtStart = nil
+        if smartCleanupReady {
+            selectionTask = Task.detached(priority: .userInitiated) { ScreenText.selectedText() }
         }
         // The start sound only for a real hold — a quick tap stays silent.
         startSound?.cancel()
         startSound = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(180))
             guard !Task.isCancelled, let self, self.phase == .recording, !self.provisional else { return }
-            self.play("Tink")
+            self.playStartSound()
         }
         // Read names on screen (chat header, recipients…) in the background while the user speaks.
         screenNames = settings.useScreenContext && permissions.granted[.accessibility] == true
@@ -343,9 +357,14 @@ final class DictationController: ObservableObject {
             let post = self.pipeline.postProcess(raw, language: self.settings.language, style: startStyle)
             polisher.prefetch(post.text, partialStart: partial)
         }
+        mainStall = .zero
         speculationLoop = Task { [weak self] in
             while !Task.isCancelled {
+                let asleep = ContinuousClock.now
                 try? await Task.sleep(for: .milliseconds(100))
+                // How late the main thread woke us: anything big here is a visible stutter in the pill.
+                let late = ContinuousClock.now - asleep - .milliseconds(100)
+                if let self, late > self.mainStall { self.mainStall = late }
                 guard let self, self.phase == .recording,
                       let engine = self.engines.ready(self.settings.resolvedEngine) else { continue }
                 let from = self.streaming.committedSamples
@@ -364,7 +383,14 @@ final class DictationController: ObservableObject {
         endRecordingSession()
         let samples = micQueue.sync { recorder.stop() }
         let seconds = Double(samples.count) / AudioRecorder.sampleRate
-        log.notice("recorded \(String(format: "%.2f", seconds), privacy: .public) s of audio")
+        log.notice("recorded \(String(format: "%.2f", seconds), privacy: .public) s of audio · longest main-thread stall \(self.mainStall.ms) ms")
+        #if DEBUG
+        if debugDryRun {
+            log.notice("dry run: \(AudioStats.isLikelySilent(samples) ? "silent" : "NOT silent", privacy: .public)")
+            phase = .idle
+            return
+        }
+        #endif
         guard seconds >= Self.minRecordingSeconds, !AudioStats.isLikelySilent(samples) else {
             phase = .idle
             return
@@ -421,6 +447,7 @@ final class DictationController: ObservableObject {
             let asrMs = (ContinuousClock.now - asrStart).ms
             if await runMacCommand(raw) { return }
             if runAppCommand(raw) { return }
+            if selectionAtStart == nil { selectionAtStart = await Self.value(of: selectionTask, within: 100) ?? nil }
             if try await rewriteSelectionIfAsked(raw, selection: selectionAtStart, session: session) { return }
             if try await composeIfAsked(raw, session: session) { return }
             // Smart cleanup (16 GB+): the local LLM polishes the dictation after the rules.
@@ -428,7 +455,9 @@ final class DictationController: ObservableObject {
             let policy: DictationPipeline.LLMPolicy = smartCleanupReady ? .polish
                 : Features.multilingual && settings.refinementEnabled && refiner.isLoaded ? .whenNeeded : .off
             if policy != .off { phase = .refining }
-            let names = await screenNames?.value ?? []
+            let t0 = ContinuousClock.now
+            let names = await Self.value(of: screenNames, within: 50) ?? [] // read while you spoke; never wait long
+            let namesMs = (ContinuousClock.now - t0).ms
             let out = await pipeline.finish(raw: raw, asrMs: asrMs, language: language, style: style,
                                             contextTerms: names, tone: Tone.forApp(targetApp), llm: policy,
                                             polisher: polisher)
@@ -451,19 +480,27 @@ final class DictationController: ObservableObject {
                     personal.contains(word) || !DictationPipeline.isKnownWord(word.lowercased())
                 }
                 : out.text
-            let spaced = Self.spaced(text)
+            let before = await Self.value(of: charBeforeCursor, within: 30) ?? nil
+            let spaced = Self.spaced(text, after: before?.first)
+            let t1 = ContinuousClock.now
             await injector.insert(spaced, restoreClipboard: settings.restoreClipboard)
-            if settings.learnFromEdits, out.action != .pressEnter { editWatcher.didInsert(text, app: targetApp) }
             if out.action == .pressEnter { await injector.pressReturn() }
-            lastText = text
-            if settings.keepHistory { DictationHistory.shared.add(text, app: targetApp) }
-            noteFeatures(raw: raw, text: text)
-            offerTip()
+            let pasteMs = (ContinuousClock.now - t1).ms
             let totalMs = (ContinuousClock.now - releasedAt).ms
+            phase = .idle // the text is in: the pill is done
+            lastText = text
             lastTimings = String(format: "%.1fs audio · ", seconds) + out.summary
                 + " · fn up → pasted \(totalMs) ms" + (reused ? " (ready early)" : "")
+                + " [names wait \(namesMs) ms, paste \(pasteMs) ms]"
             log.info("\(self.lastTimings ?? "", privacy: .public)")
-            phase = .idle
+            // Bookkeeping after the pill is idle (reading the text box back can take a while in big documents).
+            let app = targetApp
+            DispatchQueue.main.async { [self] in
+                if settings.learnFromEdits, out.action != .pressEnter { editWatcher.didInsert(text, app: app) }
+                if settings.keepHistory { DictationHistory.shared.add(text, app: app) }
+                noteFeatures(raw: raw, text: text)
+                offerTip()
+            }
         } catch {
             guard session == self.session else { return }
             show(error.localizedDescription)
@@ -724,8 +761,20 @@ final class DictationController: ObservableObject {
     }
 
     /// Adds a space when dictating right after existing text ("…5 PM." + "We need…"), like typing would.
-    static func spaced(_ text: String) -> String {
-        guard let before = ScreenText.characterBeforeCursor(), !before.isWhitespace,
+    static func spaced(_ text: String) -> String { spaced(text, after: ScreenText.characterBeforeCursor()) }
+
+    /// Waits for a background result, but no longer than `ms` (nil if it isn't ready).
+    static func value<T: Sendable>(of task: Task<T, Never>?, within ms: Int) async -> T? {
+        guard let task else { return nil }
+        return await withCheckedContinuation { (cont: CheckedContinuation<T?, Never>) in
+            let once = Once()
+            Task { let v = await task.value; if once.claim() { cont.resume(returning: v) } }
+            Task { try? await Task.sleep(for: .milliseconds(ms)); if once.claim() { cont.resume(returning: nil) } }
+        }
+    }
+
+    static func spaced(_ text: String, after before: Character?) -> String {
+        guard let before, !before.isWhitespace,
               let first = text.first, !",.;:!?)".contains(first), !text.hasPrefix("\n") else { return text }
         return " " + text
     }
@@ -784,7 +833,7 @@ final class DictationController: ObservableObject {
     /// Lets `--snapshot-pill` render every state without a microphone.
     func debugSet(phase: Phase, levels: [Float]? = nil) {
         self.phase = phase
-        if let levels { self.levels = levels }
+        if let levels { meter.levels = levels }
     }
     #endif
 
@@ -805,14 +854,20 @@ final class DictationController: ObservableObject {
 
     private func push(level: Float) {
         guard phase == .recording else { return }
-        levels.removeFirst()
-        levels.append(level)
+        meter.push(level)
     }
 
     /// Loaded once — loading a sound on the fn press delays the pill.
     private lazy var sounds: [String: NSSound] = Dictionary(uniqueKeysWithValues: ["Tink", "Pop"].compactMap { name in
         NSSound(named: NSSound.Name(name)).map { (name, $0) }
     })
+
+    /// The start chime, with the mic muted while it plays (plus a little for the speaker-to-mic delay).
+    private func playStartSound() {
+        guard settings.playSounds, let sound = sounds["Tink"] else { return }
+        recorder.mute(for: sound.duration + 0.15)
+        play("Tink")
+    }
 
     private func play(_ name: String) {
         guard settings.playSounds, let sound = sounds[name] else { return }
@@ -825,6 +880,35 @@ final class DictationController: ObservableObject {
         recorder.warmUp()
         _ = sounds
     }
+}
+
+/// The waveform's levels: at most ~30 updates a second (the mic delivers ~47), each redrawing only the waveform.
+@MainActor
+final class LevelMeterModel: ObservableObject {
+    @Published var levels: [Float] = Array(repeating: 0, count: 18)
+    private var lastPush = ContinuousClock.now
+    private var peak: Float = 0
+
+    func push(_ level: Float) {
+        peak = max(peak, level)
+        let now = ContinuousClock.now
+        guard now - lastPush >= .milliseconds(33) else { return }
+        lastPush = now
+        var next = levels
+        next.removeFirst()
+        next.append(peak)
+        levels = next
+        peak = 0
+    }
+
+    func reset() { levels = levels.map { _ in 0 } }
+}
+
+/// Lets exactly one of two racing callbacks resume a continuation.
+private final class Once: @unchecked Sendable {
+    private let lock = NSLock()
+    private var done = false
+    func claim() -> Bool { lock.withLock { defer { done = true }; return !done } }
 }
 
 private extension Duration {

@@ -67,7 +67,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Debug: start/stop recording as if fn were pressed (for timing the start).
         DistributedNotificationCenter.default().addObserver(forName: .init("app.evoo.debug.toggle"), object: nil,
                                                             queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.controller.toggleFromUI() }
+            MainActor.assumeIsolated {
+                self?.controller.debugDryRun = true
+                self?.controller.toggleFromUI()
+            }
         }
         // Debug: open the welcome tour on its last (try-it) page.
         DistributedNotificationCenter.default().addObserver(forName: .init("app.evoo.debug.welcomeTry"), object: nil,
