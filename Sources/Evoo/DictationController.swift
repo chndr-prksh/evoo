@@ -245,7 +245,11 @@ final class DictationController: ObservableObject {
 
     func start() {
         guard phase == .idle || isMessage else { return }
-        editWatcher.observe()
+        let t0 = ContinuousClock.now
+        var marks: [String] = []
+        func mark(_ what: String) { marks.append("\(what) \((ContinuousClock.now - t0).ms)ms") }
+        defer { log.notice("fn-down timing: \(marks.joined(separator: ", "), privacy: .public)") }
+        mark("begin")
         // Don't record if the model for this language isn't ready — say so instead of hanging.
         guard engines.ready(settings.resolvedEngine) != nil else {
             gesture.reset()
@@ -254,20 +258,27 @@ final class DictationController: ObservableObject {
             return show("\(what) model is still preparing (first time only) — try again shortly")
         }
         permissions.refresh()
+        mark("permissions")
         guard permissions.granted[.microphone] == true else {
             permissions.request(.microphone)
             return show("Allow microphone access for Evoo")
         }
         do {
             try recorder.start(deviceUID: settings.microphoneUID)
+            mark("micStart")
         } catch {
             gesture.reset()
             return show(error.localizedDescription)
         }
         phase = .recording
         levels = levels.map { _ in 0 }
-        play("Tink")
-        selectionAtStart = smartCleanupReady ? ScreenText.selectedText() : nil
+        mark("pillShown")
+        // Everything else waits until the mic is running and the pill is on screen.
+        DispatchQueue.main.async { [self] in
+            play("Tink")
+            editWatcher.observe() // did the user edit the last dictation? (learning)
+            selectionAtStart = smartCleanupReady ? ScreenText.selectedText() : nil
+        }
         // Read names on screen (chat header, recipients…) in the background while the user speaks.
         screenNames = settings.useScreenContext && permissions.granted[.accessibility] == true
             ? Task.detached(priority: .userInitiated) {
@@ -737,9 +748,21 @@ final class DictationController: ObservableObject {
         levels.append(level)
     }
 
+    /// Loaded once — loading a sound on the fn press delays the pill.
+    private lazy var sounds: [String: NSSound] = Dictionary(uniqueKeysWithValues: ["Tink", "Pop"].compactMap { name in
+        NSSound(named: NSSound.Name(name)).map { (name, $0) }
+    })
+
     private func play(_ name: String) {
-        guard settings.playSounds else { return }
-        NSSound(named: NSSound.Name(name))?.play()
+        guard settings.playSounds, let sound = sounds[name] else { return }
+        sound.stop()
+        sound.play()
+    }
+
+    /// Makes the first fn press as quick as the rest.
+    func warmUp() {
+        recorder.warmUp()
+        _ = sounds
     }
 }
 

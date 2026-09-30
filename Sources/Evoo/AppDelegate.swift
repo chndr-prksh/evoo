@@ -16,6 +16,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var cancellables: Set<AnyCancellable> = []
 
     func applicationDidFinishLaunching(_: Notification) {
+        // Get the microphone path ready now so the first fn press is instant (the mic itself stays off).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [controller] in controller.warmUp() }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil,
+                                                          queue: .main) { [controller] _ in
+            MainActor.assumeIsolated { controller.warmUp() }
+        }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Evoo")
         let menu = NSMenu()
@@ -57,6 +63,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                                             queue: .main) { [weak self] note in
             guard let text = note.object as? String else { return }
             MainActor.assumeIsolated { self?.controller.debugDictate(text) }
+        }
+        // Debug: start/stop recording as if fn were pressed (for timing the start).
+        DistributedNotificationCenter.default().addObserver(forName: .init("app.evoo.debug.toggle"), object: nil,
+                                                            queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.controller.toggleFromUI() }
         }
         // Debug: open the welcome tour on its last (try-it) page.
         DistributedNotificationCenter.default().addObserver(forName: .init("app.evoo.debug.welcomeTry"), object: nil,

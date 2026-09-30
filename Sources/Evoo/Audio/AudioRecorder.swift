@@ -17,6 +17,14 @@ final class AudioRecorder {
 
     private(set) var isRecording = false
 
+    /// Creates the audio input ahead of time (without turning the microphone on), so the first fn press doesn't
+    /// pay for it — that can take 0.3–4 s on a busy Mac.
+    func warmUp() {
+        guard !isRecording else { return }
+        let input = engine.inputNode
+        _ = input.outputFormat(forBus: 0)
+    }
+
     func start(deviceUID: String?) throws {
         guard !isRecording else { return }
         let input = engine.inputNode
