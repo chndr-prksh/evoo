@@ -4,6 +4,10 @@
 Hold `fn`, speak, release — clean text appears at your cursor in any app.
 
 <p>
+  <a href="https://chndr-prksh.github.io/evoo/"><b>🌐 Website: chndr-prksh.github.io/evoo</b></a>
+</p>
+
+<p>
   <a href="https://github.com/chndr-prksh/evoo/releases/latest/download/Evoo.zip">
     <img alt="Download for Mac" src="https://img.shields.io/badge/Download%20for%20Mac-free-2ea44f?style=for-the-badge&logo=apple&logoColor=white" height="44">
   </a>
