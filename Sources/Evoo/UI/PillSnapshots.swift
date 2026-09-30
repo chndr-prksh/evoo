@@ -40,10 +40,13 @@ enum PillSnapshots {
             ("6-tip", .idle, false),
             ("7-tip-long", .idle, false),
             ("5-message", .message("Hindi/Hinglish model is still preparing (first time only) — try again shortly"), false),
+            ("8-side-idle", .idle, false), ("8-side-hover", .idle, true), ("8-side-recording", .recording, false),
+            ("8-side-working", .transcribing, false),
         ]
         for (name, phase, hovering) in states {
             controller.debugSet(phase: phase, levels: wave)
             model.hovering = hovering
+            model.vertical = name.hasPrefix("8-side")
             switch name {
             case "6-tip": model.present(Tips.all[1])
             case "7-tip-long": model.present(Tips.all[4]) // longest phrase

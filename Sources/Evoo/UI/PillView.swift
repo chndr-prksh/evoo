@@ -24,14 +24,23 @@ struct PillView: View {
         }
     }
 
+    /// On the left or right side of the screen the pill stands upright (messages stay horizontal to read).
+    private var vertical: Bool { model.vertical && !isMessage }
+    private var isMessage: Bool { if case .message = look { true } else { false } }
+
     private var size: CGSize {
-        switch look {
+        let s: CGSize = switch look {
         case .idle: CGSize(width: 40, height: 8)
         case .hover: CGSize(width: Features.multilingual ? 154 : 90, height: 34)
         case .recording: CGSize(width: 176, height: 38)
         case .working: CGSize(width: 64, height: 34)
         case .message: CGSize(width: 320, height: 46)
         }
+        return vertical ? CGSize(width: s.height, height: s.width) : s
+    }
+
+    private var stack: AnyLayout {
+        vertical ? AnyLayout(VStackLayout(spacing: 4)) : AnyLayout(HStackLayout(spacing: 4))
     }
 
     /// Quick and bounce-free: the pill should feel like it's already there.
@@ -48,7 +57,7 @@ struct PillView: View {
                             .onChange(of: proxy.frame(in: .global)) { _, rect in model.tipRect = rect }
                     })
                     .transition(.opacity.combined(with: .offset(y: 6)))
-            } else if look == .hover {
+            } else if look == .hover, !model.vertical { // on a screen edge the wide hint would be cut off
                 Hint(mode: settings.activationMode)
                     .transition(.opacity.combined(with: .offset(y: 4)))
             }
@@ -57,6 +66,7 @@ struct PillView: View {
         .padding(.bottom, 4)
         .animation(spring, value: look)
         .animation(spring, value: model.tip)
+        .animation(spring, value: model.vertical)
     }
 
     private var capsule: some View {
@@ -98,7 +108,7 @@ struct PillView: View {
         case .idle:
             EmptyView()
         case .hover:
-            HStack(spacing: 2) {
+            stack {
                 if Features.multilingual {
                     RoundButton(symbol: "globe", help: "Language: \(settings.language.title)",
                                 action: model.showLanguageMenu)
@@ -108,7 +118,7 @@ struct PillView: View {
                     Image(systemName: "mic.fill")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.black)
-                        .frame(width: 40, height: 26)
+                        .frame(width: vertical ? 26 : 40, height: vertical ? 40 : 26)
                         .background(Capsule().fill(.white))
                 }
                 .buttonStyle(.plain)
@@ -121,15 +131,18 @@ struct PillView: View {
                 }
             }
         case .recording:
-            HStack(spacing: 6) {
+            stack {
                 RoundButton(symbol: "xmark", help: "Cancel (esc)", action: controller.cancel)
                 RecordingDot()
                 LiveWaveform(meter: controller.meter)
                     .frame(width: 80, height: 28)
+                    .rotationEffect(.degrees(vertical ? 90 : 0))
+                    .frame(width: vertical ? 28 : 80, height: vertical ? 80 : 28)
                 RoundButton(symbol: "checkmark", help: "Finish", filled: true, action: controller.stop)
             }
         case .working:
             WorkingDots()
+                .rotationEffect(.degrees(vertical ? 90 : 0))
         case let .message(text):
             Text(text)
                 .font(.system(size: 11, weight: .medium))

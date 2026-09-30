@@ -67,6 +67,9 @@ final class PillModel: ObservableObject {
         }
     }
 
+    /// Standing upright: on the left or right side of the screen, above the bottom edge.
+    @Published var vertical = false
+
     /// Height on the screen: 0 = bottom (default) … 1 = as high as the pill can go (the sides of the screen).
     var positionY: Double {
         get { UserDefaults.standard.object(forKey: "pillPositionY") as? Double ?? 0 }
@@ -148,6 +151,15 @@ final class PillPanel: NSPanel {
         let x = area.minX + area.width * model.position - Self.size.width / 2
         let y = area.minY + 6 + maxLift(in: area) * model.positionY
         setFrameOrigin(NSPoint(x: clampX(x, in: area), y: y))
+        updateOrientation(in: area)
+    }
+
+    /// Upright when it's on a side: near the left or right edge and lifted off the bottom.
+    private func updateOrientation(in area: NSRect) {
+        let xShare = (frame.midX - area.minX) / max(1, area.width)
+        let lifted = frame.minY - area.minY - 6 > 40
+        let onSide = lifted && (xShare < 0.15 || xShare > 0.85)
+        if model.vertical != onSide { model.vertical = onSide }
     }
 
     /// How far above the bottom the panel can go and stay on screen (the pill sits at its bottom edge).
@@ -161,7 +173,7 @@ final class PillPanel: NSPanel {
 
     /// Keeps the pill (not the whole transparent panel) on screen, with a little margin.
     private func clampX(_ x: CGFloat, in area: NSRect) -> CGFloat {
-        let half = Self.size.width / 2, pill: CGFloat = 90, margin: CGFloat = 8
+        let half = Self.size.width / 2, pill: CGFloat = model.vertical ? 38 : 90, margin: CGFloat = 8
         return min(max(x, area.minX - half + pill / 2 + margin), area.maxX - half - pill / 2 - margin)
     }
 
@@ -169,6 +181,7 @@ final class PillPanel: NSPanel {
         guard let area = currentArea else { return }
         let y = min(max(frame.minY + dy, area.minY + 6), area.minY + 6 + maxLift(in: area))
         setFrameOrigin(NSPoint(x: clampX(frame.minX + dx, in: area), y: y))
+        updateOrientation(in: area)
     }
 
     private func savePosition() {
