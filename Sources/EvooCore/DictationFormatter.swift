@@ -239,14 +239,24 @@ public enum DictationFormatter {
         return words.count - typical
     }
 
+    /// Cached, with one shared tagger: creating an NLTagger per word made long dictations take ~200 ms per pass.
     static func isVerb(_ word: String) -> Bool {
-        let tagger = NLTagger(tagSchemes: [.lexicalClass])
-        // Tag as an imperative so "book"/"call" read as verbs, not nouns.
-        let text = word.lowercased() + " it"
-        tagger.string = text
-        let tag = tagger.tag(at: text.startIndex, unit: .word, scheme: .lexicalClass).0
-        return tag == .verb
+        let key = word.lowercased()
+        return verbLock.withLock {
+            if let known = verbCache[key] { return known }
+            // Tag as an imperative so "book"/"call" read as verbs, not nouns.
+            let text = key + " it"
+            verbTagger.string = text
+            let isVerb = verbTagger.tag(at: text.startIndex, unit: .word, scheme: .lexicalClass).0 == .verb
+            if verbCache.count > 5_000 { verbCache.removeAll() }
+            verbCache[key] = isVerb
+            return isVerb
+        }
     }
+
+    private static let verbLock = NSLock()
+    nonisolated(unsafe) private static var verbCache: [String: Bool] = [:]
+    nonisolated(unsafe) private static let verbTagger = NLTagger(tagSchemes: [.lexicalClass])
 
     // MARK: - Numbered lists
 

@@ -55,6 +55,11 @@ extension TextCleaner {
 public enum AudioStats {
     /// Root-mean-square level of the clip.
     public static func rms(_ samples: [Float]) -> Float {
+        rms(samples[...])
+    }
+
+    /// Without copying: the checks below run over whole recordings (minutes of audio) in 20 ms frames.
+    public static func rms(_ samples: ArraySlice<Float>) -> Float {
         guard !samples.isEmpty else { return 0 }
         var sum: Float = 0
         for s in samples { sum += s * s }
@@ -69,15 +74,15 @@ public enum AudioStats {
         var voiced = 0
         var i = 0
         while i + frame <= samples.count {
-            if rms(Array(samples[i ..< i + frame])) >= threshold { voiced += 1 }
+            if rms(samples[i ..< i + frame]) >= threshold { voiced += 1 }
             i += frame
         }
         return Double(voiced) * 0.02
     }
 
     /// Nothing worth transcribing: quiet, or only a click (the model would turn a key click into "Yeah.").
-    public static func hasNoSpeech(_ samples: [Float], sampleRate: Int = 16_000) -> Bool {
-        isLikelySilent(samples, sampleRate: sampleRate) || voicedSeconds(samples, sampleRate: sampleRate) < 0.15
+    public static func hasNoSpeech(_ samples: [Float], sampleRate: Int = 16_000, voiced: Double? = nil) -> Bool {
+        (voiced ?? voicedSeconds(samples, sampleRate: sampleRate)) < 0.15 || isLikelySilent(samples, sampleRate: sampleRate)
     }
 
     public static func isLikelySilent(_ samples: [Float], sampleRate: Int = 16_000, threshold: Float = 0.006) -> Bool {
@@ -86,7 +91,7 @@ public enum AudioStats {
         var peak: Float = 0
         var i = 0
         while i + window <= samples.count {
-            peak = max(peak, rms(Array(samples[i ..< i + window])))
+            peak = max(peak, rms(samples[i ..< i + window]))
             i += window
         }
         return peak < threshold
@@ -104,7 +109,7 @@ public enum AudioStats {
         var last = 0
         var i = 0
         while i + frame <= samples.count {
-            if rms(Array(samples[i ..< i + frame])) >= threshold {
+            if rms(samples[i ..< i + frame]) >= threshold {
                 if first == nil { first = i }
                 last = i + frame
             }
@@ -125,7 +130,7 @@ public enum AudioStats {
         let frame = sampleRate / 50
         var i = samples.count - n
         while i + frame <= samples.count {
-            if rms(Array(samples[i ..< i + frame])) >= threshold { return false }
+            if rms(samples[i ..< i + frame]) >= threshold { return false }
             i += frame
         }
         return true

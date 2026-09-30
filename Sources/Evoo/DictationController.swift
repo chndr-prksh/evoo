@@ -47,6 +47,8 @@ final class DictationController: ObservableObject {
     #if DEBUG
     /// Debug toggle: record and report, never transcribe or paste.
     var debugDryRun = false
+    /// Debug: run everything, but log the text instead of pasting it.
+    var debugNoPaste = false
     #endif
     /// A quick fn tap: still recording for a moment (in case a second tap makes it hands-free), but the pill
     /// already looks idle — a tap shouldn't leave anything on screen.
@@ -407,7 +409,12 @@ final class DictationController: ObservableObject {
             if DictationPipeline.needsPolish(post.text) { polisher.prefetchAll(post.text) }
         }
         streaming.onCommit = { [weak self] raw, partial in
-            guard let self, let polisher = self.polisher else { return }
+            // Up to 45 s the final text comes from the whole-recording transcript, so that is what gets
+            // pre-polished (onWholeResult above); pieces only beyond that. Mixing the two meant nothing matched
+            // at release (measured: 6.9 s of polish left for a 41 s dictation).
+            guard let self, let polisher = self.polisher,
+                  self.recorder.sampleCount > Int(StreamingDictation.wholeClipLimit * AudioRecorder.sampleRate)
+            else { return }
             let post = self.pipeline.postProcess(raw, language: self.settings.language, style: startStyle)
             polisher.prefetch(post.text, partialStart: partial)
         }
@@ -438,10 +445,14 @@ final class DictationController: ObservableObject {
         guard phase == .recording else { return }
         let releasedAt = ContinuousClock.now
         endRecordingSession()
+        let tEnd = (ContinuousClock.now - releasedAt).ms
         let samples = micQueue.sync { recorder.detach() }
+        let tDetach = (ContinuousClock.now - releasedAt).ms
         micQueue.async { [recorder] in recorder.shutDown() } // the slow part, off the main thread
         let seconds = Double(samples.count) / AudioRecorder.sampleRate
-        log.notice("recorded \(String(format: "%.2f", seconds), privacy: .public) s of audio, \(String(format: "%.2f", AudioStats.voicedSeconds(samples)), privacy: .public) s voiced · longest main-thread stall \(self.mainStall.ms) ms")
+        let voiced = AudioStats.voicedSeconds(samples)
+        let tVoiced = (ContinuousClock.now - releasedAt).ms
+        log.notice("recorded \(String(format: "%.2f", seconds), privacy: .public) s of audio, \(String(format: "%.2f", voiced), privacy: .public) s voiced · longest main-thread stall \(self.mainStall.ms) ms · stop steps: end \(tEnd), detach \(tDetach), voiced \(tVoiced) ms")
         #if DEBUG
         if debugDryRun {
             log.notice("dry run: \(AudioStats.hasNoSpeech(samples) ? "silent" : "NOT silent", privacy: .public)")
@@ -449,19 +460,30 @@ final class DictationController: ObservableObject {
             return
         }
         #endif
-        guard seconds >= Self.minRecordingSeconds, !AudioStats.hasNoSpeech(samples) else {
+        // Nothing more to pre-polish: whatever runs now would only compete with the final result.
+        streaming.onWholeResult = nil
+        streaming.onCommit = nil
+        guard seconds >= Self.minRecordingSeconds, !AudioStats.hasNoSpeech(samples, voiced: voiced) else {
             phase = .idle
             return
         }
+        let tCheck = (ContinuousClock.now - releasedAt).ms
         play("Pop")
+        let tSound = (ContinuousClock.now - releasedAt).ms
         phase = .transcribing
+        let tPhase = (ContinuousClock.now - releasedAt).ms
         // Style the text for the app that will receive it: Markdown, bullets, or a single line for terminals.
         let targetApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         self.targetApp = targetApp
         let style: OutputStyle? = settings.formatText ? OutputStyle.forApp(targetApp) : nil
         session += 1
         let current = session
+        let stopMs = (ContinuousClock.now - releasedAt).ms
         processing = Task {
+            let queued = (ContinuousClock.now - releasedAt).ms
+            if queued > 50 {
+                log.notice("release: stop() took \(stopMs) ms (checks \(tCheck), sound \(tSound), pill \(tPhase)), processing started after \(queued) ms")
+            }
             await process(samples, seconds: seconds, style: style, session: current, releasedAt: releasedAt)
         }
         // Safety net: never stay stuck in "transcribing".
@@ -523,7 +545,6 @@ final class DictationController: ObservableObject {
             let out = await pipeline.finish(raw: raw, asrMs: asrMs, language: language, style: style,
                                             contextTerms: names, tone: Tone.forApp(targetApp), llm: policy,
                                             polisher: polisher)
-            learnFromScreen(seen: names, used: out.usedScreenTerms)
             // Cancelled, timed out, or superseded by a newer dictation: don't paste stale text.
             guard !Task.isCancelled, session == self.session else { return }
             if out.action == .undo {
@@ -549,7 +570,13 @@ final class DictationController: ObservableObject {
             let before = await Self.value(of: charBeforeCursor, within: 30) ?? nil
             let spaced = Self.spaced(text, after: before?.first)
             let t1 = ContinuousClock.now
+            #if DEBUG
+            if debugNoPaste { log.notice("no-paste result: \(spaced, privacy: .public)") } else {
+                await injector.insert(spaced, restoreClipboard: settings.restoreClipboard)
+            }
+            #else
             await injector.insert(spaced, restoreClipboard: settings.restoreClipboard)
+            #endif
             if out.action == .pressEnter { await injector.pressReturn() }
             let pasteMs = (ContinuousClock.now - t1).ms
             let totalMs = (ContinuousClock.now - releasedAt).ms
@@ -564,6 +591,7 @@ final class DictationController: ObservableObject {
             DispatchQueue.main.async { [self] in
                 if settings.learnFromEdits, out.action != .pressEnter { editWatcher.didInsert(text, app: app) }
                 if settings.keepHistory { DictationHistory.shared.add(text, app: app) }
+                learnFromScreen(seen: names, used: out.usedScreenTerms)
                 noteFeatures(raw: raw, text: text)
                 offerTip()
             }
@@ -967,9 +995,14 @@ final class DictationController: ObservableObject {
 
     private func play(_ name: String) {
         guard settings.playSounds, let sound = sounds[name] else { return }
-        sound.stop()
-        sound.play()
+        // Playing blocked for 65–100 ms at release (measured); off the main thread, the pill doesn't wait.
+        soundQueue.async {
+            sound.stop()
+            sound.play()
+        }
     }
+
+    private let soundQueue = DispatchQueue(label: "app.evoo.sounds", qos: .userInteractive)
 
     /// Makes the first fn press as quick as the rest.
     func warmUp() {

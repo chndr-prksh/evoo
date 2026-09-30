@@ -24,7 +24,8 @@ public enum DictationRules {
     }
 
     public static func apply(_ input: String) -> Result {
-        var tokens = normalizeMeridiem(input).split(whereSeparator: \.isWhitespace).map { Token(String($0)) }
+        var tokens = removeCommaFillers(normalizeMeridiem(input)).split(whereSeparator: \.isWhitespace)
+            .map { Token(String($0)) }
         tokens = removeFillers(tokens)
         tokens = removeStutters(tokens)
         tokens = collapseValueCorrections(tokens)
@@ -59,6 +60,30 @@ public enum DictationRules {
 
     // MARK: - Fillers & stutters
 
+    /// Spoken fillers the speech model sets off with commas: "…to, like, give…", "You know, we…", "So yeah, …".
+    /// With commas around them they're fillers; without, they're words ("I like it", "you know the answer").
+    /// ("I mean" isn't here: it's a correction cue.) Measured: the 1.7B polish model left these in.
+    public static func removeCommaFillers(_ text: String) -> String {
+        let fillers = "(?:like|you know|basically|so yeah|so basically|kind of|sort of|literally|okay so)"
+        var out = text
+        // Mid-sentence: "…to, like, give…" → "…to give…"
+        out = out.replacingOccurrences(of: "(?i),\\s*" + fillers + ",\\s*", with: " ", options: .regularExpression)
+        // Sentence start: "Like, engineering…" → "Engineering…"
+        guard let re = try? NSRegularExpression(pattern: "(?i)(^|[.!?]\\s+)" + fillers + ",?\\s+(\\w)") else { return out }
+        for m in re.matches(in: out, range: NSRange(out.startIndex..., in: out)).reversed() {
+            guard let whole = Range(m.range, in: out), let lead = Range(m.range(at: 1), in: out),
+                  let first = Range(m.range(at: 2), in: out) else { continue }
+            // Only when a comma marked it as a filler, or it's a two-word filler ("So basically …").
+            let matched = String(out[whole])
+            guard matched.contains(",") || matched.lowercased().contains("so ") else { continue }
+            out.replaceSubrange(whole, with: String(out[lead]) + out[first].uppercased())
+        }
+        return out
+    }
+
+    /// Small words a comma never really follows ("to, Wednesday").
+    static let glueWords: Set<String> = ["to", "the", "a", "an", "and", "of", "on", "in", "at", "for", "from", "with",
+                                         "is", "was", "are", "be", "my", "your", "our", "their", "his", "her", "by"]
     static let fillers: Set<String> = ["um", "umm", "uh", "uhh", "uhm", "erm", "er", "hmm", "mm", "mhm", "ah"]
 
     static func removeFillers(_ tokens: [Token]) -> [Token] {
@@ -68,6 +93,11 @@ public enum DictationRules {
             let isFiller = fillers.contains(t.norm) || (t.norm == "so" && t.raw.hasSuffix(",")
                 && (i > 0 && fillers.contains(tokens[i - 1].norm) || i + 1 < tokens.count && fillers.contains(tokens[i + 1].norm)))
             if isFiller {
+                // "to, um, Wednesday" → "to Wednesday": the comma only framed the filler.
+                if t.endsClause, var last = out.last, last.endsClause, glueWords.contains(last.norm) {
+                    last.raw = last.bare
+                    out[out.count - 1] = last
+                }
                 // Keep sentence-ending punctuation the filler carried ("… ship it, um." → "… ship it.").
                 if t.endsSentence, var last = out.popLast() {
                     last.raw = last.bare + t.trailingPunctuation

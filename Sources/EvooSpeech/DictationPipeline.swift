@@ -218,7 +218,7 @@ public final class DictationPipeline {
 
     /// Runs NeMo ITN line by line, leaving list markers alone and keeping ordinals used as words
     /// ("first run the tests" must not become "1st run the tests"; "January first" still becomes "January 1").
-    func formatNumbers(_ text: String) -> String {
+    public func formatNumbers(_ text: String) -> String {
         text.components(separatedBy: "\n").map { line in
             let marker = line.range(of: #"^(- \[ \] |- |• |☐ |\d+\. )"#, options: .regularExpression)
             let prefix = marker.map { String(line[$0]) } ?? ""

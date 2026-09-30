@@ -165,15 +165,36 @@ public final class StreamingPolisher {
     /// Sentences this short ("Thanks.", "Sounds good.") have nothing for the AI to fix.
     public static let minWords = 5
 
+    /// Keyed by the sentence without punctuation or capitals, so the same words transcribed with a different
+    /// comma still find their polished version.
     private var done: [String: String] = [:]
     private var running: [String: Task<String, Never>] = [:]
+    /// Sentences of the latest text: queued work for anything else (a sentence that was still being spoken at
+    /// an earlier pause) is skipped instead of holding up the queue.
+    private var wanted: Set<String> = []
     private var queue: Task<Void, Never>?
     private let refine: Refine
 
     public private(set) var prefetched = 0
+    public private(set) var skipped = 0
 
     public init(refine: @escaping Refine) {
         self.refine = refine
+    }
+
+    static func key(_ block: String) -> String {
+        block.lowercased().filter { $0.isLetter || $0.isNumber || $0 == " " }.split(separator: " ").joined(separator: " ")
+    }
+
+    private func isNeeded(_ block: String) -> Bool {
+        let k = Self.key(block)
+        return done[k] == nil && running[k] == nil && Self.worthPolishing(block)
+    }
+
+    /// Only sentences with something to fix go to the AI; clean ones are kept as they are (measured: polishing
+    /// every sentence left the 1.7B model 1–2 s behind at release on a 42 s dictation).
+    static func worthPolishing(_ block: String) -> Bool {
+        block.split(separator: " ").count >= minWords && DictationPipeline.needsPolish(block)
     }
 
     /// Start polishing the finished blocks of `text` — all but the block holding the last sentence, which
@@ -181,10 +202,9 @@ public final class StreamingPolisher {
     public func prefetch(_ text: String, partialStart: Bool = false) {
         var blocks = Self.prose(text).flatMap(Self.blocks)
         if partialStart, !blocks.isEmpty { blocks.removeFirst() } // may be the tail of a cut sentence
+        wanted.formUnion(blocks.map(Self.key))
         guard blocks.count > 1 else { return }
-        for block in blocks.dropLast() where done[block] == nil && running[block] == nil
-            && block.split(separator: " ").count >= Self.minWords
-        {
+        for block in blocks.dropLast() where isNeeded(block) {
             prefetched += 1
             start(block)
         }
@@ -192,9 +212,9 @@ public final class StreamingPolisher {
 
     /// At a pause: start polishing everything, the last sentence too (it's likely final).
     public func prefetchAll(_ text: String) {
-        for block in Self.prose(text).flatMap(Self.blocks) where done[block] == nil && running[block] == nil
-            && block.split(separator: " ").count >= Self.minWords
-        {
+        let blocks = Self.prose(text).flatMap(Self.blocks)
+        wanted = Set(blocks.map(Self.key))
+        for block in blocks where isNeeded(block) {
             prefetched += 1
             start(block)
         }
@@ -203,14 +223,15 @@ public final class StreamingPolisher {
     /// The polished text: finished blocks from the cache, the rest now. Lines that are list items (or too
     /// short to need it) keep Evoo's own formatting.
     public func polish(_ text: String) async -> String {
+        wanted = Set(Self.prose(text).flatMap(Self.blocks).map(Self.key))
         var lines: [String] = []
         for line in text.components(separatedBy: "\n") {
             guard Self.isProse(line) else { lines.append(line); continue }
             var out: [String] = []
             for block in Self.blocks(line) {
-                if block.split(separator: " ").count < Self.minWords { out.append(block); continue }
-                if let d = done[block] { out.append(d); continue }
-                let task = running[block] ?? start(block)
+                if !Self.worthPolishing(block) { out.append(block); continue }
+                if let d = done[Self.key(block)] { out.append(d); continue }
+                let task = running[Self.key(block)] ?? start(block)
                 out.append(await task.value)
             }
             lines.append(out.joined(separator: " "))
@@ -230,21 +251,28 @@ public final class StreamingPolisher {
     /// How many of `text`'s blocks were already polished (for measuring).
     public func cachedBlocks(of text: String) -> (cached: Int, total: Int) {
         let blocks = Self.prose(text).flatMap(Self.blocks)
-        return (blocks.filter { done[$0] != nil }.count, blocks.count)
+        return (blocks.filter { done[Self.key($0)] != nil }.count, blocks.count)
     }
 
     @discardableResult
     private func start(_ block: String) -> Task<String, Never> {
         let previous = queue
         let refine = self.refine
+        let k = Self.key(block)
         let task = Task { [weak self] () -> String in
             await previous?.value // one at a time, in order
+            // No longer part of the text (it was still being spoken when queued): skip, don't hold up the rest.
+            if let self, !self.wanted.contains(k) {
+                self.skipped += 1
+                self.running[k] = nil
+                return block
+            }
             let polished = await refine(block) ?? block
-            self?.done[block] = polished
-            self?.running[block] = nil
+            self?.done[k] = polished
+            self?.running[k] = nil
             return polished
         }
-        running[block] = task
+        running[k] = task
         queue = Task { _ = await task.value }
         return task
     }

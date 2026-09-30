@@ -153,6 +153,20 @@ case "export-train":
         print("\(name): \(rows.count)")
     }
 
+case "profile-post":
+    // Times each stage of the rules on a text, 3 runs each (warm): evoo-cli profile-post "text"
+    for input in inputs {
+        for run in 1 ... 3 {
+            var t = clock.now
+            let cleaned = TextCleaner.clean(input); let tClean = clock.now - t; t = clock.now
+            let dict = pipeline.dictionary.apply(cleaned) { DictationPipeline.isKnownWord($0) }; let tDict = clock.now - t; t = clock.now
+            let rules = DictationRules.apply(dict); let tRules = clock.now - t; t = clock.now
+            let formatted = DictationFormatter.format(rules.text, style: .markdown); let tFormat = clock.now - t; t = clock.now
+            _ = pipeline.formatNumbers(formatted); let tNumbers = clock.now - t
+            print("run \(run): clean \(tClean) · dictionary \(tDict) · rules \(tRules) · format \(tFormat) · numbers \(tNumbers)")
+        }
+    }
+
 case "bench":
     let versions: [String: AsrModelVersion] = ["v2": .v2, "v3": .v3, "110m": .tdtCtc110m]
     let version = option("--parakeet").flatMap { versions[$0] } ?? .v3

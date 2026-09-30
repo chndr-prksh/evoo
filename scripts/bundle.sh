@@ -12,8 +12,8 @@ CONFIG="${CONFIG:-release}"
 IDENTITY="${EVOO_SIGN_IDENTITY:--}"
 APP="build/Evoo.app"
 
-swift build -c "$CONFIG" --product Evoo
-BIN="$(swift build -c "$CONFIG" --show-bin-path)"
+swift build -c "$CONFIG" $SWIFT_EXTRA --product Evoo # SWIFT_EXTRA="-Xswiftc -DDEBUG": optimized build with test hooks
+BIN="$(swift build -c "$CONFIG" $SWIFT_EXTRA --show-bin-path)"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Frameworks" "$APP/Contents/Resources"

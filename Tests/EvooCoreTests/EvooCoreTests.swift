@@ -861,3 +861,17 @@ import Testing
     #expect(StyleRewrites.apply("Are you free tomorrow?", rules: rules) == "Are u free tomorrow?")
     #expect(StyleRewrites.learn(pairs)["com.tinyspeck.slackmacgap"] == nil) // per app
 }
+
+@Test func commaFillersAreRemovedWordsAreKept() {
+    #expect(DictationRules.removeCommaFillers("I wanted to, like, give you an update.") == "I wanted to give you an update.")
+    #expect(DictationRules.removeCommaFillers("Like, engineering fixed most bugs.") == "Engineering fixed most bugs.")
+    #expect(DictationRules.removeCommaFillers("Done. You know, we still need it.") == "Done. We still need it.")
+    #expect(DictationRules.removeCommaFillers("So basically, Priya is on it.") == "Priya is on it.")
+    #expect(DictationRules.removeCommaFillers("So yeah, let me know.") == "Let me know.")
+    // Real words stay.
+    #expect(DictationRules.removeCommaFillers("I like it a lot.") == "I like it a lot.")
+    #expect(DictationRules.removeCommaFillers("You know the answer.") == "You know the answer.")
+    #expect(DictationRules.removeCommaFillers("It looks like rain.") == "It looks like rain.")
+    // "I mean" is a correction cue, handled elsewhere.
+    #expect(DictationRules.apply("Let's meet tomorrow, I mean, Friday.").text.contains("Friday"))
+}

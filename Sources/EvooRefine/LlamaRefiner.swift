@@ -27,7 +27,11 @@ public final class LlamaRefiner: @unchecked Sendable {
 
     public init() {}
 
-    public var isLoaded: Bool { queue.sync { context != nil } }
+    /// Answered instantly. (It used to wait on the model's queue — behind whatever sentence was being polished —
+    /// which blocked the main thread at every fn press and release; measured up to ~1.5 s.)
+    public var isLoaded: Bool { loadedLock.withLock { loaded } }
+    private let loadedLock = NSLock()
+    private var loaded = false
 
     /// Loads the model and pre-evaluates the prompt for `language`, so the first dictation is fast too.
     public func load(_ which: RefinerModel, language: DictationLanguage = .english) async throws {
@@ -61,6 +65,7 @@ public final class LlamaRefiner: @unchecked Sendable {
             vocab = llama_model_get_vocab(m)
             sampler = chain
             loadedModel = which
+            loadedLock.withLock { loaded = true }
             try primePrefix(RefinePrompt.prefix(language: language))
         }
     }
@@ -248,6 +253,7 @@ public final class LlamaRefiner: @unchecked Sendable {
     }
 
     private func freeAll() {
+        loadedLock.withLock { loaded = false }
         if let adapter { llama_adapter_lora_free(adapter) }
         adapter = nil
         if let sampler { llama_sampler_free(sampler) }

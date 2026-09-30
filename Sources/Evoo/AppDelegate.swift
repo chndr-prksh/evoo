@@ -76,6 +76,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.controller.toggleFromUI()
             }
         }
+        // Debug: start/stop a real dictation (full pipeline) that logs its text instead of pasting it.
+        DistributedNotificationCenter.default().addObserver(forName: .init("app.evoo.debug.toggleFull"), object: nil,
+                                                            queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.controller.debugDryRun = false
+                self?.controller.debugNoPaste = true
+                self?.controller.toggleFromUI()
+            }
+        }
         // Debug: run the whole personal-model flow on a pairs file (object = path), with a short training.
         DistributedNotificationCenter.default().addObserver(forName: .init("app.evoo.debug.train"), object: nil,
                                                             queue: .main) { [weak self] note in
