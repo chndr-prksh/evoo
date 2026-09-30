@@ -81,6 +81,14 @@ case "golden", "stress":
     refiner.unload()
     await engine.unload()
 
+case "voiced":
+    // Seconds of voice in each clip (what Evoo uses to ignore key clicks): evoo-cli voiced a.wav …
+    for path in inputs {
+        let samples = try AudioConverter().resampleAudioFile(path: path)
+        print(String(format: "%.2f s voiced of %.2f s  %@", AudioStats.voicedSeconds(samples), Double(samples.count) / 16000,
+                     URL(fileURLWithPath: path).lastPathComponent))
+    }
+
 case "bench":
     let versions: [String: AsrModelVersion] = ["v2": .v2, "v3": .v3, "110m": .tdtCtc110m]
     let version = option("--parakeet").flatMap { versions[$0] } ?? .v3

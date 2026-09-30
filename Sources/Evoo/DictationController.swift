@@ -383,15 +383,15 @@ final class DictationController: ObservableObject {
         endRecordingSession()
         let samples = micQueue.sync { recorder.stop() }
         let seconds = Double(samples.count) / AudioRecorder.sampleRate
-        log.notice("recorded \(String(format: "%.2f", seconds), privacy: .public) s of audio · longest main-thread stall \(self.mainStall.ms) ms")
+        log.notice("recorded \(String(format: "%.2f", seconds), privacy: .public) s of audio, \(String(format: "%.2f", AudioStats.voicedSeconds(samples)), privacy: .public) s voiced · longest main-thread stall \(self.mainStall.ms) ms")
         #if DEBUG
         if debugDryRun {
-            log.notice("dry run: \(AudioStats.isLikelySilent(samples) ? "silent" : "NOT silent", privacy: .public)")
+            log.notice("dry run: \(AudioStats.hasNoSpeech(samples) ? "silent" : "NOT silent", privacy: .public)")
             phase = .idle
             return
         }
         #endif
-        guard seconds >= Self.minRecordingSeconds, !AudioStats.isLikelySilent(samples) else {
+        guard seconds >= Self.minRecordingSeconds, !AudioStats.hasNoSpeech(samples) else {
             phase = .idle
             return
         }

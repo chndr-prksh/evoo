@@ -816,3 +816,13 @@ import Testing
     #expect(DictationFormatter.format("First open the app, second sign in, third click settings.", style: .markdown).contains("3."))
     #expect(!DictationFormatter.format("I can write the first draft this weekend.", style: .markdown).contains("1."))
 }
+
+@Test func keyClickIsNotSpeech() {
+    var clip = [Float](repeating: 0.001, count: 32_000) // 2 s of quiet room
+    for i in 800 ..< 1_300 { clip[i] = 0.3 * Float(sin(Double(i))) } // ~30 ms fn-key click
+    for i in 30_400 ..< 30_900 { clip[i] = 0.3 * Float(sin(Double(i))) } // and on release
+    #expect(AudioStats.hasNoSpeech(clip))
+    var word = [Float](repeating: 0.001, count: 16_000)
+    for i in 4_000 ..< 9_000 { word[i] = 0.1 * Float(sin(Double(i) * 0.05)) } // ~0.3 s "yes"
+    #expect(!AudioStats.hasNoSpeech(word))
+}

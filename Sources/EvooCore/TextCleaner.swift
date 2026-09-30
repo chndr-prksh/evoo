@@ -62,6 +62,24 @@ public enum AudioStats {
     }
 
     /// True when the loudest 100 ms window is below the threshold — nobody spoke.
+    /// Seconds of the clip that sound like voice (20 ms frames above `threshold`). Speech is sustained; the
+    /// click of the fn key or a tap on the desk lasts a few tens of milliseconds.
+    public static func voicedSeconds(_ samples: [Float], sampleRate: Int = 16_000, threshold: Float = 0.008) -> Double {
+        let frame = sampleRate / 50
+        var voiced = 0
+        var i = 0
+        while i + frame <= samples.count {
+            if rms(Array(samples[i ..< i + frame])) >= threshold { voiced += 1 }
+            i += frame
+        }
+        return Double(voiced) * 0.02
+    }
+
+    /// Nothing worth transcribing: quiet, or only a click (the model would turn a key click into "Yeah.").
+    public static func hasNoSpeech(_ samples: [Float], sampleRate: Int = 16_000) -> Bool {
+        isLikelySilent(samples, sampleRate: sampleRate) || voicedSeconds(samples, sampleRate: sampleRate) < 0.15
+    }
+
     public static func isLikelySilent(_ samples: [Float], sampleRate: Int = 16_000, threshold: Float = 0.006) -> Bool {
         let window = sampleRate / 10
         guard samples.count >= window else { return true }
