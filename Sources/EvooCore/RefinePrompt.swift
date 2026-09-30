@@ -83,16 +83,18 @@ public enum RefinePrompt {
     }
 
     /// Per-dictation part. `thinkBlock` disables reasoning on hybrid-thinking Qwen3 models.
-    public static func suffix(transcript: String, thinkBlock: Bool) -> String {
-        userTurn(transcript) + "<|im_start|>assistant\n" + (thinkBlock ? "<think>\n\n</think>\n\n" : "")
+    /// `personal`: how this person writes (see `PersonalStyle.context`) — their style wins over a generic polish.
+    public static func suffix(transcript: String, personal: String? = nil, thinkBlock: Bool) -> String {
+        userTurn(transcript, personal: personal) + "<|im_start|>assistant\n" + (thinkBlock ? "<think>\n\n</think>\n\n" : "")
     }
 
     public static func chatML(transcript: String, language: DictationLanguage, thinkBlock: Bool = true) -> String {
         prefix(language: language) + suffix(transcript: transcript, thinkBlock: thinkBlock)
     }
 
-    private static func userTurn(_ text: String) -> String {
-        "<|im_start|>user\n\(request)\n<transcript>\(text)</transcript><|im_end|>\n"
+    private static func userTurn(_ text: String, personal: String? = nil) -> String {
+        let about = personal.map { "About this writer:\n\($0)\n" } ?? ""
+        return "<|im_start|>user\n\(about)\(request)\n<transcript>\(text)</transcript><|im_end|>\n"
     }
 
     /// Strips wrapper noise from model output.

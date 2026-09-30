@@ -77,15 +77,27 @@ final class AudioRecorder {
 
     /// Stops capture and returns everything recorded since `start`.
     func stop() -> [Float] {
+        let samples = detach()
+        shutDown()
+        return samples
+    }
+
+    /// Stops collecting audio and returns it — fast (the engine keeps running until `shutDown`).
+    func detach() -> [Float] {
         guard isRecording else { return [] }
         engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
-        engine.prepare() // pre-allocate so the next fn press starts capturing sooner
         isRecording = false
         return lock.withLock {
             muteUntil = 0
             return samples
         }
+    }
+
+    /// Stops the audio engine (can take 100+ ms) and pre-allocates for the next start.
+    func shutDown() {
+        guard !isRecording, engine.isRunning else { return }
+        engine.stop()
+        engine.prepare()
     }
 
     private func process(_ buffer: AVAudioPCMBuffer) {

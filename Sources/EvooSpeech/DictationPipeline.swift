@@ -113,7 +113,7 @@ public final class DictationPipeline {
             return Output(text: text, raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: (clock.now - t).ms, usedLLM: true)
         }
         // With a streaming polisher, long dictations that contain a list still get their prose polished.
-        if llm == .polish, refiner.isLoaded, polisher != nil ? text.split(separator: " ").count >= 6 : Self.worthPolishing(text) {
+        if llm == .polish, refiner.isLoaded, Self.needsPolish(text) {
             t = clock.now
             let polished: String? = if let polisher { await polisher.polish(text) }
                 else { try? await refiner.refine(text, language: language, tone: tone) }
@@ -133,6 +133,27 @@ public final class DictationPipeline {
         }
         return Output(text: text, raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: refineTime.ms, usedLLM: usedLLM,
                       action: post.action, usedScreenTerms: post.usedScreenTerms)
+    }
+
+    /// Whether the AI has something to improve after Evoo's rules. Clean text is pasted as it is — no wait.
+    /// (Measured: polishing clean one-liners added ~1 s for no change.)
+    public static func needsPolish(_ text: String) -> Bool {
+        let words = text.split(separator: " ").count
+        guard words >= 4 else { return false }
+        if words >= 40 { return true } // long dictations: punctuation and flow usually benefit
+        let lower = " " + text.lowercased() + " "
+        let leftovers = #"\b(?:like|you know|basically|kind of|sort of|i mean|literally|so yeah|sorry|no wait|wait|actually|or rather|i guess)\b"#
+        if lower.range(of: leftovers, options: .regularExpression) != nil { return true }
+        if text.range(of: #"(?i)\b(\w+ \w+)\b[ ,]+\1\b"#, options: .regularExpression) != nil { return true } // repeated phrase
+        if text.range(of: #" i "#, options: []) != nil || text.range(of: #"[.?!] [a-z]"#, options: .regularExpression) != nil {
+            return true // casing slips
+        }
+        // A long stretch without punctuation reads as a run-on sentence.
+        for sentence in text.split(whereSeparator: { ".?!".contains($0) }) {
+            let chunk = sentence.split(separator: ",").map { $0.split(separator: " ").count }.max() ?? 0
+            if chunk >= 22 { return true }
+        }
+        return false
     }
 
     /// Short, single-line dictations without anything to fix ("Sounds good.") are pasted as-is: faster,
@@ -188,6 +209,8 @@ public final class DictationPipeline {
         if language == .english {
             result.text = formatNumbers(result.text) // "four hundred ms" → "400 ms"
         }
+        // "i will", "i'm" → "I will", "I'm" (a speech-model slip; not worth an AI pass).
+        result.text = result.text.replacingOccurrences(of: #"\bi\b(?=['’ ,]|$)"#, with: "I", options: .regularExpression)
         let cased = DictationCommands.applyCasing(command.casing, to: result.text)
         return Processed(text: Snippets.unmask(cased, masked.restore), unresolved: result.unresolved,
                          action: command.action, usedScreenTerms: usedScreenTerms)

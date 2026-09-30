@@ -6,6 +6,7 @@ struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var permissions: Permissions
     @State private var launchAtLogin = LoginItem.isEnabled
+    @ObservedObject private var style = StyleStore.shared
     @State private var microphones = AudioDevices.inputs()
     @State private var loginError: String?
     @State private var newWord = ""
@@ -199,6 +200,23 @@ struct SettingsView: View {
                     Button("Clear history") { DictationHistory.shared.clear() }
                         .disabled(DictationHistory.shared.entries.isEmpty)
                 }
+            }
+
+            Section("Your writing style") {
+                Toggle("Learn how I write", isOn: $settings.learnStyle)
+                Text("Evoo keeps what it typed next to what you actually sent, and uses your own edits when it polishes — so it writes like you, not like a template. Stored only on this Mac.")
+                    .font(.caption).foregroundStyle(.secondary)
+                LabeledContent("Learned from", value: "\(style.editedCount) edits · \(style.pairs.count) messages")
+                ForEach(style.profiles, id: \.app) { p in
+                    LabeledContent(EditWatcher.appName(p.app), value: p.summary)
+                }
+                ForEach(style.rewrites.keys.sorted(), id: \.self) { app in
+                    LabeledContent(EditWatcher.appName(app) + " swaps",
+                                   value: style.rewrites[app]!.prefix(6).map { "\($0.from) → \($0.to.isEmpty ? "(removed)" : $0.to)" }
+                                       .joined(separator: ", "))
+                }
+                Button("Erase what Evoo learned about my style", role: .destructive) { style.erase() }
+                    .disabled(style.pairs.isEmpty)
             }
 
             Section("Learning") {

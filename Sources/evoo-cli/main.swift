@@ -332,14 +332,21 @@ case "post":
         let t0 = clock.now
         let r = pipeline.postProcess(input, language: language, style: style)
         let us = (clock.now - t0).formatted(.units(allowed: [.microseconds]))
-        print("in : \(input)\nout: \(r.text)\(r.unresolved ? "   [unresolved → LLM]" : "")  (\(us))\n")
+        print("in : \(input)\nout: \(r.text)\(r.unresolved ? "   [unresolved → LLM]" : "")\(DictationPipeline.needsPolish(r.text) ? "   [AI polish]" : "")  (\(us))\n")
     }
 
 case "refine":
+    let pairsFile = option("--pairs")
+    let styleApp = option("--app")
     try await loadRefiner()
     for input in inputs {
         var output = ""
-        let t = try await clock.measure { output = try await refiner.refine(input, language: language) }
+        // --pairs file.json [--app bundle.id]: polish with that person's style (Layer 1).
+        let personal = pairsFile.flatMap { try? Data(contentsOf: URL(fileURLWithPath: $0)) }
+            .flatMap { try? JSONDecoder().decode([StylePair].self, from: $0) }
+            .flatMap { PersonalStyle.context(for: input, app: styleApp, pairs: $0) }
+        if let personal { print("personal context:\n\(personal)\n") }
+        let t = try await clock.measure { output = try await refiner.refine(input, language: language, personal: personal) }
         print("in : \(input)\nout: \(output)\n    (\(t.formatted(.units(allowed: [.milliseconds]))))\n")
     }
 

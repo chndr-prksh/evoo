@@ -12,6 +12,8 @@ public final class SpeculativeTranscriber {
     private var running = false
 
     public private(set) var reuseCount = 0
+    /// Called with each speculative transcript (to start polishing it before fn goes up).
+    public var onResult: ((String) -> Void)?
 
     public init() {}
 
@@ -27,7 +29,9 @@ public final class SpeculativeTranscriber {
         let clip = Array(samples[speech])
         job = (speech, Task { [weak self] in
             defer { Task { @MainActor in self?.running = false } }
-            return try await engine.transcribe(clip, language: .english)
+            let text = try await engine.transcribe(clip, language: .english)
+            await MainActor.run { self?.onResult?(text) }
+            return text
         })
     }
 

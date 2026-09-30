@@ -101,6 +101,11 @@ public final class StreamingDictation {
     }
 
     private let whole = SpeculativeTranscriber()
+    /// The whole dictation so far, transcribed at a pause (up to `wholeClipLimit`).
+    public var onWholeResult: ((String) -> Void)? {
+        get { whole.onResult }
+        set { whole.onResult = newValue }
+    }
 
     /// The whole transcript. Up to `wholeClipLimit`: one pass over the whole recording (reused when it was
     /// already done during the last pause). Longer: committed pieces plus the rest.
@@ -178,6 +183,16 @@ public final class StreamingPolisher {
         if partialStart, !blocks.isEmpty { blocks.removeFirst() } // may be the tail of a cut sentence
         guard blocks.count > 1 else { return }
         for block in blocks.dropLast() where done[block] == nil && running[block] == nil
+            && block.split(separator: " ").count >= Self.minWords
+        {
+            prefetched += 1
+            start(block)
+        }
+    }
+
+    /// At a pause: start polishing everything, the last sentence too (it's likely final).
+    public func prefetchAll(_ text: String) {
+        for block in Self.prose(text).flatMap(Self.blocks) where done[block] == nil && running[block] == nil
             && block.split(separator: " ").count >= Self.minWords
         {
             prefetched += 1

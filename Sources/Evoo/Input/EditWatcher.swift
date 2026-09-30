@@ -21,6 +21,8 @@ final class EditWatcher {
     }
 
     var onLessons: ((_ lessons: [EditLearner.Lesson], _ app: String) -> Void)?
+    /// What Evoo typed and what the user ended up with (for learning their style).
+    var onPair: ((_ app: String, _ inserted: String, _ final: String) -> Void)?
     /// Human-readable result of the last check, for Settings → Learning.
     var onStatus: ((String) -> Void)?
 
@@ -93,6 +95,7 @@ final class EditWatcher {
         poller?.cancel()
         var edited = String(p.latest.dropFirst(p.prefix.count))
         if !p.suffix.isEmpty, edited.hasSuffix(p.suffix) { edited = String(edited.dropLast(p.suffix.count)) }
+        onPair?(p.app, p.inserted, edited)
         let lessons = EditLearner.lessons(inserted: p.inserted, edited: edited)
         let words = lessons.compactMap { lesson -> String? in
             if case let .word(_, meant) = lesson { meant } else { nil }

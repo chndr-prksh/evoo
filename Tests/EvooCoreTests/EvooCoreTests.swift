@@ -826,3 +826,38 @@ import Testing
     for i in 4_000 ..< 9_000 { word[i] = 0.1 * Float(sin(Double(i) * 0.05)) } // ~0.3 s "yes"
     #expect(!AudioStats.hasNoSpeech(word))
 }
+
+@Test func learnsWritingStyleFromEdits() {
+    let wa = "net.whatsapp.WhatsApp"
+    var pairs: [StylePair] = []
+    for (e, s) in [("Hey, are you coming tonight?", "hey are you coming tonight"),
+                   ("Sounds good, see you at 8.", "sounds good see you at 8"),
+                   ("I'm going to be late.", "gonna be late"),
+                   ("Can you call me when you're free?", "can you call me when you're free"),
+                   ("Thanks, that works.", "thanks that works")] {
+        pairs.append(StylePair(app: wa, evoo: e, sent: s))
+    }
+    let profile = PersonalStyle.profile(app: wa, pairs: pairs)
+    #expect(profile?.summary?.contains("lowercase") == true)
+    #expect(profile?.summary?.contains("no full stop") == true)
+    let shots = PersonalStyle.examples(for: "Are you free tonight?", app: wa, pairs: pairs)
+    #expect(shots.first?.sent.contains("tonight") == true)
+    #expect(PersonalStyle.context(for: "Are you free tonight?", app: wa, pairs: pairs)?.contains("They sent:") == true)
+    // A different message typed afterwards is not an edit of Evoo's text.
+    #expect(!PersonalStyle.isUsable(StylePair(app: wa, evoo: "See you at 8.", sent: "Actually let me check my calendar first and get back to you")))
+}
+
+@Test func learnsRepeatedWordSwaps() {
+    let wa = "net.whatsapp.WhatsApp"
+    let pairs = [
+        StylePair(app: wa, evoo: "I'm going to be late.", sent: "gonna be late"),
+        StylePair(app: wa, evoo: "We're going to the park.", sent: "we're going to the park"), // kept: a place, not a habit
+        StylePair(app: wa, evoo: "I'm going to call you.", sent: "gonna call u"),
+        StylePair(app: wa, evoo: "Are you coming tonight?", sent: "are u coming tonight"),
+        StylePair(app: wa, evoo: "Did you see it?", sent: "did u see it"),
+    ]
+    let rules = StyleRewrites.learn(pairs)[wa] ?? []
+    #expect(rules.contains { $0.from == "you" && $0.to == "u" })
+    #expect(StyleRewrites.apply("Are you free tomorrow?", rules: rules) == "Are u free tomorrow?")
+    #expect(StyleRewrites.learn(pairs)["com.tinyspeck.slackmacgap"] == nil) // per app
+}

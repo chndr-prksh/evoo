@@ -94,6 +94,10 @@ final class DictationController: ObservableObject {
         hotkeys.onEvent = { [weak self] event in self?.handle(event) }
         editWatcher.onLessons = { [weak self] lessons, app in self?.learn(lessons, app: app) }
         editWatcher.onStatus = { [weak self] status in self?.learningStatus = status }
+        editWatcher.onPair = { [weak self] app, inserted, final in
+            guard let self, self.settings.learnStyle else { return }
+            StyleStore.shared.add(StylePair(app: app, evoo: inserted, sent: final))
+        }
         recorder.onLevel = { [weak self] level in
             Task { @MainActor in self?.push(level: level) }
         }
@@ -348,10 +352,24 @@ final class DictationController: ObservableObject {
             let refiner = self.refiner
             let tone = Tone.forApp(NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
             let language = settings.language
-            polisher = StreamingPolisher { text in try? await refiner.refine(text, language: language, tone: tone) }
+            // Your own edits steer the polish: a style line and a couple of similar past edits (see PersonalStyle).
+            // Measured: the 1.7B model ignores style examples (same output, +0.1–1 s), so only the 4B gets them.
+            let pairs = settings.learnStyle && settings.refinerModel == .qwen3_4b ? StyleStore.shared.pairs : []
+            let app = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            polisher = StreamingPolisher { text in
+                let personal = PersonalStyle.context(for: text, app: app, pairs: pairs)
+                return try? await refiner.refine(text, language: language, tone: tone, personal: personal)
+            }
         }
         let startStyle: OutputStyle? = settings.formatText
             ? OutputStyle.forApp(NSWorkspace.shared.frontmostApplication?.bundleIdentifier) : nil
+        // When you pause (most people do, just before letting go), the whole dictation so far is transcribed —
+        // and now polished too, so a release right after the pause finds it ready.
+        streaming.onWholeResult = { [weak self] raw in
+            guard let self, let polisher = self.polisher, !raw.isEmpty else { return }
+            let post = self.pipeline.postProcess(raw, language: self.settings.language, style: startStyle)
+            if DictationPipeline.needsPolish(post.text) { polisher.prefetchAll(post.text) }
+        }
         streaming.onCommit = { [weak self] raw, partial in
             guard let self, let polisher = self.polisher else { return }
             let post = self.pipeline.postProcess(raw, language: self.settings.language, style: startStyle)
@@ -384,7 +402,8 @@ final class DictationController: ObservableObject {
         guard phase == .recording else { return }
         let releasedAt = ContinuousClock.now
         endRecordingSession()
-        let samples = micQueue.sync { recorder.stop() }
+        let samples = micQueue.sync { recorder.detach() }
+        micQueue.async { [recorder] in recorder.shutDown() } // the slow part, off the main thread
         let seconds = Double(samples.count) / AudioRecorder.sampleRate
         log.notice("recorded \(String(format: "%.2f", seconds), privacy: .public) s of audio, \(String(format: "%.2f", AudioStats.voicedSeconds(samples)), privacy: .public) s voiced · longest main-thread stall \(self.mainStall.ms) ms")
         #if DEBUG
@@ -421,7 +440,8 @@ final class DictationController: ObservableObject {
 
     func cancel() {
         endRecordingSession()
-        _ = micQueue.sync { recorder.stop() }
+        _ = micQueue.sync { recorder.detach() }
+        micQueue.async { [recorder] in recorder.shutDown() }
         provisional = false
         processing?.cancel()
         watchdog?.cancel()
@@ -446,8 +466,10 @@ final class DictationController: ObservableObject {
         }
         do {
             let asrStart = ContinuousClock.now
+            let startDelay = (asrStart - releasedAt).ms
             let (raw, reused) = try await streaming.finish(samples, engine: engine)
             let asrMs = (ContinuousClock.now - asrStart).ms
+            let afterASR = ContinuousClock.now
             if await runMacCommand(raw) { return }
             if runAppCommand(raw) { return }
             if selectionAtStart == nil { selectionAtStart = await Self.value(of: selectionTask, within: 100) ?? nil }
@@ -458,6 +480,7 @@ final class DictationController: ObservableObject {
             let policy: DictationPipeline.LLMPolicy = smartCleanupReady ? .polish
                 : Features.multilingual && settings.refinementEnabled && refiner.isLoaded ? .whenNeeded : .off
             if policy != .off { phase = .refining }
+            let commandsMs = (ContinuousClock.now - afterASR).ms
             let t0 = ContinuousClock.now
             let names = await Self.value(of: screenNames, within: 50) ?? [] // read while you spoke; never wait long
             let namesMs = (ContinuousClock.now - t0).ms
@@ -478,11 +501,15 @@ final class DictationController: ObservableObject {
             guard !out.text.isEmpty else { return (phase = .idle) }
 
             // Habits learned from the user's edits in this app (e.g. no final full stop in WhatsApp).
+            // Word swaps this person keeps making in this app ("going to" → "gonna"), learned from their edits.
+            let swapped = settings.learnStyle
+                ? StyleRewrites.apply(out.text, rules: targetApp.flatMap { StyleStore.shared.rewrites[$0] } ?? [])
+                : out.text
             let text = settings.learnFromEdits
-                ? settings.habits.adapt(out.text, app: targetApp) { [personal = settings.personalWords] word in
+                ? settings.habits.adapt(swapped, app: targetApp) { [personal = settings.personalWords] word in
                     personal.contains(word) || !DictationPipeline.isKnownWord(word.lowercased())
                 }
-                : out.text
+                : swapped
             let before = await Self.value(of: charBeforeCursor, within: 30) ?? nil
             let spaced = Self.spaced(text, after: before?.first)
             let t1 = ContinuousClock.now
@@ -494,7 +521,7 @@ final class DictationController: ObservableObject {
             lastText = text
             lastTimings = String(format: "%.1fs audio · ", seconds) + out.summary
                 + " · fn up → pasted \(totalMs) ms" + (reused ? " (ready early)" : "")
-                + " [names wait \(namesMs) ms, paste \(pasteMs) ms]"
+                + " [start \(startDelay) ms, commands \(commandsMs) ms, names wait \(namesMs) ms, paste \(pasteMs) ms]"
             log.info("\(self.lastTimings ?? "", privacy: .public)")
             // Bookkeeping after the pill is idle (reading the text box back can take a while in big documents).
             let app = targetApp

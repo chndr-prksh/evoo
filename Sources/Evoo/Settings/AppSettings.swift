@@ -56,6 +56,8 @@ final class AppSettings: ObservableObject {
     @Published var usedFeatures: [String] { didSet { save(usedFeatures, "usedFeatures") } }
     /// Keep recent dictations on this Mac so they can be searched and re-used.
     @Published var keepHistory: Bool { didSet { save(keepHistory, "keepHistory") } }
+    /// Learn how the user writes from their edits (Layer 1: examples + style in the polish prompt).
+    @Published var learnStyle: Bool { didSet { save(learnStyle, "learnStyle") } }
     @Published var habits: LearnedHabits {
         didSet { defaults.set(try? JSONEncoder().encode(habits), forKey: "habits") }
     }
@@ -94,6 +96,7 @@ final class AppSettings: ObservableObject {
         snippets = UserDefaults.standard.data(forKey: "snippets")
             .flatMap { try? JSONDecoder().decode([Snippet].self, from: $0) } ?? []
         keepHistory = bool("keepHistory", true)
+        learnStyle = bool("learnStyle", true)
         showTips = bool("showTips", true)
         learnFromScreen = bool("learnFromScreen", true)
         screenLexicon = UserDefaults.standard.data(forKey: "screenLexicon")
