@@ -411,10 +411,11 @@ final class DictationController: ObservableObject {
             ? OutputStyle.forApp(NSWorkspace.shared.frontmostApplication?.bundleIdentifier) : nil
         // When you pause (most people do, just before letting go), the whole dictation so far is transcribed —
         // and now polished too, so a release right after the pause finds it ready.
-        streaming.onWholeResult = { [weak self] raw in
+        streaming.onWholeResult = { [weak self] raw, atPause in
             guard let self, let polisher = self.polisher, !raw.isEmpty else { return }
             let post = self.pipeline.postProcess(raw, language: self.settings.language, style: startStyle)
-            if DictationPipeline.needsPolish(post.text) { polisher.prefetchAll(post.text) }
+            // Mid-speech: polish the sentences already finished. At a pause: the last one too.
+            if atPause { polisher.prefetchAll(post.text) } else { polisher.prefetch(post.text) }
         }
         streaming.onCommit = { [weak self] raw, partial in
             // Up to 45 s the final text comes from the whole-recording transcript, so that is what gets

@@ -189,8 +189,16 @@ func runStress(engine: SpeechEngine, pipeline: DictationPipeline, refiner: Llama
             let whole = SpeculativeTranscriber()
             let stream = StreamingDictation()
             let polisher = polish ? StreamingPolisher { t in try? await refiner.refine(t, language: .english) } : nil
+            // Exactly what the app does (DictationController.start): up to 45 s, pre-polish the whole-recording
+            // transcript at each pause; beyond that, the committed pieces.
+            var recordedCount = 0
             if mode == "stream", let polisher {
+                stream.onWholeResult = { raw, atPause in
+                    let post = pipeline.postProcess(raw, language: .english, style: .markdown)
+                    if atPause { polisher.prefetchAll(post.text) } else { polisher.prefetch(post.text) }
+                }
                 stream.onCommit = { raw, partial in
+                    guard recordedCount > Int(StreamingDictation.wholeClipLimit * 16_000) else { return }
                     let post = pipeline.postProcess(raw, language: .english, style: .markdown)
                     polisher.prefetch(post.text, partialStart: partial)
                 }
@@ -198,6 +206,7 @@ func runStress(engine: SpeechEngine, pipeline: DictationPipeline, refiner: Llama
             var peak = residentMB()
             for start in stride(from: 0, to: clip.count, by: 1_600) {
                 recorded += clip[start ..< min(start + 1_600, clip.count)]
+                recordedCount = recorded.count
                 if mode == "stream" {
                     let from = stream.committedSamples
                     stream.consider(recent: Array(recorded[from...]), from: from, engine: engine)
@@ -208,6 +217,8 @@ func runStress(engine: SpeechEngine, pipeline: DictationPipeline, refiner: Llama
                 try await Task.sleep(for: .milliseconds(100))
                 if start % 16_000 == 0 { peak = max(peak, residentMB()) }
             }
+            stream.onWholeResult = nil
+            stream.onCommit = nil
             let released = clock.now
             let raw: String
             if mode == "stream" { raw = try await stream.finish(recorded, engine: engine).text }
@@ -227,7 +238,11 @@ func runStress(engine: SpeechEngine, pipeline: DictationPipeline, refiner: Llama
                                  blocksReady: ready.cached, blocksTotal: ready.total, wer: wer(text, out.text),
                                  output: out.text, peakMemoryMB: peak)
             results.append(r)
-            if custom != nil { print("  → \(out.text)") }
+            if custom != nil {
+                print("  → \(out.text)")
+                let post = pipeline.postProcess(raw, language: .english, style: .markdown).text
+                print("  raw: \(raw)\n  post: \(post)\n  sentences: \(StreamingPolisher.debugSentences(post).count) · prefetched \(polisher?.prefetched ?? 0) · skipped \(polisher?.skipped ?? 0)")
+            }
             print(String(format: "%@ %2d sentences (%3d words, %5.1f s audio): fn-up → text %6d ms  [asr %5d, polish %6d, blocks ready %d/%d]  WER %.1f%%  mem %.0f MB",
                          mode.padding(toLength: 6, withPad: " ", startingAt: 0), n, r.words, seconds, total, asrMs, polishMs,
                          ready.cached, ready.total, r.wer * 100, peak))

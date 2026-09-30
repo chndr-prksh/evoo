@@ -67,6 +67,9 @@ public enum DictationRules {
         let fillers = "(?:like|you know|basically|so yeah|so basically|kind of|sort of|literally|okay so)"
         var out = text
         // Mid-sentence: "…to, like, give…" → "…to give…"
+        // Between clauses ("…last night, you know, we still…") the comma stays; inside a clause it goes.
+        out = out.replacingOccurrences(of: "(?i),\\s*(?:you know|so basically|basically|so yeah|okay so),\\s*", with: ", ",
+                                       options: .regularExpression)
         out = out.replacingOccurrences(of: "(?i),\\s*" + fillers + ",\\s*", with: " ", options: .regularExpression)
         // "You know we still need…" / "…the report, you know." — "you know" leading into a sentence, or trailing it.
         if let lead = try? NSRegularExpression(pattern: "(?i)(^|[.!?]\\s+)you know,?\\s+((?:we|i|they|he|she|there|so|my|our)\\b)") {

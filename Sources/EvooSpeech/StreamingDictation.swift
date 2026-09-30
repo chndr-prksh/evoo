@@ -97,12 +97,12 @@ public final class StreamingDictation {
     /// recorded so far (it only transcribes at a pause, and reuses the result at release if nothing changed).
     public func considerWhole(_ samples: [Float], engine: SpeechEngine) {
         guard Double(samples.count) / 16_000 <= Self.wholeClipLimit else { return }
-        whole.consider(samples, engine: engine)
+        whole.consider(samples, engine: engine, every: .seconds(2))
     }
 
     private let whole = SpeculativeTranscriber()
     /// The whole dictation so far, transcribed at a pause (up to `wholeClipLimit`).
-    public var onWholeResult: ((String) -> Void)? {
+    public var onWholeResult: ((String, Bool) -> Void)? {
         get { whole.onResult }
         set { whole.onResult = newValue }
     }
@@ -234,9 +234,29 @@ public final class StreamingPolisher {
                 let task = running[Self.key(block)] ?? start(block)
                 out.append(await task.value)
             }
-            lines.append(out.joined(separator: " "))
+            lines.append(Self.fixSeams(out.joined(separator: " ")))
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// Chunks of one sentence are polished separately, so where they meet: "launch, The design" → "launch, the
+    /// design", and "night. we still" → "night. We still". Names stay capitalized.
+    static func fixSeams(_ text: String) -> String {
+        var words = text.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
+        guard words.count > 1 else { return text }
+        for i in 1 ..< words.count {
+            let prev = words[i - 1], w = words[i]
+            guard let first = w.first, first.isLetter else { continue }
+            if ".!?".contains(prev.last ?? " "), first.isLowercase {
+                words[i] = first.uppercased() + w.dropFirst()
+            } else if prev.hasSuffix(","), first.isUppercase, w.count > 1, w.dropFirst().allSatisfy({ !$0.isUppercase }),
+                      w != "I", !w.hasPrefix("I'"),
+                      DictationPipeline.isKnownWord(w.lowercased().trimmingCharacters(in: .punctuationCharacters))
+            {
+                words[i] = first.lowercased() + w.dropFirst()
+            }
+        }
+        return words.joined(separator: " ")
     }
 
     static func isProse(_ line: String) -> Bool {
@@ -280,11 +300,32 @@ public final class StreamingPolisher {
     /// Splits into blocks of whole sentences, counted from the start so earlier blocks stay identical as the
     /// dictation grows.
     static func blocks(_ text: String) -> [String] {
-        let sentences = sentences(text)
+        let sentences = sentences(text).flatMap(clauses)
         return stride(from: 0, to: sentences.count, by: sentencesPerBlock).map {
             sentences[$0 ..< min($0 + sentencesPerBlock, sentences.count)].joined(separator: " ")
         }
     }
+
+    /// Fluent speech often comes back as one long run-on sentence (commas, no full stops), which could only be
+    /// polished once it was finished. Long sentences are split at commas into chunks of 8+ words, counted from
+    /// the start, so earlier chunks stay the same as the sentence grows and can be polished while it's spoken.
+    static func clauses(_ sentence: String) -> [String] {
+        let words = sentence.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+        guard words.count > 20 else { return [sentence] }
+        var out: [String] = [], current: [String] = []
+        for (i, w) in words.enumerated() {
+            current.append(w)
+            let remaining = words.count - i - 1
+            if w.hasSuffix(","), current.count >= 8, remaining >= 4 {
+                out.append(current.joined(separator: " "))
+                current = []
+            }
+        }
+        if !current.isEmpty { out.append(current.joined(separator: " ")) }
+        return out
+    }
+
+    public static func debugSentences(_ text: String) -> [String] { prose(text).flatMap(blocks) }
 
     static func sentences(_ text: String) -> [String] {
         var out: [String] = []
