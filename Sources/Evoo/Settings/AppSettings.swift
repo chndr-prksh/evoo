@@ -71,7 +71,9 @@ final class AppSettings: ObservableObject {
         language = value("language", .english)
         engine = value("engine", .automatic)
         refinementEnabled = bool("refinementEnabled", true)
-        refinerModel = value("refinerModel", .qwen3_4b) // quality first
+        // Dictation polish: the 4B model polishes ~4 words/s on an 8 GB Mac — slower than people speak — so smaller
+        // Macs use the 1.7B (~1.3 s a sentence). Class notes always use the 4B.
+        refinerModel = value("refinerModel", SystemInfo.isLowMemory ? .qwen3_1_7b : .qwen3_4b)
         smartCleanup = bool("smartCleanup", false) && SystemInfo.canRunSmartCleanup
         microphoneUID = UserDefaults.standard.string(forKey: "microphoneUID")
         showPill = bool("showPill", true)
@@ -84,7 +86,9 @@ final class AppSettings: ObservableObject {
             refinementEnabled = false
         }
         formatText = bool("formatText", true)
-        fastestModel = bool("fastestModel", true) // fast; names and casing are fixed by the dictionary and AI polish
+        // Accurate by default: the golden set scores 67/69 vs 58/69 for the 110M model (it mishears short commands —
+        // "Mute" → "Mud", "space bar" → "face bar"), and streaming means long dictations don't wait for it anyway.
+        fastestModel = bool("fastestModel", false)
         useScreenContext = bool("useScreenContext", true)
         learnFromEdits = bool("learnFromEdits", true)
         snippets = UserDefaults.standard.data(forKey: "snippets")

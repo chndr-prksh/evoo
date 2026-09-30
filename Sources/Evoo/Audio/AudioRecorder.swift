@@ -61,6 +61,11 @@ final class AudioRecorder {
         lock.withLock { samples }
     }
 
+    /// What was recorded from sample `index` on (cheap: doesn't copy the whole recording).
+    func snapshot(from index: Int) -> [Float] {
+        lock.withLock { index < samples.count ? Array(samples[index...]) : [] }
+    }
+
     /// Stops capture and returns everything recorded since `start`.
     func stop() -> [Float] {
         guard isRecording else { return [] }

@@ -115,6 +115,12 @@ public enum RefinePrompt {
         let inLen = input.count, outLen = out.count
         if outLen > inLen * 2 + 40 { return nil } // the model added content
         if inLen > 40, outLen < inLen / 5 { return nil } // the model dropped most of it
+        // Meaning guards: a polish must never lose a negation ("no, not today" → "") or the user's quotation.
+        if negations(out) < negations(input) { return nil }
+        let quotes = CharacterSet(charactersIn: "\"“”")
+        if input.unicodeScalars.contains(where: quotes.contains), !out.unicodeScalars.contains(where: quotes.contains) {
+            return nil
+        }
 
         // Cleanup only removes words; it shouldn't invent many. Skipped when the script changes (Hinglish).
         if language == .english {
@@ -123,6 +129,13 @@ public enum RefinePrompt {
             if novel.count > max(2, words(out).count / 4) { return nil }
         }
         return out
+    }
+
+    static func negations(_ s: String) -> Int {
+        let lower = s.lowercased().replacingOccurrences(of: "’", with: "'")
+        return lower.components(separatedBy: CharacterSet.letters.union(CharacterSet(charactersIn: "'")).inverted)
+            .filter { ["not", "never", "nothing", "nobody", "none", "cannot"].contains($0) || $0.hasSuffix("n't") }
+            .count
     }
 
     private static func words(_ s: String) -> [String] {

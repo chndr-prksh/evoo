@@ -789,3 +789,30 @@ import Testing
     // Nothing new → nothing written.
     #expect(ClassNotePrompt.tidy("## Bayes\n- **prior** — P(A) before evidence", lastTopic: nil, existing: existing, heard: "") == "")
 }
+
+@Test func goldenSetRegressions() {
+    // "X or not X" is never a correction.
+    #expect(DictationRules.apply("to be or not to be").text.lowercased().contains("to be or not to be"))
+    #expect(DictationRules.apply("I'll go whether or not it rains.").text.contains("whether or not it rains"))
+    // Real echo corrections still work.
+    #expect(DictationRules.apply("Let's go tomorrow, not tomorrow, day after tomorrow.").text.contains("day after tomorrow"))
+    // "so" between fillers is a filler; a normal leading "So," stays.
+    #expect(DictationRules.apply("Um, so, uh, I think we should ship it.").text == "I think we should ship it.")
+    #expect(DictationRules.apply("So, what do you think?").text == "So, what do you think?")
+    // Speech-model artifacts.
+    #expect(TextCleaner.clean("Click Send. Send") == "Click Send.")
+    #expect(TextCleaner.clean("Bye bye.") == "Bye bye.")
+    #expect(TextCleaner.clean("at 7:30 p.m. on the 21st.") == "at 7:30 p.m on the 21st.")
+    #expect(TextCleaner.tidyTimes("7.30 p.m.") .hasPrefix("7:30"))
+    // "Mute" misheard.
+    #expect(MacCommands.parse("Mude.") == .mute(true))
+}
+
+@Test func polishNeverDropsMeaning() {
+    #expect(RefinePrompt.accept(refined: "Let's go to the park.", input: "Let's go to the park, no, not today.") == nil)
+    #expect(RefinePrompt.accept(refined: "To be or not to be.", input: "\"to be or not to be\".") == nil)
+    #expect(RefinePrompt.accept(refined: "I can't make it today.", input: "I can't, um, make it today.") != nil)
+    // Lists: an ordinal after "in" still counts ("…sign in, third…").
+    #expect(DictationFormatter.format("First open the app, second sign in, third click settings.", style: .markdown).contains("3."))
+    #expect(!DictationFormatter.format("I can write the first draft this weekend.", style: .markdown).contains("1."))
+}

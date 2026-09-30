@@ -260,10 +260,16 @@ public enum DictationFormatter {
         var expected = 1
         var i = 0
         while i < words.count {
+            // Items are short: a marker far from the last one belongs to something else.
+            if let last = markers.last, i - last.index > 25 { break }
             let w = normalize(words[i])
             let next = i + 1 < words.count ? normalize(words[i + 1]) : ""
             let n = expected - 1
-            if n < ordinals.count, w == ordinals[n] || w == ordinals[n] + "ly" {
+            let prev = i > 0 ? normalize(words[i - 1]) : ""
+            // "the first draft", "my second job": an ordinary word, not a list marker.
+            let determiners: Set<String> = ["the", "a", "an", "my", "our", "your", "his", "her", "their", "its", "this",
+                                            "that", "every", "each"]
+            if n < ordinals.count, w == ordinals[n] || w == ordinals[n] + "ly", !determiners.contains(prev) {
                 markers.append((i, 1)); expected += 1
             } else if n < cardinals.count, ["step", "number", "point"].contains(w),
                       next == cardinals[n] || next == String(expected)
@@ -279,9 +285,23 @@ public enum DictationFormatter {
 
         let intro = words[..<markers[0].index].joined(separator: " ")
             .trimmingCharacters(in: CharacterSet(charactersIn: " ,:"))
+        // The last item ends with its sentence; whatever follows is ordinary text after the list.
+        var lastEnd = words.count
+        if let last = markers.last {
+            for j in (last.index + last.length) ..< words.count where ".!?".contains(words[j].last ?? " ") {
+                lastEnd = j + 1
+                break
+            }
+        }
+        let rest = words[lastEnd...].joined(separator: " ")
+        // Items are short; a "first … second …" spread across paragraphs is prose, not a list.
+        for (k, m) in markers.enumerated() {
+            let end = k + 1 < markers.count ? markers[k + 1].index : lastEnd
+            if end - (m.index + m.length) > 20 { return nil }
+        }
         var items: [String] = []
         for (k, m) in markers.enumerated() {
-            let end = k + 1 < markers.count ? markers[k + 1].index : words.count
+            let end = k + 1 < markers.count ? markers[k + 1].index : lastEnd
             var item = words[(m.index + m.length) ..< end].joined(separator: " ")
             item = item.trimmingCharacters(in: CharacterSet(charactersIn: " ,;:"))
             if item.lowercased().hasSuffix(" and") { item = String(item.dropLast(4)) }
@@ -289,7 +309,8 @@ public enum DictationFormatter {
             items.append(capitalizeFirst(item.trimmingCharacters(in: CharacterSet(charactersIn: " ,"))))
         }
         let body = items.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
-        return intro.isEmpty ? body : capitalizeFirst(intro) + ":\n" + body
+        let head = intro.isEmpty ? "" : capitalizeFirst(intro) + (".!?".contains(intro.last ?? " ") ? "\n" : ":\n")
+        return head + body + (rest.isEmpty ? "" : "\n\n" + rest)
     }
 
     // MARK: - Helpers

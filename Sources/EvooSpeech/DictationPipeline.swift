@@ -88,7 +88,8 @@ public final class DictationPipeline {
     /// Raw text → final text (rules, formatting, numbers, optional LLM).
     /// `contextTerms`: names seen on screen for this dictation only (see `ContextVocabulary`).
     public func finish(raw: String, asrMs: Int, language: DictationLanguage, style: OutputStyle?,
-                       contextTerms: [String] = [], tone: Tone = .neutral, llm: LLMPolicy) async -> Output
+                       contextTerms: [String] = [], tone: Tone = .neutral, llm: LLMPolicy,
+                       polisher: StreamingPolisher? = nil) async -> Output
     {
         let clock = ContinuousClock()
         var t = clock.now
@@ -111,10 +112,12 @@ public final class DictationPipeline {
             }
             return Output(text: text, raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: (clock.now - t).ms, usedLLM: true)
         }
-        if llm == .polish, refiner.isLoaded, Self.worthPolishing(text) {
+        // With a streaming polisher, long dictations that contain a list still get their prose polished.
+        if llm == .polish, refiner.isLoaded, polisher != nil ? text.split(separator: " ").count >= 6 : Self.worthPolishing(text) {
             t = clock.now
-            if let polished = try? await refiner.refine(text, language: language, tone: tone),
-               !polished.contains("\n") || text.contains("\n") // keep Evoo's own list formatting per app
+            let polished: String? = if let polisher { await polisher.polish(text) }
+                else { try? await refiner.refine(text, language: language, tone: tone) }
+            if let polished, !polished.contains("\n") || text.contains("\n") // keep Evoo's own list formatting per app
             {
                 text = polished
             }
@@ -198,11 +201,41 @@ public final class DictationPipeline {
             let prefix = marker.map { String(line[$0]) } ?? ""
             let body = String(line.dropFirst(prefix.count))
             guard !body.isEmpty else { return line }
-            let (masked, restore) = Self.maskOrdinals(body)
+            // "twenty-eight" → "twenty eight" (the normalizer skips hyphenated numbers).
+            var body2 = body.replacingOccurrences(of: #"(?i)\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)-(\w)"#,
+                                                  with: "$1 $2", options: .regularExpression)
+            var money: [(String, String)] = []
+            body2 = maskMoney(body2, into: &money)
+            let (masked, restore) = Self.maskOrdinals(body2)
             var out = normalizer.normalizeSentence(masked)
-            for (placeholder, word) in restore { out = out.replacingOccurrences(of: placeholder, with: word) }
+            for (placeholder, word) in restore + money { out = out.replacingOccurrences(of: placeholder, with: word) }
+            out = out.replacingOccurrences(of: #"(\d) ?percent\b"#, with: "$1%", options: .regularExpression)
             return prefix + TextCleaner.tidyTimes(out)
         }.joined(separator: "\n")
+    }
+
+    static let numberWords = "zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|"
+        + "fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|"
+        + "thousand|million|billion"
+
+    /// "one thousand two hundred dollars" → "$1,200". The normalizer gets thousands + hundreds + dollars wrong
+    /// ("$100200"), so the amount is converted on its own and kept out of its way.
+    func maskMoney(_ text: String, into restore: inout [(String, String)]) -> String {
+        let pattern = "(?i)\\b((?:(?:" + Self.numberWords + ")(?:\\s+and)?\\s+)*(?:" + Self.numberWords + "))\\s+(dollars?|bucks)\\b"
+        guard let re = try? NSRegularExpression(pattern: pattern) else { return text }
+        var out = text
+        for m in re.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
+            guard let whole = Range(m.range, in: text), let num = Range(m.range(at: 1), in: text) else { continue }
+            let digits = normalizer.normalizeSentence(String(text[num])).filter { $0.isNumber || $0 == "." }
+            guard let value = Double(digits) else { continue }
+            let f = NumberFormatter()
+            f.numberStyle = .decimal
+            f.maximumFractionDigits = 2
+            let placeholder = "evoomoney\(restore.count)x"
+            restore.append((placeholder, "$" + (f.string(from: NSNumber(value: value)) ?? digits)))
+            out.replaceSubrange(Range(m.range, in: out) ?? whole, with: placeholder)
+        }
+        return out
     }
 
     static let months: Set<String> = ["january", "february", "march", "april", "may", "june", "july", "august",
@@ -226,6 +259,8 @@ public final class DictationPipeline {
             // "Which one do you mean" must not become "Which 1"; "one hundred", "one hour" still convert.
             let isPronounOne = bare == "one" && !numberContext.contains(prev) && !numberContext.contains(next)
             guard ordinalWords.contains(bare) || isPronounOne else { continue }
+            // "twenty first" is a number ("21st"), not the word "first".
+            if ["twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"].contains(prev) { continue }
             let afterOf = i + 2 < words.count ? words[i + 2].lowercased().filter(\.isLetter) : ""
             // A date — "January first", "the first of May" — is left for ITN to write as "January 1".
             if months.contains(prev) || (next == "of" && months.contains(afterOf)) { continue }

@@ -59,6 +59,28 @@ func loadRefiner() async throws {
 }
 
 switch command {
+case "golden", "stress":
+    let versions: [String: AsrModelVersion] = ["v2": .v2, "v3": .v3, "110m": .tdtCtc110m]
+    let engine = ParakeetEngine(version: option("--parakeet").flatMap { versions[$0] } ?? .tdtCtc110m)
+    try await engine.load { _ in }
+    await DictationPipeline.warmUp(engine)
+    let polish = flag("--polish")
+    let json = option("--json")
+    pipeline.dictionary = PersonalDictionary(["Divya", "Aarav", "Kubernetes", "Priya", "Rahul"])
+    if polish {
+        try await refiner.load(option("--polish-model").flatMap(RefinerModel.init(rawValue:)) ?? .qwen3_4b, language: .english)
+    }
+    if command == "golden" {
+        try await runGolden(engine: engine, pipeline: pipeline, polish: polish, json: json)
+    } else {
+        let counts = (option("--sentences") ?? "1,5,10,30,50").split(separator: ",").compactMap { Int($0) }
+        let modes = (option("--modes") ?? "whole,stream").split(separator: ",").map(String.init)
+        try await runStress(engine: engine, pipeline: pipeline, refiner: refiner, polish: polish, counts: counts,
+                            modes: modes, json: json)
+    }
+    refiner.unload()
+    await engine.unload()
+
 case "bench":
     let versions: [String: AsrModelVersion] = ["v2": .v2, "v3": .v3, "110m": .tdtCtc110m]
     let version = option("--parakeet").flatMap { versions[$0] } ?? .v3

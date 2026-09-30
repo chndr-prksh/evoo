@@ -63,8 +63,11 @@ public enum DictationRules {
 
     static func removeFillers(_ tokens: [Token]) -> [Token] {
         var out: [Token] = []
-        for t in tokens {
-            if fillers.contains(t.norm) {
+        for (i, t) in tokens.enumerated() {
+            // "Um, so, uh, I think…": a "so" wedged between fillers is a filler too.
+            let isFiller = fillers.contains(t.norm) || (t.norm == "so" && t.raw.hasSuffix(",")
+                && (i > 0 && fillers.contains(tokens[i - 1].norm) || i + 1 < tokens.count && fillers.contains(tokens[i + 1].norm)))
+            if isFiller {
                 // Keep sentence-ending punctuation the filler carried ("… ship it, um." → "… ship it.").
                 if t.endsSentence, var last = out.popLast() {
                     last.raw = last.bare + t.trailingPunctuation
@@ -260,7 +263,8 @@ public enum DictationRules {
         var t = input
         var i = 1
         while i < t.count {
-            guard t[i].norm == "not", !t[i - 1].endsSentence else { i += 1; continue }
+            // "to be or not to be", "whether or not", "like it or not" aren't corrections.
+            guard t[i].norm == "not", !t[i - 1].endsSentence, t[i - 1].norm != "or" else { i += 1; continue }
             var echoed = 0
             for k in stride(from: min(3, i), through: 1, by: -1) where i + k < t.count {
                 let before = t[(i - k) ..< i].map(\.norm), after = t[(i + 1) ... (i + k)].map(\.norm)
@@ -268,7 +272,10 @@ public enum DictationRules {
             }
             var start = i - echoed
             // Partial echo: "2 laptops, not 2, 3 laptops" repeats only the first word of what's taken back.
-            if echoed == 0, i + 1 < t.count, let j = (max(0, i - 3) ..< i).last(where: { t[$0].norm == t[i + 1].norm }) {
+            // Only after a pause ("2 laptops, not 2, …"): without one it's ordinary speech.
+            if echoed == 0, i + 1 < t.count, t[i - 1].raw.hasSuffix(","),
+               let j = (max(0, i - 3) ..< i).last(where: { t[$0].norm == t[i + 1].norm })
+            {
                 echoed = 1
                 start = j
             }

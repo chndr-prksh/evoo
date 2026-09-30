@@ -14,9 +14,9 @@ struct WelcomeView: View {
     @State private var drag: CGFloat = 0
     @FocusState private var tryFocused: Bool
     @State private var wantAI = true
-    @State private var wantPolish = !SystemInfo.isLowMemory
+    @State private var wantPolish = true
     @State private var wantLogin = true
-    @State private var wantFast = true
+    @State private var wantFast = false
     @State private var applied = false
     private let pages = 5
     private let refresh = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -162,17 +162,17 @@ struct WelcomeView: View {
             Text("Set up Evoo").font(.system(size: 26, weight: .bold))
             Text("We've picked the best settings. Click Set up & continue — downloads run in the background, and you can change anything later in Settings.")
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            SetupRow(icon: "bolt.fill", title: "Fast speech model",
+            SetupRow(icon: "bolt.fill", title: "Extra-fast speech model",
                      detail: controller.modelStatus
-                         ?? "About 2× faster. Names and capitals are fixed by your dictionary and AI polish. Works offline.",
+                         ?? "Off is recommended: the standard model hears short commands and names better, and long dictations are transcribed while you speak either way.",
                      state: controller.modelStatus != nil ? .working : applied ? .done : .off, isOn: $wantFast, locked: false)
-            SetupRow(icon: "sparkles", title: "Local AI model (Qwen3 4B · 2.5 GB, once)",
+            SetupRow(icon: "sparkles", title: SystemInfo.isLowMemory ? "Local AI models (3.6 GB, once)" : "Local AI model (Qwen3 4B · 2.5 GB, once)",
                      detail: "Powers class notes, rewrite by voice (“make this more formal”), replies and translation.",
                      state: aiState, isOn: $wantAI, locked: false, progress: controller.refinerDownloadProgress)
             SetupRow(icon: "wand.and.stars", title: "Polish every dictation with AI",
                      detail: SystemInfo.isLowMemory
-                         ? "Fixes grammar and messy phrasing. On this Mac (\(Int(SystemInfo.memoryGB.rounded())) GB) it adds a few seconds per dictation — you can turn it on later."
-                         : "Fixes grammar and messy phrasing after Evoo's rules. Adds about a second.",
+                         ? "Fixes grammar and messy phrasing — sentence by sentence while you speak, so long dictations are ready about a second after you let go."
+                         : "Fixes grammar and messy phrasing after Evoo's rules — while you speak, so it's ready about a second after you let go.",
                      state: settings.smartCleanup ? .done : .off, isOn: $wantPolish, locked: false)
                 .disabled(!wantAI)
             SetupRow(icon: "brain", title: "Learn names and words",
@@ -186,7 +186,7 @@ struct WelcomeView: View {
 
     private var aiState: SetupRow.State {
         if controller.refinerDownloadProgress != nil { return .working }
-        return controller.notesModelInstalled ? .done : .off
+        return controller.notesModelInstalled && controller.refinerInstalled ? .done : .off
     }
 
     /// Turns on the recommended switches and starts the AI download (continues after the tour closes).
@@ -200,14 +200,15 @@ struct WelcomeView: View {
         settings.appCommands = true
         settings.keepHistory = true
         settings.showTips = true
-        settings.refinerModel = DictationController.notesModel
+        settings.refinerModel = SystemInfo.isLowMemory ? .qwen3_1_7b : DictationController.notesModel
         if wantLogin, !LoginItem.isEnabled { try? LoginItem.set(true) }
         if wantAI {
-            if controller.notesModelInstalled {
+            if controller.refinerInstalled {
                 settings.smartCleanup = wantPolish
                 controller.prepareRefiner()
+                if !controller.notesModelInstalled { controller.downloadNotesModel() }
             } else {
-                controller.downloadRefiner(enableCleanup: wantPolish)
+                controller.downloadRefiner(enableCleanup: wantPolish, thenNotesModel: true)
             }
         }
     }

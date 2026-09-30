@@ -17,6 +17,12 @@ public enum TextCleaner {
         text = text.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
         text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if hallucinations.contains(text.lowercased()) { return "" }
+        // "p.m. on the 21st": the sentence goes on — the dot is the abbreviation's, not a full stop.
+        text = text.replacingOccurrences(of: #"\b([AaPp])\.\s?([Mm])\.(?=\s+[a-z])"#, with: "$1.$2",
+                                         options: .regularExpression)
+        // A speech model sometimes echoes the last word: "Click Send. Send", "T. T. T. T."
+        text = text.replacingOccurrences(of: #"\b([\w']+)\.(?:\s+\1\.?)+$"#, with: "$1.",
+                                         options: [.regularExpression, .caseInsensitive])
         return text
     }
 }
@@ -28,6 +34,11 @@ extension TextCleaner {
         var out = text
         // "p.m." (both dots) or "PM" — never swallow a full stop that follows "PM".
         let meridiem = #"\s?([AaPp])(?:\.\s?[Mm]\.|\s?[Mm]\b)"#
+        // "7.30 p.m." → "7:30 p.m." (a dot between hour and minutes is a speech-model habit).
+        out = out.replacingOccurrences(of: #"\b(\d{1,2})\.(\d{2})(?=\s?[AaPp]\.?\s?[Mm]\b)"#, with: "$1:$2",
+                                       options: .regularExpression)
+        // "p.m. on the 21st": the sentence goes on, so the second dot is only the abbreviation's.
+        out = out.replacingOccurrences(of: #"\b([AaPp])\.\s?[Mm]\.(?=\s+[a-z])"#, with: "$1M", options: .regularExpression)
         // "8 p.m. Then…": the second dot also ends the sentence.
         out = out.replacingOccurrences(of: #"([AaPp])\.\s?[Mm]\.(?=\s+[A-Z])"#, with: "$1M.", options: .regularExpression)
         out = out.replacingOccurrences(of: #"\b0?(\d{1,2}):00"# + meridiem, with: "$1 $2M", options: .regularExpression)

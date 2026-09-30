@@ -88,7 +88,8 @@ public enum MacCommands {
         }
         if match(#"(?:turn (?:the )?)?volume up|louder|turn it up"#) != nil { return .volumeStep(up: true) }
         if match(#"(?:turn (?:the )?)?volume down|quieter|softer|turn it down"#) != nil { return .volumeStep(up: false) }
-        if match(#"mute(?: (?:the )?(?:sound|volume|mac|audio))?"#) != nil { return .mute(true) }
+        // "Mute" alone is often heard as "Mude" / "Moot".
+        if match(#"(?:mute|mude|moot)(?: (?:the )?(?:sound|volume|mac|audio))?"#) != nil { return .mute(true) }
         if match(#"unmute(?: (?:the )?(?:sound|volume|mac|audio))?"#) != nil { return .mute(false) }
         if match(#"(?:play|pause|resume)(?: (?:the )?(?:music|song|video|media))?|play pause"#) != nil { return .media(.playPause) }
         if match(#"(?:next|skip)(?: (?:the )?)?(?:song|track)|skip (?:this|it)"#) != nil { return .media(.next) }

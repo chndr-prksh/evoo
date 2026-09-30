@@ -1,0 +1,58 @@
+[
+  {
+    "asrAtReleaseMs" : 538,
+    "audioSeconds" : 4.09075,
+    "blocksReady" : 0,
+    "blocksTotal" : 1,
+    "mode" : "stream",
+    "output" : "I wanted to give everyone a quick update on where we are with the launch.",
+    "peakMemoryMB" : 1175.734375,
+    "polishAtReleaseMs" : 4917,
+    "releaseToTextMs" : 5456,
+    "sentences" : 1,
+    "wer" : 0,
+    "words" : 15
+  },
+  {
+    "asrAtReleaseMs" : 0,
+    "audioSeconds" : 19.265,
+    "blocksReady" : 2,
+    "blocksTotal" : 5,
+    "mode" : "stream",
+    "output" : "I wanted to give everyone a quick update on where we are with the launch. The design team finished the new onboarding screens last night. We still need to review the copy on the pricing page before it goes live. Engineering fixed most of the bugs that came up during testing. There is one issue left with notifications on older phones.",
+    "peakMemoryMB" : 1226.609375,
+    "polishAtReleaseMs" : 10036,
+    "releaseToTextMs" : 10036,
+    "sentences" : 5,
+    "wer" : 0,
+    "words" : 61
+  },
+  {
+    "asrAtReleaseMs" : 151,
+    "audioSeconds" : 37.4810625,
+    "blocksReady" : 7,
+    "blocksTotal" : 10,
+    "mode" : "stream",
+    "output" : "I wanted to give everyone a quick update on where we are with the launch. The design team finished the new onboarding screens last night. We still need to review the copy on the pricing page before it goes live. Engineering fixed most of the bugs that came up during testing. There is one issue left with notifications on older phones. Priya is looking into it and expects to have a fix by tomorrow afternoon. Once that is done, we can start the final round of testing. I think we should give ourselves 2 extra days just to be safe. That would move the launch from Monday to Wednesday. Marketing is fine with that as long as we tell them by Friday.",
+    "peakMemoryMB" : 1228.375,
+    "polishAtReleaseMs" : 8410,
+    "releaseToTextMs" : 8562,
+    "sentences" : 10,
+    "wer" : 0.00819672131147541,
+    "words" : 122
+  },
+  {
+    "asrAtReleaseMs" : 2,
+    "audioSeconds" : 107.07125,
+    "blocksReady" : 13,
+    "blocksTotal" : 14,
+    "mode" : "stream",
+    "output" : "I wanted to give everyone a quick update on where we are with the launch. The design team finished the new onboarding screens last night. We still need to review the copy on the pricing page before it goes live. Engineering fixed most of the bugs that came up during testing. There is one issue left with notifications on older phones. Priya is looking into it and expects to have a fix by tomorrow afternoon. Once that is done, we can start the final round of testing. I think we should give ourselves 2 extra days just to be safe. That would move the launch from Monday to Wednesday. Marketing is fine with that as long as we tell them by Friday. The press release is already written and approved. We also have 3 customer stories ready to share on the blog. Support will need a short guide so they can answer common questions. I can write the:\n1. Draft of that guide this weekend, Rahul offered to record a short video walking through the new features. Let's make sure the video is under 2 minutes. People rarely watch longer videos all the way through. On the business side, the early numbers look encouraging. Sign-ups from the waitlist are higher than we expected. About 40% of people who joined the beta used it every day. That is much better than our last product. The main complaint was that the app felt slow on first launch. We have already cut the loading time in half. There is more we can do, but it is good enough for now. After launch, I want us to focus on 3 things. First, listen closely to what new users say in the first week\n2. Fix anything that stops people from finishing sign up\n3. Keep the team rested, because this has been a long quarter. I know everyone has been working late, and I really appreciate it. Please take a day off after the launch if you can.",
+    "peakMemoryMB" : 1228.53125,
+    "polishAtReleaseMs" : 171,
+    "releaseToTextMs" : 173,
+    "sentences" : 30,
+    "wer" : 0.026785714285714284,
+    "words" : 336
+  }
+]

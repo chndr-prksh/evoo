@@ -38,6 +38,7 @@ final class DictationController: ObservableObject {
     /// The mic starts and stops here, so a key press never waits on CoreAudio.
     private let micQueue = DispatchQueue(label: "app.evoo.mic", qos: .userInteractive)
     private var startSound: Task<Void, Never>?
+    private var refinerLoading = false
     /// A quick fn tap: still recording for a moment (in case a second tap makes it hands-free), but the pill
     /// already looks idle — a tap shouldn't leave anything on screen.
     @Published private(set) var provisional = false
@@ -46,7 +47,8 @@ final class DictationController: ObservableObject {
     private lazy var pipeline = DictationPipeline(refiner: refiner)
     private let injector = TextInjector()
     private let editWatcher = EditWatcher()
-    private let speculator = SpeculativeTranscriber()
+    private let streaming = StreamingDictation()
+    private var polisher: StreamingPolisher?
     private var speculationLoop: Task<Void, Never>?
     /// Names read from the screen while the user speaks; ready by the time fn goes up.
     private var screenNames: Task<[String], Never>?
@@ -168,15 +170,17 @@ final class DictationController: ObservableObject {
             || (Features.multilingual && settings.refinementEnabled)
         guard wanted else { return refiner.unload() }
         let model = settings.refinerModel
-        guard ModelDownloader.isInstalled(model) else { return }
+        guard ModelDownloader.isInstalled(model), !refinerLoading else { return }
+        refinerLoading = true
         Task {
+            defer { refinerLoading = false }
             do { try await refiner.load(model, language: settings.language) } catch {
                 log.error("Refiner load failed: \(error.localizedDescription)")
             }
         }
     }
 
-    func downloadRefiner(enableCleanup: Bool = true) {
+    func downloadRefiner(enableCleanup: Bool = true, thenNotesModel: Bool = false) {
         let model = settings.refinerModel
         guard refinerDownloadProgress == nil else { return }
         refinerDownloadProgress = 0
@@ -188,6 +192,7 @@ final class DictationController: ObservableObject {
                 refinerDownloadProgress = nil
                 if enableCleanup, SystemInfo.canRunSmartCleanup { settings.smartCleanup = true } // downloaded to use it
                 prepareRefiner()
+                if thenNotesModel, !notesModelInstalled { downloadNotesModel() }
             } catch {
                 refinerDownloadProgress = nil
                 show("Download failed: \(error.localizedDescription)")
@@ -261,6 +266,12 @@ final class DictationController: ObservableObject {
 
     func start() {
         guard phase == .idle || isMessage else { return }
+        // Class notes swap in the 4B model; dictation goes back to its own (faster) one once the class is over.
+        if refiner.loadedModel != settings.refinerModel, ClassNotesModel.shared.recorder == nil,
+           ClassNotesModel.shared.makingStudyPack == nil, settings.smartCleanup
+        {
+            prepareRefiner()
+        }
         let t0 = ContinuousClock.now
         var marks: [String] = []
         func mark(_ what: String) { marks.append("\(what) \((ContinuousClock.now - t0).ms)ms") }
@@ -315,13 +326,30 @@ final class DictationController: ObservableObject {
             }
             : nil
         // While fn is held, transcribe during pauses so the text is ready the moment fn goes up.
-        speculator.reset()
+        // Long dictations: finished stretches are transcribed while you speak, and (with AI polish on) finished
+        // sentences are polished in the background — so releasing fn only leaves the last few seconds to do.
+        streaming.reset()
+        polisher = nil
+        if smartCleanupReady {
+            let refiner = self.refiner
+            let tone = Tone.forApp(NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
+            let language = settings.language
+            polisher = StreamingPolisher { text in try? await refiner.refine(text, language: language, tone: tone) }
+        }
+        let startStyle: OutputStyle? = settings.formatText
+            ? OutputStyle.forApp(NSWorkspace.shared.frontmostApplication?.bundleIdentifier) : nil
+        streaming.onCommit = { [weak self] raw, partial in
+            guard let self, let polisher = self.polisher else { return }
+            let post = self.pipeline.postProcess(raw, language: self.settings.language, style: startStyle)
+            polisher.prefetch(post.text, partialStart: partial)
+        }
         speculationLoop = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(100))
                 guard let self, self.phase == .recording,
                       let engine = self.engines.ready(self.settings.resolvedEngine) else { continue }
-                self.speculator.consider(self.recorder.snapshot(), engine: engine)
+                let from = self.streaming.committedSamples
+                self.streaming.consider(recent: self.recorder.snapshot(from: from), from: from, engine: engine)
             }
         }
         maxDurationTimer = Task {
@@ -355,7 +383,7 @@ final class DictationController: ObservableObject {
         // Safety net: never stay stuck in "transcribing".
         watchdog?.cancel()
         watchdog = Task {
-            try? await Task.sleep(for: .seconds(Self.processingTimeoutSeconds))
+            try? await Task.sleep(for: .seconds(Self.processingTimeoutSeconds + seconds / 2))
             guard !Task.isCancelled, session == current, phase == .transcribing || phase == .refining else { return }
             processing?.cancel()
             show("That took too long — please try again")
@@ -389,7 +417,7 @@ final class DictationController: ObservableObject {
         }
         do {
             let asrStart = ContinuousClock.now
-            let (raw, reused) = try await speculator.transcript(for: samples, engine: engine)
+            let (raw, reused) = try await streaming.finish(samples, engine: engine)
             let asrMs = (ContinuousClock.now - asrStart).ms
             if await runMacCommand(raw) { return }
             if runAppCommand(raw) { return }
@@ -402,7 +430,8 @@ final class DictationController: ObservableObject {
             if policy != .off { phase = .refining }
             let names = await screenNames?.value ?? []
             let out = await pipeline.finish(raw: raw, asrMs: asrMs, language: language, style: style,
-                                            contextTerms: names, tone: Tone.forApp(targetApp), llm: policy)
+                                            contextTerms: names, tone: Tone.forApp(targetApp), llm: policy,
+                                            polisher: polisher)
             learnFromScreen(seen: names, used: out.usedScreenTerms)
             // Cancelled, timed out, or superseded by a newer dictation: don't paste stale text.
             guard !Task.isCancelled, session == self.session else { return }

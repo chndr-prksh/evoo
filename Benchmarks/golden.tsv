@@ -1,0 +1,86 @@
+# Evoo golden set: category <TAB> what is said <TAB> check <TAB> expected
+# check: text = output must equal expected (case/space-insensitive, trailing punctuation ignored)
+#        has  = output must contain every "|"-separated piece;  not = must contain none of them
+#        mac  = parsed Mac command, described (prefix match);  app = parsed app command;  edit = parsed voice edit
+# Audio is macOS text-to-speech (Samantha), 16 kHz — clean speech, no room noise.
+
+# ── Self-corrections
+corrections	Let's meet tomorrow, no, day after tomorrow.	text	Let's meet day after tomorrow.
+corrections	I'm planning to go out tomorrow at 4, not 4, 5 PM.	text	I'm planning to go out tomorrow at 5 PM.
+corrections	Send it to Rahul, sorry, to Priya.	has	Priya
+corrections	The meeting is at 3:30, actually make it 4.	has	4
+corrections	Book a table for four, I mean six people.	has	6 people
+corrections	We need 20 chairs, no wait, 25 chairs.	has	25 chairs
+corrections	Call me on Monday, scratch that, call me on Tuesday.	has	Tuesday
+corrections	I'll take the red one, no, the blue one.	has	blue one
+corrections	Let's go to the park, no, not today.	has	not today
+corrections	I don't know, no, I really don't know.	has	really don't know
+# ── Fillers, stutters, restarts
+cleanup	Um, so, uh, I think we should, we should ship it on Friday.	text	I think we should ship it on Friday.
+cleanup	We should, we should leave now.	text	We should leave now.
+cleanup	Can you, can you send me the file?	text	Can you send me the file?
+cleanup	Like, you know, the demo went really well.	has	demo went really well
+# ── Numbers, times, money, units
+numbers	Latency needs to be under four hundred milliseconds.	has	400
+numbers	Twenty five percent of users saw the new screen.	has	25%
+numbers	The flight leaves at seven thirty PM on the twenty first.	has	7:30|21
+numbers	It costs one thousand two hundred dollars.	has	1,200|$
+numbers	I ran five kilometers in twenty eight minutes.	has	5|28
+numbers	Version two point three ships next week.	has	2.3
+numbers	Which one do you want?	text	Which one do you want?
+numbers	Call me at nine eight seven six five four three two one zero.	has	9876543210
+# ── Lists & formatting
+lists	I need to buy tomorrow bread, eggs, milk, avocado and bananas.	has	Bread|Eggs|Milk|Avocado|Bananas
+lists	First open the app, second sign in, third click settings.	has	1.|2.|3.
+lists	Dear team new paragraph the launch is moved to Monday.	has	Dear team
+lists	My email is chandra at gmail dot com.	has	chandra@gmail.com
+lists	Hello new line how are you?	has	Hello
+# ── Spoken formatting commands
+commands	Capitalize each word the quick brown fox.	text	The Quick Brown Fox
+commands	All caps urgent.	has	URGENT
+commands	Quote to be or not to be end quote.	has	"to be or not to be"
+# ── Names (personal dictionary: Divya, Aarav, Kubernetes)
+names	Hi Divya, how are you?	has	Divya
+names	Aarav will join the call at five.	has	Aarav
+names	We deploy everything on Kubernetes.	has	Kubernetes
+names	I have a new idea for the product.	not	Divya|Aarav
+# ── Punctuation on long speech
+punctuation	so I was thinking about the launch plan and I feel like we should move it by a week because the design is not ready and the team is tired	has	.
+punctuation	what time does the store open tomorrow	has	?
+# ── Mac control (parsed, not executed)
+mac	Volume thirty.	mac	volume(30)
+mac	Set the volume to fifty percent.	mac	volume(50)
+mac	Turn the volume down.	mac	volumeStep(up: false)
+mac	Mute.	mac	mute(true)
+mac	Press space bar.	mac	keys
+mac	Space bar.	mac	keys
+mac	Press command shift T.	mac	keys
+mac	New tab.	mac	keys
+mac	Take a screenshot.	mac	keys
+mac	Move this to the left half.	mac	window(EvooCore.WindowAction.leftHalf)
+mac	Maximize this window.	mac	window(EvooCore.WindowAction.maximize)
+mac	Search my Mac for tax documents.	mac	spotlight("tax documents")
+mac	Run shortcut Morning Routine.	mac	runShortcut
+mac	Next song.	mac	media
+mac	Dark mode.	mac	darkMode(true)
+mac	Click send.	mac	click("send")
+mac	Remind me to call Divya tomorrow at 5 PM.	mac	reminder
+mac	Schedule lunch with Raj on Friday at 1 PM.	mac	event
+mac	Note: buy a gift for mom.	mac	note
+mac	What did I say about the invoice?	mac	askHistory
+mac	Read this aloud.	mac	readAloud
+mac	Search note Bayes theorem.	mac	searchClassNotes
+# Not commands: ordinary sentences must stay text
+notcommand	I turned the volume up at the party yesterday.	nocommand
+notcommand	Can you press the shirt before the meeting?	nocommand
+notcommand	Let me open up about how I feel.	nocommand
+# ── Apps & websites (parsed, not executed)
+app	Open YouTube.	app	open
+app	Open GitHub in Chrome.	app	openIn
+app	Search Google for flights to Delhi.	app	search
+app	Ask ChatGPT how tides work.	app	search
+app	New Google doc.	app	openURL
+# ── Voice edits (parsed)
+edit	Replace Tuesday with Wednesday.	edit	replace
+edit	Delete the last sentence.	edit	deleteLastSentence
+edit	Make that a list.	edit	makeList
