@@ -28,5 +28,6 @@ if let i = CommandLine.arguments.firstIndex(of: "--snapshot-notes"), i + 1 < Com
 let app = NSApplication.shared
 let delegate = MainActor.assumeIsolated { AppDelegate() }
 app.delegate = delegate
-app.setActivationPolicy(.accessory) // menu-bar app: no Dock icon
+// In the Dock with a main window (default), or menu bar only (Settings › Show Evoo in the Dock).
+app.setActivationPolicy(UserDefaults.standard.object(forKey: "showInDock") as? Bool ?? true ? .regular : .accessory)
 app.run()

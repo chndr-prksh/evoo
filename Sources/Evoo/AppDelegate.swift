@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var pill: PillPanel!
     private var settingsWindow: NSWindow?
+    private var mainWindow: NSWindow?
     private var historyWindow: NSWindow?
     private var welcomeWindow: NSWindow?
     private var classWindow: NSWindow?
@@ -101,11 +102,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             MainActor.assumeIsolated { self?.openWelcome(page: 4) }
         }
         #endif
+        seedLifetimeTotals()
         if !UserDefaults.standard.bool(forKey: "onboarded") {
             openWelcome(page: 0)
         } else if !controller.permissions.allGranted {
             openSettings()
         }
+    }
+
+    // MARK: - Main window & Dock
+
+    /// Clicking Evoo's Dock icon opens the main window.
+    func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows _: Bool) -> Bool {
+        openMain()
+        return true
+    }
+
+    @objc private func openMainFromMenu() { openMain() }
+
+    func openMain() {
+        if mainWindow == nil {
+            let view = MainWindowView(controller: controller, settings: controller.settings,
+                                      openClassNotes: { [weak self] in self?.openClassNotes(query: nil) })
+            let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+            window.title = "Evoo"
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+            window.setContentSize(NSSize(width: 980, height: 680))
+            window.isReleasedWhenClosed = false
+            window.setFrameAutosaveName("EvooMain")
+            window.center()
+            mainWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        mainWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    /// "Show Evoo in the Dock" (Settings): Dock icon + app menu, or menu bar only.
+    static func applyDockSetting(_ show: Bool) {
+        NSApp.setActivationPolicy(show ? .regular : .accessory)
+    }
+
+    /// Home's totals start from the dictations already in history (before the counters existed).
+    private func seedLifetimeTotals() {
+        let s = controller.settings
+        guard s.wordsDictated == 0, !DictationHistory.shared.entries.isEmpty else { return }
+        let words = DictationHistory.shared.entries.map { $0.text.split(whereSeparator: \.isWhitespace).count }.reduce(0, +)
+        s.wordsDictated = words
+        s.secondsDictated = Double(words) / 150 * 60 // ~150 words a minute spoken
     }
 
     // MARK: - Menu
@@ -117,6 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let status = controller.modelStatus ?? (controller.permissions.allGranted
             ? "Ready — hold fn to dictate" : "Permissions needed")
         menu.addItem(withTitle: status, action: nil, keyEquivalent: "").isEnabled = false
+        menu.addItem(item("Open Evoo", #selector(openMainFromMenu), key: "o"))
         menu.addItem(.separator())
 
         menu.addItem(item(controller.phase == .recording ? "Stop Dictation" : "Start Hands-free Dictation",
@@ -128,7 +172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         if Features.multilingual {
             let languages = NSMenu()
-            for language in DictationLanguage.allCases {
+            for language in Features.languages {
                 let entry = item(language.title, #selector(selectLanguage(_:)))
                 entry.representedObject = language.rawValue
                 entry.state = settings.language == language ? .on : .off

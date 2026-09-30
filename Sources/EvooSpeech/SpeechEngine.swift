@@ -73,6 +73,8 @@ public final class SpeechEngines {
         switch id {
         case .parakeet: ParakeetEngine(version: parakeetVersion)
         case .whisper: WhisperEngine()
+        case .hinglish: WhisperEngine(modelFolder: HinglishAddon.folder, tokenizerFolder: HinglishAddon.tokenizerFolder,
+                                      languageOverride: "en")
         }
     }
 }

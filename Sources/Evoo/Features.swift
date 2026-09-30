@@ -1,6 +1,11 @@
-/// Build-time feature switches.
+import EvooCore
+import EvooSpeech
+
+/// Feature switches.
 enum Features {
-    /// Hindi / Hinglish (Whisper + local LLM). Off for now: Evoo ships English-only, tuned for speed.
-    /// Turning it back on restores the language picker, Whisper, and the local AI refiner.
-    static let multilingual = false
+    /// Language switching (English / Hinglish): available once the Hinglish add-on is downloaded (Settings).
+    /// English always keeps its own model (Parakeet) and pipeline.
+    static var multilingual: Bool { HinglishAddon.isInstalled }
+    /// Hindi in Devanagari stays hidden until it's good enough.
+    static let languages: [DictationLanguage] = [.english, .hinglish]
 }

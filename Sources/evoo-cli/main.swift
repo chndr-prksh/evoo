@@ -59,6 +59,23 @@ func loadRefiner() async throws {
 }
 
 switch command {
+case "hinglish":
+    // Hinglish test set with a converted model folder, or the stock Whisper (--stock) for comparison:
+    //   evoo-cli hinglish --model-folder path/to/converted   |   evoo-cli hinglish --stock
+    // --addon: download (if needed) and use the Hinglish add-on exactly as the app does.
+    if flag("--addon"), !HinglishAddon.isInstalled {
+        print("downloading the Hinglish add-on…")
+        try await HinglishAddon.download { _ in }
+    }
+    let folder = option("--model-folder") ?? (HinglishAddon.isInstalled ? HinglishAddon.folder.path : nil)
+    let engine = folder == HinglishAddon.folder.path
+        ? WhisperEngine(modelFolder: HinglishAddon.folder, tokenizerFolder: HinglishAddon.tokenizerFolder, languageOverride: "en")
+        : WhisperEngine(modelFolder: folder.map { URL(fileURLWithPath: $0) }, languageOverride: folder == nil ? nil : "en")
+    let t = try await clock.measure { try await engine.load { _ in } }
+    print("loaded \(folder ?? "stock whisper") in \(t)")
+    try await runHinglish(engine: engine, pipeline: pipeline, json: option("--json"))
+    await engine.unload()
+
 case "download":
     // Downloads AI models the benchmark needs (verified, same place the app uses): evoo-cli download qwen3_1_7b …
     for name in inputs {

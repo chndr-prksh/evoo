@@ -126,7 +126,7 @@ import Testing
 
     @Test func engineRouting() {
         #expect(EnginePreference.automatic.resolve(for: .english) == .parakeet)
-        #expect(EnginePreference.automatic.resolve(for: .hinglish) == .whisper)
+        #expect(EnginePreference.automatic.resolve(for: .hinglish) == .hinglish)
         #expect(EnginePreference.parakeet.resolve(for: .hindi) == .whisper) // Parakeet has no Hindi
     }
 }
@@ -879,4 +879,17 @@ import Testing
     #expect(DictationRules.removeCommaFillers("Do you know the answer?") == "Do you know the answer?")
     // "I mean" is a correction cue, handled elsewhere.
     #expect(DictationRules.apply("Let's meet tomorrow, I mean, Friday.").text.contains("Friday"))
+}
+
+@Test func hinglishCorrections() {
+    #expect(HinglishRules.apply("Kal milte hain, nahi, parson milte hain.") == "Parson milte hain.")
+    #expect(HinglishRules.apply("Kal milte parson milte hain.") == "Parson milte hain.")
+    #expect(HinglishRules.apply("Rahul ko message bhejo, sorry, Amit ko message bhejo.") == "Amit ko message bhejo.")
+    #expect(HinglishRules.apply("Raahul ko message amit ko message bhejo.") == "Amit ko message bhejo.")
+    #expect(HinglishRules.apply("Mujhe do nahin, teen tickets chahiye.") == "Mujhe teen tickets chahiye.")
+    // Ordinary sentences stay.
+    #expect(HinglishRules.apply("Mera phone kharab hai, tera phone theek hai.") == "Mera phone kharab hai, tera phone theek hai.")
+    #expect(HinglishRules.apply("Main ghar ja raha hoon aur tum ghar aao.") == "Main ghar ja raha hoon aur tum ghar aao.")
+    #expect(HinglishRules.apply("Please bhej do.") == "Please bhej do.")
+    #expect(HinglishRules.apply("Payment ho gaya hai, screenshot bhej raha hoon.") == "Payment ho gaya hai, screenshot bhej raha hoon.")
 }

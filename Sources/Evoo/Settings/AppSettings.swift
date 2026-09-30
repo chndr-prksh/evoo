@@ -21,6 +21,11 @@ final class AppSettings: ObservableObject {
     @Published var playSounds: Bool { didSet { save(playSounds, "playSounds") } }
     /// Mic runs between dictations so fn starts instantly (and keeps the 0.3 s before the press).
     @Published var keepMicReady: Bool { didSet { save(keepMicReady, "keepMicReady") } }
+    /// Evoo in the Dock with its main window (like Wispr Flow); off = menu bar only.
+    @Published var showInDock: Bool { didSet { save(showInDock, "showInDock") } }
+    /// Lifetime totals for Home (history itself only keeps the last 500 dictations).
+    @Published var wordsDictated: Int { didSet { save(wordsDictated, "wordsDictated") } }
+    @Published var secondsDictated: Double { didSet { save(secondsDictated, "secondsDictated") } }
     @Published var restoreClipboard: Bool { didSet { save(restoreClipboard, "restoreClipboard") } }
     /// Names and terms to recognize correctly ("Divya", "Kubernetes").
     @Published var personalWords: [String] { didSet { save(personalWords, "personalWords") } }
@@ -74,7 +79,9 @@ final class AppSettings: ObservableObject {
             UserDefaults.standard.object(forKey: key) as? Bool ?? fallback
         }
         activationMode = value("activationMode", .hybrid)
-        language = value("language", .english)
+        // English unless the Hinglish add-on is installed; Hindi (Devanagari) and the old Whisper + LLM path are off.
+        let saved: DictationLanguage = value("language", .english)
+        language = Features.languages.contains(saved) && (saved != .hinglish || Features.multilingual) ? saved : .english
         engine = value("engine", .automatic)
         refinementEnabled = bool("refinementEnabled", true)
         // Dictation polish: the 4B model polishes ~4 words/s on an 8 GB Mac — slower than people speak — so smaller
@@ -86,13 +93,13 @@ final class AppSettings: ObservableObject {
         showPill = bool("showPill", true)
         playSounds = bool("playSounds", true)
         keepMicReady = bool("keepMicReady", false)
+        showInDock = bool("showInDock", true)
+        wordsDictated = UserDefaults.standard.integer(forKey: "wordsDictated")
+        secondsDictated = UserDefaults.standard.double(forKey: "secondsDictated")
         restoreClipboard = bool("restoreClipboard", true)
         personalWords = UserDefaults.standard.stringArray(forKey: "personalWords") ?? []
-        if !Features.multilingual {
-            language = .english
-            engine = .automatic
-            refinementEnabled = false
-        }
+        engine = .automatic
+        refinementEnabled = false
         formatText = bool("formatText", true)
         // Accurate by default: the golden set scores 67/69 vs 58/69 for the 110M model (it mishears short commands —
         // "Mute" → "Mud", "space bar" → "face bar"), and streaming means long dictations don't wait for it anyway.

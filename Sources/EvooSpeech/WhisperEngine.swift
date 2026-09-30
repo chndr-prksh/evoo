@@ -5,7 +5,18 @@ import WhisperKit
 /// OpenAI Whisper large-v3 turbo (MIT) on CoreML via WhisperKit (MIT).
 /// Multilingual — used for Hindi / Hinglish.
 public final class WhisperEngine: SpeechEngine {
-    public init() {}
+    /// A converted model in a local folder (e.g. the Hinglish add-on) instead of the stock download.
+    private let modelFolder: URL?
+    /// Oriserve's Hinglish models write Roman Hinglish when decoding as "en" (per their model card).
+    private let languageOverride: String?
+
+    private let tokenizerFolder: URL?
+
+    public init(modelFolder: URL? = nil, tokenizerFolder: URL? = nil, languageOverride: String? = nil) {
+        self.modelFolder = modelFolder
+        self.tokenizerFolder = tokenizerFolder
+        self.languageOverride = languageOverride
+    }
 
     public let id = ASREngineID.whisper
     private var pipe: WhisperKit?
@@ -16,7 +27,10 @@ public final class WhisperEngine: SpeechEngine {
         guard pipe == nil else { return }
         try FileManager.default.createDirectory(at: ModelPaths.whisper, withIntermediateDirectories: true)
         progress(0)
-        let config = WhisperKitConfig(
+        let config = modelFolder.map {
+            WhisperKitConfig(modelFolder: $0.path, tokenizerFolder: tokenizerFolder, verbose: false, logLevel: .error,
+                             prewarm: true, load: true, download: false)
+        } ?? WhisperKitConfig(
             model: WhisperVariant.name,
             downloadBase: ModelPaths.whisper,
             verbose: false,
@@ -33,14 +47,17 @@ public final class WhisperEngine: SpeechEngine {
         guard let pipe else { throw EngineError.notLoaded }
         let options = DecodingOptions(
             task: .transcribe,
-            language: language.whisperCode,
+            language: languageOverride ?? language.whisperCode,
             temperature: 0,
             usePrefillPrompt: true,
             detectLanguage: false,
             skipSpecialTokens: true,
             withoutTimestamps: true
         )
-        let results = try await pipe.transcribe(audioArray: samples, decodeOptions: options)
+        // Whisper models tend to drop the first word when speech starts right at the beginning of the clip
+        // (measured on the Hinglish model: "Priya ko report…" → "Ko report…"). A little silence in front fixes it.
+        let padded = modelFolder == nil ? samples : [Float](repeating: 0, count: 8_000) + samples
+        let results = try await pipe.transcribe(audioArray: padded, decodeOptions: options)
         return results.map(\.text).joined(separator: " ")
     }
 

@@ -1,0 +1,22 @@
+# Hinglish test set: what the Hindi voice says (Devanagari + English words, as people mix them) <TAB> what you'd type.
+# Scoring is lenient about Roman spelling variants (hai/he, kar/kr, nahi/nahin) — see evoo-cli hinglish.
+कल मीटिंग है, please confirm कर देना.	kal meeting hai, please confirm kar dena
+मैं दस मिनट में पहुँच रहा हूँ.	main 10 minute mein pahunch raha hoon
+आज ऑफिस नहीं आ पाऊँगा, तबियत ठीक नहीं है.	aaj office nahi aa paunga, tabiyat theek nahi hai
+प्रिया को report भेज दो, वो wait कर रही है.	priya ko report bhej do, wo wait kar rahi hai
+शाम को पाँच बजे call करते हैं.	shaam ko 5 baje call karte hain
+मुझे कल तक presentation ready करनी है.	mujhe kal tak presentation ready karni hai
+तुम कब free हो? मैं बात करना चाहता हूँ.	tum kab free ho? main baat karna chahta hoon
+खाना order कर दिया है, आधे घंटे में आ जाएगा.	khana order kar diya hai, aadhe ghante mein aa jayega
+मम्मी को बोल देना मैं late आऊँगा.	mummy ko bol dena main late aaunga
+ये feature बहुत अच्छा है, पर थोड़ा slow है.	ye feature bahut accha hai, par thoda slow hai
+कल मिलते हैं, नहीं, परसों मिलते हैं.	parson milte hain
+राहुल को message भेजो, sorry, अमित को message भेजो.	amit ko message bhejo
+मुझे दो नहीं, तीन tickets चाहिए.	mujhe teen tickets chahiye
+Meeting को Monday से Wednesday पर shift कर दो.	meeting ko monday se wednesday par shift kar do
+Payment हो गया है, screenshot भेज रहा हूँ.	payment ho gaya hai, screenshot bhej raha hoon
+Bhai, weekend पर क्या plan है?	bhai, weekend par kya plan hai
+Client ने बोला है कि deadline next week है.	client ne bola hai ki deadline next week hai
+मैं traffic में फँसा हूँ, थोड़ा late हो जाएगा.	main traffic mein fansa hoon, thoda late ho jayega
+Please मेरा नाम list में add कर दो.	please mera naam list mein add kar do
+Team को thank you बोलना, बहुत अच्छा काम किया.	team ko thank you bolna, bahut accha kaam kiya

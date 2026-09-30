@@ -258,3 +258,49 @@ func runStress(engine: SpeechEngine, pipeline: DictationPipeline, refiner: Llama
 extension Duration {
     var ms: Int { Int(components.seconds * 1000 + components.attoseconds / 1_000_000_000_000_000) }
 }
+
+// MARK: - Hinglish
+
+/// Lenient key for Roman Hinglish words: "hai"/"he", "nahi"/"nahin", "accha"/"acha", "mein"/"me" match.
+func hinglishKey(_ w: String) -> String {
+    var s = w.lowercased().filter { $0.isLetter || $0.isNumber }
+    for (a, b) in [("aa", "a"), ("ee", "i"), ("oo", "u"), ("chch", "ch"), ("cch", "ch"), ("chh", "ch"), ("ye", "e"), ("ya", "e"),
+                   ("ah", "a"), ("w", "v"), ("z", "j"),
+                   ("ph", "f"), ("ai", "e"), ("ei", "e"), ("th", "t"), ("dh", "d"), ("kh", "k"), ("gh", "g"),
+                   ("bh", "b"), ("sh", "s")] {
+        s = s.replacingOccurrences(of: a, with: b)
+    }
+    while s.count > 2, s.hasSuffix("n") || s.hasSuffix("h") { s.removeLast() } // nasal / aspirated endings
+    return s
+}
+
+func hinglishWER(_ ref: String, _ hyp: String) -> Double {
+    let norm = { (s: String) in
+        s.lowercased().split { !($0.isLetter || $0.isNumber) }.map { hinglishKey(String($0)) }.joined(separator: " ")
+    }
+    return wer(norm(ref), norm(hyp))
+}
+
+@MainActor
+func runHinglish(engine: SpeechEngine, pipeline: DictationPipeline, json: String?) async throws {
+    let lines = try String(contentsOf: URL(fileURLWithPath: "Benchmarks/hinglish.tsv"), encoding: .utf8)
+        .split(separator: "\n").map(String.init).filter { !$0.hasPrefix("#") && $0.contains("\t") }
+    let clock = ContinuousClock()
+    var total = 0.0, exactish = 0, ms: [Int] = []
+    for line in lines {
+        let f = line.components(separatedBy: "\t")
+        let samples = try speech(f[0], voice: "Lekha")
+        let t = clock.now
+        let raw = try await engine.transcribe(samples, language: .hinglish)
+        let asr = (clock.now - t).ms
+        ms.append(asr)
+        let out = pipeline.postProcess(raw, language: .hinglish, style: .plain).text
+        let e = hinglishWER(f[1], out)
+        total += e
+        if e <= 0.1 { exactish += 1 }
+        print(String(format: "%@ %4.0f%%  %@\n        want: %@\n        got:  %@  (%d ms)", e <= 0.1 ? "✅" : "  ", e * 100, f[0], f[1], out, asr))
+    }
+    let sorted = ms.sorted()
+    print(String(format: "\nHINGLISH: %d/%d right (≤10%% word errors) · average word errors %.1f%% · speed median %d ms, max %d ms",
+                 exactish, lines.count, total / Double(lines.count) * 100, sorted[sorted.count / 2], sorted.last ?? 0))
+}

@@ -1,4 +1,5 @@
 import EvooCore
+import EvooSpeech
 import SwiftUI
 
 struct SettingsView: View {
@@ -9,6 +10,9 @@ struct SettingsView: View {
     @ObservedObject private var style = StyleStore.shared
     @ObservedObject private var personal = PersonalModel.shared
     @State private var pillPlace = Self.currentPillPlace
+    @State private var hinglishInstalled = HinglishAddon.isInstalled
+    @State private var hinglishProgress: Double?
+    @State private var hinglishError: String?
 
     static let pillPlaces: [(name: String, x: Double, y: Double)] = [
         ("Bottom left", 0.12, 0), ("Bottom center", 0.5, 0), ("Bottom right", 0.88, 0),
@@ -57,9 +61,9 @@ struct SettingsView: View {
                 Picker("Fn key", selection: $settings.activationMode) {
                     ForEach(ActivationMode.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
-                if Features.multilingual {
+                if hinglishInstalled {
                     Picker("Language", selection: $settings.language) {
-                        ForEach(DictationLanguage.allCases, id: \.self) { Text($0.title).tag($0) }
+                        ForEach(Features.languages, id: \.self) { Text($0.title).tag($0) }
                     }
                 }
                 Toggle("Fastest speech model", isOn: $settings.fastestModel)
@@ -126,7 +130,39 @@ struct SettingsView: View {
                 }
             }
 
-            if Features.multilingual {
+            Section("Hinglish (add-on, beta)") {
+                Text("Dictate in Hinglish — Hindi and English mixed, written the way people type it in chat (\"kal meeting hai, please confirm kar dena\"). Uses its own speech model, so English stays exactly as it is. Switch languages from the pill or here. Runs on this Mac.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if hinglishInstalled {
+                    Label("Installed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    Button("Remove Hinglish add-on", role: .destructive) {
+                        settings.language = .english
+                        HinglishAddon.remove()
+                        hinglishInstalled = false
+                    }
+                } else if let p = hinglishProgress {
+                    ProgressView(value: p) { Text("Downloading… \(Int(p * 100))%") }
+                } else {
+                    HStack {
+                        Text("\(HinglishAddon.sizeMB) MB, once").foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Download") {
+                            hinglishError = nil
+                            hinglishProgress = 0
+                            Task {
+                                do {
+                                    try await HinglishAddon.download { p in Task { @MainActor in hinglishProgress = p } }
+                                    hinglishInstalled = true
+                                } catch { hinglishError = error.localizedDescription }
+                                hinglishProgress = nil
+                            }
+                        }
+                    }
+                }
+                if let hinglishError { Text(hinglishError).font(.caption).foregroundStyle(.red) }
+            }
+
+            if false { // old Whisper + LLM path, kept for reference
                 Section("Speech model") {
                     Picker("Engine", selection: $settings.engine) {
                         ForEach(EnginePreference.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -277,6 +313,8 @@ struct SettingsView: View {
             }
 
             Section("General") {
+                Toggle("Show Evoo in the Dock", isOn: $settings.showInDock)
+                    .onChange(of: settings.showInDock) { _, show in AppDelegate.applyDockSetting(show) }
                 Toggle("Show floating pill", isOn: $settings.showPill)
                 Picker("Pill position", selection: Binding(
                     get: { pillPlace },

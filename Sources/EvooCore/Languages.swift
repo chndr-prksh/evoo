@@ -46,11 +46,14 @@ public enum DictationLanguage: String, CaseIterable, Codable, Sendable {
 public enum ASREngineID: String, CaseIterable, Codable, Sendable {
     case parakeet
     case whisper
+    /// The Hinglish add-on (Whisper fine-tuned to write Roman Hinglish).
+    case hinglish
 
     public var title: String {
         switch self {
         case .parakeet: "Parakeet TDT v3 (fastest, English + EU)"
         case .whisper: "Whisper large-v3 turbo (multilingual)"
+        case .hinglish: "Hinglish add-on (Whisper, fine-tuned)"
         }
     }
 
@@ -58,6 +61,7 @@ public enum ASREngineID: String, CaseIterable, Codable, Sendable {
         switch self {
         case .parakeet: "NVIDIA Parakeet TDT 0.6B v3 — CC-BY-4.0"
         case .whisper: "OpenAI Whisper — MIT"
+        case .hinglish: "Oriserve Whisper-Hindi2Hinglish — Apache-2.0"
         }
     }
 }
@@ -77,7 +81,7 @@ public enum EnginePreference: String, CaseIterable, Codable, Sendable {
 
     public func resolve(for language: DictationLanguage) -> ASREngineID {
         switch self {
-        case .automatic: language.parakeetSupported ? .parakeet : .whisper
+        case .automatic: language == .english ? .parakeet : language == .hinglish ? .hinglish : .whisper
         case .parakeet: language.parakeetSupported ? .parakeet : .whisper
         case .whisper: .whisper
         }

@@ -203,6 +203,7 @@ public final class DictationPipeline {
             usedScreenTerms = r.used.filter { contextTerms.contains($0) && !dictionary.terms.contains($0) }
         }
         var result = DictationRules.apply(text) // corrections, fillers, stutters
+        if language == .hinglish { result.text = HinglishRules.apply(result.text) } // Hinglish restarts only
         if let style {
             result.text = DictationFormatter.format(result.text, style: style) // lists, line breaks, emails
         }

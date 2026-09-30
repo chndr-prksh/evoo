@@ -191,8 +191,7 @@ final class DictationController: ObservableObject {
     }
 
     func prepareRefiner() {
-        let wanted = (settings.smartCleanup && SystemInfo.canRunSmartCleanup)
-            || (Features.multilingual && settings.refinementEnabled)
+        let wanted = settings.smartCleanup && SystemInfo.canRunSmartCleanup
         guard wanted else { return refiner.unload() }
         let model = settings.refinerModel
         guard ModelDownloader.isInstalled(model), !refinerLoading else { return }
@@ -394,7 +393,7 @@ final class DictationController: ObservableObject {
         // sentences are polished in the background — so releasing fn only leaves the last few seconds to do.
         streaming.reset()
         polisher = nil
-        if smartCleanupReady {
+        if smartCleanupReady, settings.language == .english {
             let refiner = self.refiner
             let tone = Tone.forApp(NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
             let language = settings.language
@@ -545,8 +544,8 @@ final class DictationController: ObservableObject {
             if try await composeIfAsked(raw, session: session) { return }
             // Smart cleanup (16 GB+): the local LLM polishes the dictation after the rules.
             // Otherwise the LLM only runs for Hinglish (multilingual builds).
-            let policy: DictationPipeline.LLMPolicy = smartCleanupReady ? .polish
-                : Features.multilingual && settings.refinementEnabled && refiner.isLoaded ? .whenNeeded : .off
+            // Hinglish is written by its own model and cleaned by the Hinglish rules; the small local AIs handle it badly.
+            let policy: DictationPipeline.LLMPolicy = smartCleanupReady && language == .english ? .polish : .off
             if policy != .off { phase = .refining }
             let commandsMs = (ContinuousClock.now - afterASR).ms
             let t0 = ContinuousClock.now
@@ -592,6 +591,8 @@ final class DictationController: ObservableObject {
             let totalMs = (ContinuousClock.now - releasedAt).ms
             phase = .idle // the text is in: the pill is done
             lastText = text
+            settings.wordsDictated += text.split(whereSeparator: \.isWhitespace).count
+            settings.secondsDictated += seconds
             lastTimings = String(format: "%.1fs audio · ", seconds) + out.summary
                 + " · fn up → pasted \(totalMs) ms" + (reused ? " (ready early)" : "")
                 + " [start \(startDelay) ms, commands \(commandsMs) ms, names wait \(namesMs) ms, paste \(pasteMs) ms]"

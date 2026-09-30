@@ -207,7 +207,7 @@ final class PillPanel: NSPanel {
 
     private func popUpLanguageMenu() {
         let menu = NSMenu()
-        for language in DictationLanguage.allCases {
+        for language in Features.languages {
             let item = NSMenuItem(title: language.title, action: #selector(pickLanguage(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = language.rawValue

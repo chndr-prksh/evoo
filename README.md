@@ -21,7 +21,7 @@ one-line install below. Evoo updates itself after that.
 - 100% local: speech recognition and text cleanup run on-device. No accounts, no cloud, no API keys.
 - Understands what you *meant*: "let's meet tomorrow, no, day after tomorrow" → **"Let's meet day after tomorrow."**
 - Works everywhere you can paste: Chrome, Slack, Gmail, Notion, VS Code, Cursor, Terminal, Office…
-- English (Hindi/Hinglish are built but switched off for now — `Features.multilingual`). Pluggable speech engines.
+- English, plus a **Hinglish add-on (beta)**: download it from Settings (133 MB) and switch languages on the pill. It uses its own model (Oriserve Whisper-Hindi2Hinglish, Apache-2.0), writes Roman Hinglish ("kal meeting hai, please confirm kar dena"), and handles Hinglish self-corrections; English keeps its own model and is unaffected.
 - Speculative transcription: Evoo starts transcribing when you pause, so text is usually ready the instant fn goes up.
 - Personal dictionary for names and jargon (Divya, Aarav, Kubernetes).
 - Voice shortcuts: say "my email" (alone or mid-sentence) and get the full text you set up.
@@ -36,6 +36,7 @@ one-line install below. Evoo updates itself after that.
   class: a one-screen study sheet (summary, key formulas, terms, practice questions), flashcards, and Q&A about
   the lecture. No audio is kept. Classes are grouped by subject; say "search note Bayes theorem" to find
   something. Export to PDF or Markdown.
+- **Desktop app:** Evoo sits in the Dock; click it for Home (words dictated, speaking speed, time saved, streak, recent dictations), History, Dictionary, Class Notes and Settings. Prefer menu bar only? Settings › Show Evoo in the Dock.
 - **Instant start:** the pill appears the moment you press fn. Optional *Keep the microphone ready* (Settings) keeps
   the mic on between dictations, holding only the last 0.3 s in memory, so recording starts instantly and includes
   the moment before the press. Drag the pill anywhere along the bottom or up the left/right side (it stands upright
