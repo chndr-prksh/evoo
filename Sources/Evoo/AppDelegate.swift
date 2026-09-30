@@ -124,12 +124,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if mainWindow == nil {
             let view = MainWindowView(controller: controller, settings: controller.settings,
                                       openClassNotes: { [weak self] in self?.openClassNotes(query: nil) })
+                .evooLook()
             let window = NSWindow(contentViewController: NSHostingController(rootView: view))
             window.title = "Evoo"
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
             window.setContentSize(NSSize(width: 980, height: 680))
             window.isReleasedWhenClosed = false
             window.setFrameAutosaveName("EvooMain")
+            Theme.style(window)
             window.center()
             mainWindow = window
         }
@@ -237,9 +239,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ClassNotesModel.shared.query = query
         }
         if classWindow == nil {
-            let view = ClassNotesView(model: .shared, store: .shared, controller: controller)
+            let view = ClassNotesView(model: .shared, store: .shared, controller: controller).evooLook()
             let window = NSWindow(contentViewController: NSHostingController(rootView: view))
             window.title = "Class Notes"
+            Theme.style(window)
             window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
             window.isReleasedWhenClosed = false
             window.setContentSize(NSSize(width: 1100, height: 700))
@@ -259,9 +262,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 UserDefaults.standard.set(true, forKey: "onboarded")
                 self?.welcomeWindow?.close()
                 self?.controller.startHotkeysIfPossible()
-            }, page: page)
+            }, page: page).evooLook()
             let window = NSWindow(contentViewController: NSHostingController(rootView: view))
             window.title = "Welcome to Evoo"
+            Theme.style(window)
             window.styleMask = [.titled, .closable, .fullSizeContentView]
             window.titlebarAppearsTransparent = true
             window.isReleasedWhenClosed = false
@@ -274,9 +278,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openHistory() {
         if historyWindow == nil {
-            let view = HistoryView(history: .shared, notes: .notes, query: .shared)
+            let view = HistoryView(history: .shared, notes: .notes, query: .shared).evooLook()
             let window = NSWindow(contentViewController: NSHostingController(rootView: view))
             window.title = "Evoo History"
+            Theme.style(window)
             window.styleMask = [.titled, .closable, .resizable]
             window.isReleasedWhenClosed = false
             window.center()
@@ -303,9 +308,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func openSettings() {
         if settingsWindow == nil {
             let view = SettingsView(controller: controller, settings: controller.settings,
-                                    permissions: controller.permissions)
+                                    permissions: controller.permissions).evooLook()
             let window = NSWindow(contentViewController: NSHostingController(rootView: view))
             window.title = "Evoo Settings"
+            Theme.style(window)
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
             window.center()

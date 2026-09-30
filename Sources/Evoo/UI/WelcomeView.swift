@@ -63,7 +63,7 @@ struct WelcomeView: View {
                 Spacer()
                 HStack(spacing: 7) {
                     ForEach(0 ..< pages, id: \.self) { i in
-                        Circle().fill(i == page ? Color.accentColor : Color.secondary.opacity(0.3))
+                        Circle().fill(i == page ? Theme.ink : Theme.line)
                             .frame(width: 7, height: 7)
                             .onTapGesture { withAnimation { go(i) } }
                     }
@@ -99,15 +99,15 @@ struct WelcomeView: View {
                     .font(.title3).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
             VStack(alignment: .leading, spacing: 14) {
-                Trust(icon: "lock.shield.fill", color: .green, title: "Your voice never leaves this Mac",
+                Trust(icon: "lock.shield.fill", color: Theme.green, title: "Your voice never leaves this Mac",
                       detail: "Speech is turned into text right here. Nothing is uploaded, ever.")
-                Trust(icon: "wifi.slash", color: .blue, title: "Works offline",
+                Trust(icon: "wifi.slash", color: Theme.ink2, title: "Works offline",
                       detail: "No internet needed after the one-time model download — on a plane, anywhere.")
-                Trust(icon: "cpu.fill", color: .purple, title: "Runs on your Mac's own chip",
+                Trust(icon: "cpu.fill", color: Theme.ink2, title: "Runs on your Mac's own chip",
                       detail: "Apple's Neural Engine does the work: fast, and nothing to pay for.")
-                Trust(icon: "person.crop.circle.badge.xmark", color: .orange, title: "No account, no tracking",
+                Trust(icon: "person.crop.circle.badge.xmark", color: Theme.ink2, title: "No account, no tracking",
                       detail: "No sign-up, no analytics. Your history and learned words stay on this Mac.")
-                Trust(icon: "chevron.left.forwardslash.chevron.right", color: .gray, title: "Free and open source",
+                Trust(icon: "chevron.left.forwardslash.chevron.right", color: Theme.ink2, title: "Free and open source",
                       detail: "Anyone can read the code on GitHub and check all of the above.")
             }
         }
@@ -274,7 +274,7 @@ private struct SetupRow: View {
             }
         }
         .padding(10)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.06)))
+        .card()
     }
 }
 
@@ -316,7 +316,7 @@ private struct Feature: View {
             Spacer(minLength: 0)
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.08)))
+        .card()
     }
 }
 
@@ -333,7 +333,7 @@ private struct Step: View {
     var body: some View {
         HStack(spacing: 14) {
             ZStack {
-                Circle().fill(done == true ? Color.green : Color.accentColor.opacity(0.15))
+                Circle().fill(done == true ? Theme.green : Theme.soft)
                 if done == true {
                     Image(systemName: "checkmark").font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
                 } else {
@@ -354,6 +354,6 @@ private struct Step: View {
             }
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.06)))
+        .card()
     }
 }

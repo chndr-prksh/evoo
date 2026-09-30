@@ -26,36 +26,72 @@ struct MainWindowView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
-            List(Page.allCases, selection: $page) { p in
-                Label(p.rawValue, systemImage: p.icon).tag(p)
-            }
-            .navigationSplitViewColumnWidth(min: 170, ideal: 190)
-            .safeAreaInset(edge: .bottom) {
-                HStack(spacing: 6) {
-                    Circle().fill(controller.permissions.allGranted ? Color.green : Color.orange).frame(width: 7, height: 7)
-                    Text(controller.permissions.allGranted ? "Ready — hold fn" : "Needs permissions")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                }
-                .padding(12)
-            }
-        } detail: {
-            switch page ?? .home {
-            case .home: HomeView(controller: controller, settings: settings, history: .shared, go: { page = $0 },
-                                 openClassNotes: openClassNotes)
-            case .history: HistoryView(history: .shared, notes: .notes, query: .shared)
-            case .dictionary: DictionaryView(settings: settings)
-            case .classNotes: ClassNotesHome(open: openClassNotes)
-            case .settings:
-                ScrollView {
-                    SettingsView(controller: controller, settings: settings, permissions: controller.permissions)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
+        HStack(spacing: 0) {
+            sidebar
+            Rectangle().fill(Theme.line).frame(width: 1)
+            Group {
+                switch page ?? .home {
+                case .home: HomeView(controller: controller, settings: settings, history: .shared, go: { page = $0 },
+                                     openClassNotes: openClassNotes)
+                case .history: HistoryView(history: .shared, notes: .notes, query: .shared)
+                case .dictionary: DictionaryView(settings: settings)
+                case .classNotes: ClassNotesHome(open: openClassNotes)
+                case .settings:
+                    ScrollView {
+                        SettingsView(controller: controller, settings: settings, permissions: controller.permissions)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.white)
         }
+        .foregroundStyle(Theme.ink)
         .frame(minWidth: 860, minHeight: 600)
+    }
+
+    /// Like the website's nav: quiet, with a soft grey highlight for the current page (no system blue).
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 9) {
+                Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 26, height: 26)
+                Text("Evoo").font(.system(size: 17, weight: .bold))
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 34)
+            .padding(.bottom, 18)
+            ForEach(Page.allCases) { p in
+                Button {
+                    page = p
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: p.icon).frame(width: 18)
+                        Text(p.rawValue)
+                        Spacer()
+                    }
+                    .font(.system(size: 14, weight: page == p ? .semibold : .regular))
+                    .foregroundStyle(page == p ? Theme.ink : Theme.ink2)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(page == p ? Color.white : Color.clear))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(page == p ? Theme.line : Color.clear))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+            HStack(spacing: 7) {
+                Circle().fill(controller.permissions.allGranted ? Theme.green : Color.orange).frame(width: 7, height: 7)
+                Text(controller.permissions.allGranted ? "Ready — hold fn" : "Needs permissions")
+                    .font(.caption).foregroundStyle(Theme.muted)
+            }
+            .padding(10)
+        }
+        .padding(10)
+        .frame(width: 210)
+        .frame(maxHeight: .infinity)
+        .background(Theme.soft)
     }
 }
 
@@ -123,7 +159,8 @@ private struct HomeView: View {
                     Text("Hold").foregroundStyle(.secondary)
                     Text("fn").font(.system(.body, design: .rounded).weight(.semibold))
                         .padding(.horizontal, 7).padding(.vertical, 1)
-                        .background(RoundedRectangle(cornerRadius: 5).fill(Color.secondary.opacity(0.15)))
+                        .background(RoundedRectangle(cornerRadius: 5).fill(Theme.soft))
+                        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.line))
                     Text("in any app, speak, and let go.").foregroundStyle(.secondary)
                 }
             }
@@ -169,7 +206,7 @@ private struct HomeView: View {
                     }
                 }
                 .padding(12)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.07)))
+                .card(radius: 10)
             }
         }
     }
@@ -190,13 +227,13 @@ private struct Stat: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: icon).foregroundStyle(.tint)
+            Image(systemName: icon).foregroundStyle(Theme.ink2)
             Text(value).font(.system(size: 26, weight: .semibold, design: .rounded)).monospacedDigit()
             Text(label).font(.callout).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.07)))
+        .card()
     }
 }
 
@@ -209,7 +246,7 @@ private struct Action: View {
     var body: some View {
         Button(action: run) {
             HStack(spacing: 12) {
-                Image(systemName: icon).font(.title3).foregroundStyle(.tint).frame(width: 26)
+                Image(systemName: icon).font(.title3).foregroundStyle(Theme.ink).frame(width: 26)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.headline)
                     Text(detail).font(.caption).foregroundStyle(.secondary)
@@ -218,7 +255,8 @@ private struct Action: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.secondary.opacity(0.25)))
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.line))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -288,7 +326,7 @@ private struct ClassNotesHome: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Image(systemName: "graduationcap.fill").font(.system(size: 44)).foregroundStyle(.tint)
+            Image(systemName: "graduationcap.fill").font(.system(size: 44)).foregroundStyle(Theme.ink)
             Text("Class Notes").font(.system(size: 26, weight: .bold))
             Text("Evoo listens to a lecture and jots down what matters — formulas, definitions, what's on the exam — then gives you a study sheet, flashcards and Q&A.")
                 .foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 440)
