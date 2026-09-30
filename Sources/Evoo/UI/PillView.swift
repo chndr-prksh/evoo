@@ -18,7 +18,7 @@ struct PillView: View {
     private var look: Look {
         switch controller.phase {
         case .idle: model.hovering ? .hover : .idle
-        case .recording: .recording
+        case .recording: controller.provisional ? (model.hovering ? .hover : .idle) : .recording
         case .transcribing, .refining: .working
         case let .message(text): .message(text)
         }
@@ -34,7 +34,8 @@ struct PillView: View {
         }
     }
 
-    private let spring = Animation.spring(response: 0.32, dampingFraction: 0.82)
+    /// Quick and bounce-free: the pill should feel like it's already there.
+    private let spring = Animation.easeOut(duration: 0.13)
 
     var body: some View {
         VStack(spacing: 8) {

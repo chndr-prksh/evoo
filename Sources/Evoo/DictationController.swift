@@ -35,6 +35,12 @@ final class DictationController: ObservableObject {
     private let log = Logger(subsystem: "app.evoo", category: "dictation")
     private let hotkeys = FnKeyMonitor()
     private let recorder = AudioRecorder()
+    /// The mic starts and stops here, so a key press never waits on CoreAudio.
+    private let micQueue = DispatchQueue(label: "app.evoo.mic", qos: .userInteractive)
+    private var startSound: Task<Void, Never>?
+    /// A quick fn tap: still recording for a moment (in case a second tap makes it hands-free), but the pill
+    /// already looks idle — a tap shouldn't leave anything on screen.
+    @Published private(set) var provisional = false
     private let engines = SpeechEngines(parakeetVersion: AppSettings.shared.fastestModel ? .tdtCtc110m : .v3)
     private let refiner = LlamaRefiner()
     private lazy var pipeline = DictationPipeline(refiner: refiner)
@@ -207,6 +213,7 @@ final class DictationController: ObservableObject {
         case .fnUp: apply(gesture.handle(.fnUp(at: now)))
         case .otherKey: apply(gesture.handle(.otherKey(at: now)))
         }
+        updateProvisional()
         scheduleGestureTimeout()
     }
 
@@ -218,7 +225,16 @@ final class DictationController: ObservableObject {
             try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled else { return }
             apply(gesture.timeout(now: ProcessInfo.processInfo.systemUptime))
+            updateProvisional()
         }
+    }
+
+    private func updateProvisional() {
+        let tap = if case .tapPending = gesture.phase { true } else { false }
+        let wasTap = provisional
+        provisional = tap && phase == .recording
+        // Second tap → hands-free: now it's real, so give the start sound.
+        if wasTap, !provisional, phase == .recording { play("Tink") }
     }
 
     private func apply(_ action: HotkeyAction?) {
@@ -263,21 +279,34 @@ final class DictationController: ObservableObject {
             permissions.request(.microphone)
             return show("Allow microphone access for Evoo")
         }
-        do {
-            try recorder.start(deviceUID: settings.microphoneUID)
-            mark("micStart")
-        } catch {
-            gesture.reset()
-            return show(error.localizedDescription)
-        }
-        phase = .recording
+        // The pill opens on the very next frame; the mic starts in the background (40–200 ms) and the audio
+        // from that moment on is kept. Nothing on the main thread waits for it.
         levels = levels.map { _ in 0 }
+        phase = .recording
+        provisional = false
         mark("pillShown")
-        // Everything else waits until the mic is running and the pill is on screen.
+        let device = settings.microphoneUID
+        micQueue.async { [recorder, weak self] in
+            do { try recorder.start(deviceUID: device) } catch {
+                DispatchQueue.main.async {
+                    guard let self, self.phase == .recording else { return }
+                    self.gesture.reset()
+                    self.endRecordingSession()
+                    self.show(error.localizedDescription)
+                }
+            }
+        }
+        // Everything else waits until the pill is on screen.
         DispatchQueue.main.async { [self] in
-            play("Tink")
             editWatcher.observe() // did the user edit the last dictation? (learning)
             selectionAtStart = smartCleanupReady ? ScreenText.selectedText() : nil
+        }
+        // The start sound only for a real hold — a quick tap stays silent.
+        startSound?.cancel()
+        startSound = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(180))
+            guard !Task.isCancelled, let self, self.phase == .recording, !self.provisional else { return }
+            self.play("Tink")
         }
         // Read names on screen (chat header, recipients…) in the background while the user speaks.
         screenNames = settings.useScreenContext && permissions.granted[.accessibility] == true
@@ -305,8 +334,9 @@ final class DictationController: ObservableObject {
         guard phase == .recording else { return }
         let releasedAt = ContinuousClock.now
         endRecordingSession()
-        let samples = recorder.stop()
+        let samples = micQueue.sync { recorder.stop() }
         let seconds = Double(samples.count) / AudioRecorder.sampleRate
+        log.notice("recorded \(String(format: "%.2f", seconds), privacy: .public) s of audio")
         guard seconds >= Self.minRecordingSeconds, !AudioStats.isLikelySilent(samples) else {
             phase = .idle
             return
@@ -334,7 +364,8 @@ final class DictationController: ObservableObject {
 
     func cancel() {
         endRecordingSession()
-        _ = recorder.stop()
+        _ = micQueue.sync { recorder.stop() }
+        provisional = false
         processing?.cancel()
         watchdog?.cancel()
         session += 1
@@ -342,6 +373,7 @@ final class DictationController: ObservableObject {
     }
 
     private func endRecordingSession() {
+        startSound?.cancel()
         maxDurationTimer?.cancel()
         speculationLoop?.cancel()
         gesture.reset()

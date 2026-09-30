@@ -84,7 +84,7 @@ final class AppSettings: ObservableObject {
             refinementEnabled = false
         }
         formatText = bool("formatText", true)
-        fastestModel = bool("fastestModel", false)
+        fastestModel = bool("fastestModel", true) // fast; names and casing are fixed by the dictionary and AI polish
         useScreenContext = bool("useScreenContext", true)
         learnFromEdits = bool("learnFromEdits", true)
         snippets = UserDefaults.standard.data(forKey: "snippets")

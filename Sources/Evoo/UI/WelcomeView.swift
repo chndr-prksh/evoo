@@ -16,6 +16,7 @@ struct WelcomeView: View {
     @State private var wantAI = true
     @State private var wantPolish = !SystemInfo.isLowMemory
     @State private var wantLogin = true
+    @State private var wantFast = true
     @State private var applied = false
     private let pages = 5
     private let refresh = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -161,9 +162,10 @@ struct WelcomeView: View {
             Text("Set up Evoo").font(.system(size: 26, weight: .bold))
             Text("We've picked the best settings. Click Set up & continue — downloads run in the background, and you can change anything later in Settings.")
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            SetupRow(icon: "waveform", title: "Speech model",
-                     detail: controller.modelStatus ?? "Ready — dictation works now, even offline.",
-                     state: controller.modelStatus == nil ? .done : .working, isOn: .constant(true), locked: true)
+            SetupRow(icon: "bolt.fill", title: "Fast speech model",
+                     detail: controller.modelStatus
+                         ?? "About 2× faster. Names and capitals are fixed by your dictionary and AI polish. Works offline.",
+                     state: controller.modelStatus != nil ? .working : applied ? .done : .off, isOn: $wantFast, locked: false)
             SetupRow(icon: "sparkles", title: "Local AI model (Qwen3 4B · 2.5 GB, once)",
                      detail: "Powers class notes, rewrite by voice (“make this more formal”), replies and translation.",
                      state: aiState, isOn: $wantAI, locked: false, progress: controller.refinerDownloadProgress)
@@ -190,6 +192,7 @@ struct WelcomeView: View {
     /// Turns on the recommended switches and starts the AI download (continues after the tour closes).
     private func applyRecommended() {
         applied = true
+        settings.fastestModel = wantFast
         settings.formatText = true
         settings.useScreenContext = true
         settings.learnFromScreen = true
