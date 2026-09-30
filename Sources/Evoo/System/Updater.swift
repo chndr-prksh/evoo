@@ -51,8 +51,11 @@ final class Updater: ObservableObject {
                 let (data, _) = try await URLSession.shared.data(for: request)
                 let release = try JSONDecoder().decode(Release.self, from: data)
                 guard let build = Int(release.tag_name.replacingOccurrences(of: "build-", with: "")),
-                      let zip = release.assets.first(where: { $0.name == "Evoo.zip" })?.browser_download_url,
-                      let sha = release.assets.first(where: { $0.name == "Evoo.zip.sha256" })?.browser_download_url
+                      // Updates download their own copy, so new downloads of Evoo.zip can be counted on their own.
+                      let zip = (release.assets.first(where: { $0.name == "Evoo-update.zip" })
+                          ?? release.assets.first(where: { $0.name == "Evoo.zip" }))?.browser_download_url,
+                      let sha = (release.assets.first(where: { $0.name == "Evoo-update.zip.sha256" })
+                          ?? release.assets.first(where: { $0.name == "Evoo.zip.sha256" }))?.browser_download_url
                 else { throw UpdateError.malformedRelease }
                 latest = (build, zip, sha)
                 state = build > currentBuild ? .available(build: build) : .upToDate

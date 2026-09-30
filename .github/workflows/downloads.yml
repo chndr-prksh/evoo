@@ -1,0 +1,47 @@
+# Hourly: counts new downloads of Evoo.zip (website button, GitHub release page, one-line install) and tells the
+# owner by commenting on the "Downloads" issue (GitHub emails / app notifications). Installed copies update via
+# Evoo-update.zip, so they aren't counted as new downloads. Optional phone push: add a repo secret NTFY_TOPIC and
+# subscribe to that topic in the free ntfy app. GitHub doesn't say who downloaded — only how many.
+name: Download tracker
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  count:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for new downloads
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          set -euo pipefail
+          count() { gh api "repos/$REPO/releases?per_page=100" --paginate \
+            --jq "[.[].assets[] | select(.name==\"$1\") | .download_count] | add // 0" | jq -s 'add // 0'; }
+          total=$(count Evoo.zip)
+          updates=$(count Evoo-update.zip)
+          gh label create downloads -R "$REPO" --color 0E8A16 --description "Download counts" 2>/dev/null || true
+          issue=$(gh issue list -R "$REPO" --label downloads --state open --json number --jq '.[0].number // empty')
+          if [ -z "$issue" ]; then
+            # First run: record where we start, without announcing past downloads.
+            gh issue create -R "$REPO" --label downloads --title "📦 Evoo downloads" \
+              --body "Downloads: $total · Updates: $updates (updated hourly — new downloads are posted as comments)"
+            exit 0
+          fi
+          last=$(gh issue view "$issue" -R "$REPO" --json body --jq .body | grep -o 'Downloads: [0-9]*' | grep -o '[0-9]*' || echo 0)
+          if [ "$total" -gt "${last:-0}" ]; then
+            new=$((total - last))
+            msg="🎉 $new new download$([ "$new" = 1 ] || echo s) of Evoo — $total in total"
+            gh issue comment "$issue" -R "$REPO" --body "$msg (installed copies have updated $updates times)"
+            gh issue edit "$issue" -R "$REPO" \
+              --body "Downloads: $total · Updates: $updates (updated hourly — new downloads are posted as comments)"
+            if [ -n "${NTFY_TOPIC:-}" ]; then curl -s -H "Title: Evoo" -d "$msg" "https://ntfy.sh/$NTFY_TOPIC" >/dev/null; fi
+          fi
