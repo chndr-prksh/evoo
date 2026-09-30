@@ -76,7 +76,7 @@ case "golden", "stress":
         let counts = (option("--sentences") ?? "1,5,10,30,50").split(separator: ",").compactMap { Int($0) }
         let modes = (option("--modes") ?? "whole,stream").split(separator: ",").map(String.init)
         try await runStress(engine: engine, pipeline: pipeline, refiner: refiner, polish: polish, counts: counts,
-                            modes: modes, json: json)
+                            modes: modes, json: json, text: option("--text"))
     }
     refiner.unload()
     await engine.unload()

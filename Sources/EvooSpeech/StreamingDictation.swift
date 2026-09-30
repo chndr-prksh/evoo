@@ -10,8 +10,14 @@ import Foundation
 /// Very long stretches without a pause are cut at the quietest moment near the end.
 @MainActor
 public final class StreamingDictation {
-    public static let minSegment = 4.0 // seconds
+    /// Pieces are cut only at a real break (not a breath mid-sentence) and only once they're sentence-sized:
+    /// a piece is transcribed without the words around it, so short pieces lose accuracy ("updated. File.").
+    public static let minSegment = 8.0 // seconds
     public static let maxSegment = 25.0
+    public static let segmentPause = 0.6
+    /// Up to this long, the final text comes from one pass over the whole recording (most accurate); the
+    /// pieces are only used to start polishing early.
+    public static let wholeClipLimit = 45.0
 
     private var committed: [String] = []
     private var committedEnd = 0
@@ -26,6 +32,7 @@ public final class StreamingDictation {
     public init() {}
 
     public func reset() {
+        whole.reset()
         committed = []
         committedEnd = 0
         busy = nil
@@ -54,10 +61,11 @@ public final class StreamingDictation {
         guard busy == nil, offset == committedEnd, pending.count > 8_000 else { return }
         let rate = 16_000.0
         let seconds = Double(pending.count) / rate
-        let paused = AudioStats.endsInPause(pending, seconds: 0.35)
-        guard paused || seconds >= Self.maxSegment else { return }
+        let paused = AudioStats.endsInPause(pending, seconds: Self.segmentPause)
+        let breath = AudioStats.endsInPause(pending, seconds: 0.35)
+        guard breath || seconds >= Self.maxSegment else { return }
 
-        if seconds >= Self.minSegment {
+        if seconds >= Self.minSegment, paused || seconds >= Self.maxSegment {
             // Commit up to the pause (or the quietest point near the end of a very long stretch).
             let cut = paused ? pending.count : Self.quietestPoint(pending, within: Int(3 * rate))
             let end = committedEnd + cut
@@ -85,8 +93,21 @@ public final class StreamingDictation {
         }
     }
 
-    /// The whole transcript: committed pieces plus the rest, reusing the speculative tail when unchanged.
+    /// Whole-recording speculation for dictations up to `wholeClipLimit`: call at each tick with everything
+    /// recorded so far (it only transcribes at a pause, and reuses the result at release if nothing changed).
+    public func considerWhole(_ samples: [Float], engine: SpeechEngine) {
+        guard Double(samples.count) / 16_000 <= Self.wholeClipLimit else { return }
+        whole.consider(samples, engine: engine)
+    }
+
+    private let whole = SpeculativeTranscriber()
+
+    /// The whole transcript. Up to `wholeClipLimit`: one pass over the whole recording (reused when it was
+    /// already done during the last pause). Longer: committed pieces plus the rest.
     public func finish(_ samples: [Float], engine: SpeechEngine) async throws -> (text: String, reused: Bool) {
+        if Double(samples.count) / 16_000 <= Self.wholeClipLimit {
+            return try await whole.transcript(for: samples, engine: engine)
+        }
         await busy?.value
         let rest = committedEnd < samples.count ? Array(samples[committedEnd...]) : []
         var last = ""

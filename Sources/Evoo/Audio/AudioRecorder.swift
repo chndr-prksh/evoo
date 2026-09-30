@@ -68,6 +68,8 @@ final class AudioRecorder {
         lock.withLock { samples }
     }
 
+    var sampleCount: Int { lock.withLock { samples.count } }
+
     /// What was recorded from sample `index` on (cheap: doesn't copy the whole recording).
     func snapshot(from index: Int) -> [Float] {
         lock.withLock { index < samples.count ? Array(samples[index...]) : [] }

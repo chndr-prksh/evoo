@@ -169,14 +169,17 @@ func residentMB() -> Double {
 /// "stream": commit stretches at pauses and polish finished sentences in the background.
 @MainActor
 func runStress(engine: SpeechEngine, pipeline: DictationPipeline, refiner: LlamaRefiner, polish: Bool,
-               counts: [Int], modes: [String], json: String?) async throws
+               counts: [Int], modes: [String], json: String?, text custom: String? = nil) async throws
 {
-    let passages = try String(contentsOf: URL(fileURLWithPath: "Benchmarks/passages.txt"), encoding: .utf8)
+    // A custom text may carry its own pauses: "…the website [[slnc 500]] with the download link…".
+    let passages = try custom.map { [$0] } ?? String(contentsOf: URL(fileURLWithPath: "Benchmarks/passages.txt"), encoding: .utf8)
         .split(separator: "\n").map(String.init)
+    let counts = custom == nil ? counts : [1]
     let clock = ContinuousClock()
     var results: [StressResult] = []
     for n in counts {
         let text = passages.prefix(n).joined(separator: " ")
+            .replacingOccurrences(of: #"\s*\[\[slnc \d+\]\]\s*"#, with: " ", options: .regularExpression)
         // A short natural pause between sentences, then 0.6 s of silence before fn is released.
         let spoken = passages.prefix(n).joined(separator: " [[slnc 250]] ")
         let clip = try speech(spoken) + [Float](repeating: 0, count: 9_600)
@@ -198,6 +201,7 @@ func runStress(engine: SpeechEngine, pipeline: DictationPipeline, refiner: Llama
                 if mode == "stream" {
                     let from = stream.committedSamples
                     stream.consider(recent: Array(recorded[from...]), from: from, engine: engine)
+                    stream.considerWhole(recorded, engine: engine)
                 } else {
                     whole.consider(recorded, engine: engine)
                 }
@@ -223,6 +227,7 @@ func runStress(engine: SpeechEngine, pipeline: DictationPipeline, refiner: Llama
                                  blocksReady: ready.cached, blocksTotal: ready.total, wer: wer(text, out.text),
                                  output: out.text, peakMemoryMB: peak)
             results.append(r)
+            if custom != nil { print("  → \(out.text)") }
             print(String(format: "%@ %2d sentences (%3d words, %5.1f s audio): fn-up → text %6d ms  [asr %5d, polish %6d, blocks ready %d/%d]  WER %.1f%%  mem %.0f MB",
                          mode.padding(toLength: 6, withPad: " ", startingAt: 0), n, r.words, seconds, total, asrMs, polishMs,
                          ready.cached, ready.total, r.wer * 100, peak))

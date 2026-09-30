@@ -17,7 +17,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_: Notification) {
         // Get the microphone path ready now so the first fn press is instant (the mic itself stays off).
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [controller] in controller.warmUp() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [controller] in
+            controller.warmUp()
+            controller.cleanScreenLearned()
+        }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil,
                                                           queue: .main) { [controller] _ in
             MainActor.assumeIsolated { controller.warmUp() }

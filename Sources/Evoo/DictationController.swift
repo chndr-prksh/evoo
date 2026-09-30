@@ -369,6 +369,9 @@ final class DictationController: ObservableObject {
                       let engine = self.engines.ready(self.settings.resolvedEngine) else { continue }
                 let from = self.streaming.committedSamples
                 self.streaming.consider(recent: self.recorder.snapshot(from: from), from: from, engine: engine)
+                if self.recorder.sampleCount <= Int(StreamingDictation.wholeClipLimit * AudioRecorder.sampleRate) {
+                    self.streaming.considerWhole(self.recorder.snapshot(), engine: engine)
+                }
             }
         }
         maxDurationTimer = Task {
@@ -595,11 +598,41 @@ final class DictationController: ObservableObject {
     private func learnFromScreen(seen: [String], used: [String]) {
         guard settings.learnFromScreen, !seen.isEmpty else { return }
         let promoted = settings.screenLexicon.observe(seen)
-        let new = Array(Set(used + promoted)).filter { !settings.personalWords.contains($0) }.sorted()
+        let new = Array(Set(used + promoted)).filter { !settings.personalWords.contains($0) && Self.worthLearning($0) }
+            .sorted()
         guard !new.isEmpty else { return }
         settings.personalWords += new
         settings.screenLearned += new
         if !used.isEmpty { show("Learned “\(used.joined(separator: "”, “"))” from your screen") }
+    }
+
+    /// Whether a word seen on screen should join the dictionary for good: a name ("Divya", "Kubernetes") or a
+    /// brand-style word ("GitHub", "WhatsApp") — not code (`DictationPipeline`, `ASREngineID`), acronyms, cut-off
+    /// fragments, or ordinary words the old word list doesn't know ("Download", "Sidebar", "workflow").
+    static func worthLearning(_ word: String) -> Bool {
+        guard word.count >= 4, word.count <= 16, word.allSatisfy(\.isLetter), let first = word.first, first.isUppercase
+        else { return false }
+        // "Divya", "Kubernetes" — or two real parts: "GitHub", "WhatsApp", "McKinsey" (not "MWtiand", "NzN").
+        let twoParts = word.range(of: #"^[A-Z][a-z]+[A-Z][a-z]{2,}$"#, options: .regularExpression) != nil && word.count <= 10
+        guard word.range(of: #"^[A-Z][a-z]+$"#, options: .regularExpression) != nil || twoParts,
+              word.range(of: #"[aeiouy]"#, options: [.regularExpression, .caseInsensitive]) != nil, // "Mgmt"
+              word.range(of: #"(.)\1\1"#, options: .regularExpression) == nil // "Missssyouuu", "Aawww"
+        else { return false }
+        // macOS's own (current) spelling dictionary: if it knows the word, it's not a name worth learning.
+        let lower = word.lowercased()
+        let known = NSSpellChecker.shared.checkSpelling(of: lower, startingAt: 0).location == NSNotFound
+        return !known
+    }
+
+    /// Screen learning used to keep code identifiers and everyday words; drop those (never the user's own words).
+    func cleanScreenLearned() {
+        // "DeVeo" was a mishearing of "Divya" quoted on screen; learned, it would undo the fix it came from.
+        let junk = Set(settings.screenLearned.filter { !Self.worthLearning($0) || $0 == "DeVeo" })
+        guard !junk.isEmpty else { return }
+        settings.screenLearned.removeAll { junk.contains($0) }
+        settings.personalWords.removeAll { junk.contains($0) }
+        applyVocabulary()
+        log.notice("Removed \(junk.count) screen-learned words that weren't names")
     }
 
     /// Every few dictations, introduce one feature the user hasn't used yet (schedule in `Tips`).
