@@ -23,7 +23,8 @@ struct SettingsView: View {
         let x = PillModel.shared.position, y = PillModel.shared.positionY
         return pillPlaces.first { abs($0.x - x) < 0.02 && abs($0.y - y) < 0.02 }?.name ?? "Custom (dragged)"
     }
-    @State private var microphones = AudioDevices.inputs()
+    // Filled in on appear: listing devices talks to CoreAudio, too slow for init (which runs on every redraw).
+    @State private var microphones: [AudioDevices.Device] = []
     @State private var loginError: String?
     @State private var newWord = ""
 
@@ -331,6 +332,7 @@ struct SettingsView: View {
                 Toggle("Restore clipboard after pasting", isOn: $settings.restoreClipboard)
                 Toggle("Start Evoo at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in
+                        guard on != LoginItem.isEnabled else { return }
                         do { try LoginItem.set(on) } catch {
                             loginError = error.localizedDescription
                             launchAtLogin = LoginItem.isEnabled
@@ -348,7 +350,10 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .onAppear {
             permissions.refresh()
-            microphones = AudioDevices.inputs()
+        }
+        .task {
+            microphones = await Task.detached(priority: .userInitiated) { AudioDevices.inputs() }.value
+            launchAtLogin = await LoginItem.refresh()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             permissions.refresh()

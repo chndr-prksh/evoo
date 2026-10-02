@@ -66,10 +66,27 @@ final class Permissions: ObservableObject {
     }
 }
 
+/// "Start at login". Asking macOS for the status is a round trip to a system service that can take ~1 s (after
+/// sleep, on a busy Mac), so views read a cached value and `refresh()` updates it in the background.
 enum LoginItem {
-    static var isEnabled: Bool { SMAppService.mainApp.status == .enabled }
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var cached = false
+
+    static var isEnabled: Bool { lock.withLock { cached } }
+
+    /// Asks macOS (off the main thread) and returns the up-to-date status.
+    @discardableResult
+    static func refresh() async -> Bool {
+        await Task.detached(priority: .utility) {
+            let on = SMAppService.mainApp.status == .enabled
+            lock.withLock { cached = on }
+            return on
+        }.value
+    }
 
     static func set(_ enabled: Bool) throws {
+        defer { Task { await refresh() } }
         if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+        lock.withLock { cached = enabled }
     }
 }

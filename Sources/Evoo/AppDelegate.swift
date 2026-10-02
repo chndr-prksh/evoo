@@ -18,6 +18,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_: Notification) {
         // Get the microphone path ready now so the first fn press is instant (the mic itself stays off).
+        Task { await LoginItem.refresh() }
+        // A closed window drops its SwiftUI views: hidden views still redraw on every dictation (pill press/release)
+        // and would cost the main thread — and the pill's animation — time for nothing.
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: nil,
+                                               queue: .main) { [weak self] note in
+            MainActor.assumeIsolated { self?.forget(note.object as? NSWindow) }
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [controller] in
             controller.warmUp()
             controller.cleanScreenLearned()
@@ -137,6 +144,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         NSApp.activate(ignoringOtherApps: true)
         mainWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    private func forget(_ window: NSWindow?) {
+        guard let window else { return }
+        for slot in [\AppDelegate.mainWindow, \.settingsWindow, \.historyWindow, \.welcomeWindow, \.classWindow]
+        where self[keyPath: slot] === window {
+            self[keyPath: slot] = nil
+            // Let the close finish first, then free the views.
+            DispatchQueue.main.async { window.contentViewController = nil }
+        }
     }
 
     /// "Show Evoo in the Dock" (Settings): Dock icon + app menu, or menu bar only.
