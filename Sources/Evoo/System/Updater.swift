@@ -34,6 +34,8 @@ final class Updater: ObservableObject {
 
     func start() {
         guard isEnabled else { return }
+        reportLastUpdate()
+        if case .failed = state { return }
         check()
         timer = Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.check() }
@@ -100,20 +102,59 @@ final class Updater: ObservableObject {
         }
     }
 
+    /// Where the new version goes. Normally over the running copy. But an app opened straight from Downloads
+    /// (after "Open Anyway") runs from a read-only copy macOS makes ("App Translocation"), and a folder we can't
+    /// write to can't be updated either — then install into /Applications instead.
+    static func installLocation(for current: URL) -> URL {
+        let fm = FileManager.default
+        let translocated = current.path.contains("/AppTranslocation/")
+        let writable = fm.isWritableFile(atPath: current.deletingLastPathComponent().path)
+        if !translocated, writable { return current }
+        return URL(fileURLWithPath: "/Applications/Evoo.app")
+    }
+
+    /// Written by the swap script; read on the next launch so a failed update says why instead of failing silently.
+    static let resultFile = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Logs/Evoo-update.log")
+
     /// Hands off to a tiny shell script that waits for Evoo to quit, swaps the bundle, and reopens it.
     private func relaunch(replacing current: URL, with newApp: URL) {
         let pid = ProcessInfo.processInfo.processIdentifier
+        let target = Self.installLocation(for: current)
+        let backup = newApp.deletingLastPathComponent().appendingPathComponent("Evoo-old.app")
+        let log = Self.resultFile.path
+        // Move the old app aside (not delete) so a failed swap can put it back; never leave the user without Evoo.
         let script = """
+        exec >>"\(log)" 2>&1
+        echo "$(date) update to build \(latest?.build ?? 0): \(current.path) -> \(target.path)"
         while kill -0 \(pid) 2>/dev/null; do sleep 0.2; done
-        rm -rf "\(current.path)"
-        mv "\(newApp.path)" "\(current.path)"
-        open "\(current.path)"
+        rm -rf "\(backup.path)"
+        if [ -e "\(target.path)" ] && ! mv "\(target.path)" "\(backup.path)"; then
+          echo "FAILED: couldn't move the old app out of the way"; open "\(current.path)"; exit 1
+        fi
+        if ! mv "\(newApp.path)" "\(target.path)"; then
+          echo "FAILED: couldn't put the new app in place"
+          [ -e "\(backup.path)" ] && mv "\(backup.path)" "\(target.path)"
+          open "\(current.path)"; exit 1
+        fi
+        xattr -dr com.apple.quarantine "\(target.path)" 2>/dev/null
+        rm -rf "\(backup.path)"
+        echo "OK"
+        open "\(target.path)"
         """
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/sh")
         task.arguments = ["-c", script]
         try? task.run()
         NSApp.terminate(nil)
+    }
+
+    /// On launch: if the last update didn't take, show why (once).
+    func reportLastUpdate() {
+        guard let text = try? String(contentsOf: Self.resultFile, encoding: .utf8),
+              let last = text.split(separator: "\n").last.map(String.init), last.hasPrefix("FAILED") else { return }
+        try? FileManager.default.removeItem(at: Self.resultFile)
+        state = .failed("Last update didn't install: \(last.dropFirst(8)). Download Evoo again from the website.")
     }
 
     private func run(_ tool: String, _ args: [String]) throws {
