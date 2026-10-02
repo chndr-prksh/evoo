@@ -157,13 +157,14 @@ public final class StreamingDictation {
 /// the last sentences are left for the AI. Each block is polished once and reused.
 @MainActor
 public final class StreamingPolisher {
-    public typealias Refine = @Sendable (String) async -> String?
+    /// The sentence to polish, and the text just before it in this dictation (context for the AI).
+    public typealias Refine = @Sendable (_ text: String, _ before: String?) async -> String?
 
     /// One sentence per block: each is polished while the next one is being said, so at release only the last
     /// sentence is left. (Measured: 3-sentence blocks left up to three sentences to do at release.)
     public static let sentencesPerBlock = 1
     /// Sentences this short ("Thanks.", "Sounds good.") have nothing for the AI to fix.
-    public static let minWords = 5
+    public nonisolated static let minWords = 5
 
     /// Keyed by the sentence without punctuation or capitals, so the same words transcribed with a different
     /// comma still find their polished version.
@@ -174,12 +175,47 @@ public final class StreamingPolisher {
     private var wanted: Set<String> = []
     private var queue: Task<Void, Never>?
     private let refine: Refine
+    /// Contextual polish (bigger models): every sentence goes to the AI — a sound-alike word ("went up the hell")
+    /// looks perfectly clean to the rules — with the sentences before it as context.
+    public nonisolated let contextual: Bool
+    /// How many earlier sentences go along as context.
+    static let contextSentences = 2
 
     public private(set) var prefetched = 0
     public private(set) var skipped = 0
 
-    public init(refine: @escaping Refine) {
+    public init(contextual: Bool = false, refine: @escaping Refine) {
+        self.contextual = contextual
         self.refine = refine
+    }
+
+    /// How long the release waits for a contextual check still running on a sentence with nothing visibly off.
+    static let contextOnlyWaitMs = 400
+
+    /// The task's result if it finishes within `ms`, else nil — returns on time (a task group would wait for the
+    /// task anyway).
+    static func value(of task: Task<String, Never>, within ms: Int) async -> String? {
+        final class Once: @unchecked Sendable {
+            private let lock = NSLock()
+            private var done = false
+            func claim() -> Bool { lock.withLock { defer { done = true }; return !done } }
+        }
+        let once = Once()
+        return await withCheckedContinuation { (cont: CheckedContinuation<String?, Never>) in
+            Task { let v = await task.value; if once.claim() { cont.resume(returning: v) } }
+            Task { try? await Task.sleep(for: .milliseconds(ms)); if once.claim() { cont.resume(returning: nil) } }
+        }
+    }
+
+    /// Whether `block` is worth sending to the AI.
+    func worth(_ block: String) -> Bool {
+        contextual ? block.split(separator: " ").count >= Self.minWords : Self.worthPolishing(block)
+    }
+
+    /// The sentences before block `i`, as context (contextual mode only).
+    private func before(_ i: Int, in blocks: [String]) -> String? {
+        guard contextual, i > 0 else { return nil }
+        return blocks[max(0, i - Self.contextSentences) ..< i].joined(separator: " ")
     }
 
     static func key(_ block: String) -> String {
@@ -188,7 +224,7 @@ public final class StreamingPolisher {
 
     private func isNeeded(_ block: String) -> Bool {
         let k = Self.key(block)
-        return done[k] == nil && running[k] == nil && Self.worthPolishing(block)
+        return done[k] == nil && running[k] == nil && worth(block)
     }
 
     /// Only sentences with something to fix go to the AI; clean ones are kept as they are (measured: polishing
@@ -204,9 +240,9 @@ public final class StreamingPolisher {
         if partialStart, !blocks.isEmpty { blocks.removeFirst() } // may be the tail of a cut sentence
         wanted.formUnion(blocks.map(Self.key))
         guard blocks.count > 1 else { return }
-        for block in blocks.dropLast() where isNeeded(block) {
+        for (i, block) in blocks.enumerated().dropLast() where isNeeded(block) {
             prefetched += 1
-            start(block)
+            start(block, before: before(i, in: blocks))
         }
     }
 
@@ -214,9 +250,9 @@ public final class StreamingPolisher {
     public func prefetchAll(_ text: String) {
         let blocks = Self.prose(text).flatMap(Self.blocks)
         wanted = Set(blocks.map(Self.key))
-        for block in blocks where isNeeded(block) {
+        for (i, block) in blocks.enumerated() where isNeeded(block) {
             prefetched += 1
-            start(block)
+            start(block, before: before(i, in: blocks))
         }
     }
 
@@ -225,14 +261,27 @@ public final class StreamingPolisher {
     public func polish(_ text: String) async -> String {
         wanted = Set(Self.prose(text).flatMap(Self.blocks).map(Self.key))
         var lines: [String] = []
+        var earlier: [String] = [] // every block so far, across lines (context)
         for line in text.components(separatedBy: "\n") {
             guard Self.isProse(line) else { lines.append(line); continue }
             var out: [String] = []
             for block in Self.blocks(line) {
-                if !Self.worthPolishing(block) { out.append(block); continue }
+                earlier.append(block)
+                if !worth(block) { out.append(block); continue }
                 if let d = done[Self.key(block)] { out.append(d); continue }
-                let task = running[Self.key(block)] ?? start(block)
-                out.append(await task.value)
+                if let task = running[Self.key(block)] {
+                    // A context-only check (nothing visibly off) gets a short wait, never seconds.
+                    if contextual, !Self.worthPolishing(block) {
+                        out.append(await Self.value(of: task, within: Self.contextOnlyWaitMs) ?? block)
+                    } else {
+                        out.append(await task.value)
+                    }
+                    continue
+                }
+                // Not started while you spoke: a contextual check now would delay the text by ~1–3 s, so only
+                // sentences with something visibly off go to the AI at release (as without context).
+                if contextual, !Self.worthPolishing(block) { out.append(block); continue }
+                out.append(await start(block, before: before(earlier.count - 1, in: earlier)).value)
             }
             lines.append(Self.fixSeams(out.joined(separator: " ")))
         }
@@ -275,7 +324,7 @@ public final class StreamingPolisher {
     }
 
     @discardableResult
-    private func start(_ block: String) -> Task<String, Never> {
+    private func start(_ block: String, before: String? = nil) -> Task<String, Never> {
         let previous = queue
         let refine = self.refine
         let k = Self.key(block)
@@ -287,7 +336,7 @@ public final class StreamingPolisher {
                 self.running[k] = nil
                 return block
             }
-            let polished = await refine(block) ?? block
+            let polished = await refine(block, before) ?? block
             self?.done[k] = polished
             self?.running[k] = nil
             return polished

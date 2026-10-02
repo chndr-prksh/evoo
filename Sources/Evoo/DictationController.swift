@@ -40,7 +40,9 @@ final class DictationController: ObservableObject {
     /// The mic starts and stops here, so a key press never waits on CoreAudio.
     private let micQueue = DispatchQueue(label: "app.evoo.mic", qos: .userInteractive)
     private var refinerLoading = false
-    private var charBeforeCursor: Task<String?, Never>?
+    /// The text just before the cursor, read at fn-down: for the space before the dictation, and as context
+    /// for the AI polish.
+    private var textBeforeCursor: Task<String?, Never>?
     private var selectionTask: Task<String?, Never>?
     private var mainStall: Duration = .zero
     #if DEBUG
@@ -72,6 +74,11 @@ final class DictationController: ObservableObject {
 
     private var smartCleanupReady: Bool {
         settings.smartCleanup && SystemInfo.canRunSmartCleanup && refiner.isLoaded
+    }
+
+    /// Polish with context (fixes misheard words): 16 GB+ Macs with the 1.7B or 4B model.
+    private var contextualPolish: Bool {
+        !SystemInfo.isLowMemory && refiner.loadedModel != .qwen3_0_6b
     }
 
     private var gesture: HotkeyGesture
@@ -370,7 +377,8 @@ final class DictationController: ObservableObject {
         }
         // Everything else waits until the pill is on screen.
         // Whether to add a space before the text: read now, in the background, never after release.
-        charBeforeCursor = Task.detached(priority: .userInitiated) { ScreenText.characterBeforeCursor().map(String.init) }
+        let textBefore = Task.detached(priority: .userInitiated) { ScreenText.textBeforeCursor(limit: RefinePrompt.maxContext) }
+        textBeforeCursor = textBefore
         // Reading other apps' text boxes can be slow (Chrome, big documents): never on the main thread, which
         // draws the pill.
         Task { await editWatcher.observeInBackground() } // did the user edit the last dictation? (learning)
@@ -401,9 +409,18 @@ final class DictationController: ObservableObject {
             // Measured: the 1.7B model ignores style examples (same output, +0.1–1 s), so only the 4B gets them.
             let pairs = settings.learnStyle && settings.refinerModel == .qwen3_4b ? StyleStore.shared.pairs : []
             let app = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-            polisher = StreamingPolisher { text in
+            // Contextual polish (16 GB+ with the 1.7B/4B): every sentence, with what came before it — the earlier
+            // sentences and the text already in the box — so misheard words get fixed. The 0.6B is too small to
+            // use context well, so 8 GB Macs keep the quick fixes-only polish.
+            let contextual = contextualPolish
+            polisher = StreamingPolisher(contextual: contextual) { text, earlier in
                 let personal = PersonalStyle.context(for: text, app: app, pairs: pairs)
-                return try? await refiner.refine(text, language: language, tone: tone, personal: personal)
+                var context = earlier
+                if contextual, let onScreen = await Self.value(of: textBefore, within: 50) ?? nil {
+                    context = [onScreen, earlier ?? ""].joined(separator: " ")
+                }
+                return try? await refiner.refine(text, language: language, tone: tone, personal: personal,
+                                                 context: context)
             }
         }
         let startStyle: OutputStyle? = settings.formatText
@@ -576,8 +593,8 @@ final class DictationController: ObservableObject {
                     personal.contains(word) || !DictationPipeline.isKnownWord(word.lowercased())
                 }
                 : swapped
-            let before = await Self.value(of: charBeforeCursor, within: 30) ?? nil
-            let spaced = Self.spaced(text, after: before?.first)
+            let before = await Self.value(of: textBeforeCursor, within: 30) ?? nil
+            let spaced = Self.spaced(text, after: before?.last)
             let t1 = ContinuousClock.now
             #if DEBUG
             if debugNoPaste { log.notice("no-paste result: \(spaced, privacy: .public)") } else {

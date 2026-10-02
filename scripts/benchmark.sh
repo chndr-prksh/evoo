@@ -39,8 +39,11 @@ echo "==> Running the tests (about 5 minutes per model)..."
       "There is one issue left with notifications on older phones, you know." 2>&1 | grep -E "^out|ms\)" || true
     echo "-- every feature (golden set):"
     ./evoo-cli golden --parakeet v3 --polish --polish-model "$m" 2>&1 | grep "^PASSED" || true
+    echo "-- misheard words (contextual polish):"
+    ./evoo-cli misheard --model "$m" 2>&1 | grep "^misheard" || true
     echo "-- real-time dictations, fn up -> text:"
     ./evoo-cli stress --parakeet v3 --polish --polish-model "$m" --sentences 1,5,10 --modes stream 2>&1 | grep "^stream" || true
+    [ "$m" != qwen3_0_6b ] && { ./evoo-cli stress --parakeet v3 --polish --polish-model "$m" --contextual --sentences 1,5,10 --modes stream 2>&1 | grep "^stream" | sed 's/^stream/context/' || true; }
     ./evoo-cli stress --parakeet v3 --polish --polish-model "$m" --modes stream --text "$FILLER" 2>&1 | grep "^stream" | sed 's/^stream/filler/' || true
   done
 } 2>&1 | tee "$OUT"

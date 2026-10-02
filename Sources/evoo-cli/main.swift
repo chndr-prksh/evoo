@@ -94,6 +94,7 @@ case "golden", "stress":
     try await engine.load { _ in }
     await DictationPipeline.warmUp(engine)
     let polish = flag("--polish")
+    let contextual = flag("--contextual")
     let json = option("--json")
     pipeline.dictionary = PersonalDictionary(["Divya", "Aarav", "Kubernetes", "Priya", "Rahul"])
     if polish {
@@ -101,11 +102,11 @@ case "golden", "stress":
         if let a = option("--adapter") { print("adapter loaded: \(try await refiner.setAdapter(path: a))") }
     }
     if command == "golden" {
-        try await runGolden(engine: engine, pipeline: pipeline, polish: polish, json: json)
+        try await runGolden(engine: engine, pipeline: pipeline, refiner: refiner, polish: polish, contextual: contextual, json: json)
     } else {
         let counts = (option("--sentences") ?? "1,5,10,30,50").split(separator: ",").compactMap { Int($0) }
         let modes = (option("--modes") ?? "whole,stream").split(separator: ",").map(String.init)
-        try await runStress(engine: engine, pipeline: pipeline, refiner: refiner, polish: polish, counts: counts,
+        try await runStress(engine: engine, pipeline: pipeline, refiner: refiner, polish: polish, contextual: contextual, counts: counts,
                             modes: modes, json: json, text: option("--text"))
     }
     refiner.unload()
@@ -441,6 +442,39 @@ case "post":
         let us = (clock.now - t0).formatted(.units(allowed: [.microseconds]))
         print("in : \(input)\nout: \(r.text)\(r.unresolved ? "   [unresolved → LLM]" : "")\(DictationPipeline.needsPolish(r.text) ? "   [AI polish]" : "")  (\(us))\n")
     }
+
+case "misheard":
+    // Contextual polish: misheard words fixed, correct words kept (Benchmarks/misheard.tsv).
+    //   evoo-cli misheard --model qwen3_4b [--no-context]
+    let useContext = !flag("--no-context")
+    try await loadRefiner()
+    let lines = try String(contentsOf: URL(fileURLWithPath: "Benchmarks/misheard.tsv"), encoding: .utf8)
+        .split(separator: "\n").map(String.init).filter { !$0.hasPrefix("#") && !$0.isEmpty }
+    func norm(_ s: String) -> [String] {
+        s.lowercased().replacingOccurrences(of: "’", with: "'")
+            .components(separatedBy: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "'")).inverted).filter { !$0.isEmpty }
+    }
+    var fixed = 0, fixes = 0, kept = 0, keeps = 0, ms = 0
+    for line in lines {
+        let f = line.components(separatedBy: "\t")
+        guard f.count == 5 else { continue }
+        let (kind, earlier, said, check, want) = (f[0], f[1] == "-" ? nil : f[1], f[2], f[3], f[4])
+        var out = ""
+        let t = try await clock.measure {
+            out = try await refiner.refine(said, language: .english, context: useContext ? earlier : nil)
+        }
+        ms += t.ms
+        let lower = out.lowercased()
+        let ok: Bool = switch check {
+        case "has": want.split(separator: "|").allSatisfy { lower.contains($0.lowercased()) }
+        case "not": !want.split(separator: "|").contains { lower.contains($0.lowercased()) }
+        default: norm(out) == norm(said)
+        }
+        if kind == "fix" { fixes += 1; if ok { fixed += 1 } } else { keeps += 1; if ok { kept += 1 } }
+        print("\(ok ? "✓" : "✗") [\(kind)] \(said)\n    → \(out)  (\(t.ms) ms)")
+    }
+    print("\nmisheard fixed \(fixed)/\(fixes) · correct kept \(kept)/\(keeps) · \(ms / max(1, lines.count)) ms avg"
+        + (useContext ? "" : " (no context)"))
 
 case "refine":
     let pairsFile = option("--pairs")

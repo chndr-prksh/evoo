@@ -893,3 +893,24 @@ import Testing
     #expect(HinglishRules.apply("Please bhej do.") == "Please bhej do.")
     #expect(HinglishRules.apply("Payment ho gaya hai, screenshot bhej raha hoon.") == "Payment ho gaya hai, screenshot bhej raha hoon.")
 }
+
+struct ContextPromptTests {
+    @Test func echoedContextIsDropped() {
+        let context = "We're planning the product launch for next quarter."
+        let out = RefinePrompt.dropEcho("We're planning the product launch for next quarter. The launch is in March.",
+                                        context: context, input: "the lunch is in march")
+        #expect(out == "The launch is in March.")
+        // A dictation that really starts like the context is left alone.
+        #expect(RefinePrompt.dropEcho("We're planning it.", context: "We're planning it.", input: "we're planning it")
+            == "We're planning it.")
+    }
+
+    @Test func contextIsTrimmedToTheEnd() {
+        let long = String(repeating: "word ", count: 200) + "last sentence here."
+        let trimmed = RefinePrompt.trimmedContext(long)!
+        #expect(trimmed.count <= RefinePrompt.maxContext)
+        #expect(trimmed.hasSuffix("last sentence here."))
+        #expect(RefinePrompt.trimmedContext("  ") == nil)
+        #expect(RefinePrompt.suffix(transcript: "hi there", context: "Earlier.", thinkBlock: false).contains("<earlier>Earlier.</earlier>"))
+    }
+}

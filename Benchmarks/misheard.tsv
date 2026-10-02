@@ -1,0 +1,32 @@
+# Contextual polish: sound-alike words the speech model got wrong, and correct sentences that must stay as they are.
+# kind <TAB> earlier text (context, "-" for none) <TAB> what the speech model wrote <TAB> check <TAB> expected
+# check: has = output contains every "|" piece (case-insensitive);  not = contains none;  same = same words as said
+# ── Misheard, clear from the sentence alone
+fix	-	jack and gill went up the hell to fetch a pale of water	has	Jill|hill|pail
+fix	-	I need to by a new charger for my phone	has	buy a new charger
+fix	-	their going to be late for the meeting	has	they're going
+fix	-	can you send me the dead line for the project	has	deadline
+fix	-	I'll meat you at the coffee shop at five	has	meet you
+fix	-	the whether is really nice today so let's go for a walk	has	weather
+fix	-	please right down the address before you forget	has	write down
+fix	-	we need to except the offer by friday	has	accept the offer
+fix	-	twinkle twinkle little star how I wonder what you are	has	Twinkle, twinkle, little star|wonder what you are
+fix	-	humpty dumpty sat on a wall humpty dumpty had a great fall	has	Humpty Dumpty sat on a wall|great fall
+# ── Misheard, needs the earlier text
+fix	We're planning the product launch for next quarter.	the lunch is going to be in march	has	launch
+fix	I'm writing the report on Kubernetes clusters.	we have three nodes in each cluster and the pods keep crashing	has	nodes|pods
+fix	Let's talk about the quarterly budget.	the cash flow looks good but the revenue is flat	has	cash flow|revenue
+fix	The new principal starts at our school on Monday.	the principle wants to meet all the teachers	has	principal wants
+fix	I'm baking bread this weekend.	I need more flower and yeast	has	flour
+fix	We sailed across the bay yesterday.	the sale was torn by the wind	has	sail
+# ── Correct as said: must not change words
+keep	-	I will be there in an hour with the documents	same	-
+keep	-	the hell with it, let's just ship it	same	-
+keep	-	we bought a new lunch box for the kids	same	-
+keep	-	she sells sea shells by the sea shore	same	-
+keep	We're planning the product launch.	lunch is on me today	same	-
+keep	-	Jack went to the hill station with his family	same	-
+keep	-	the flower shop on main street closes at six	same	-
+keep	-	our sales were down last month but we expect a better quarter	same	-
+keep	-	I'd rather walk than take the bus in this weather	same	-
+keep	-	my friend Jill works at the bank	same	-

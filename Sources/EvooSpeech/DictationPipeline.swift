@@ -113,7 +113,12 @@ public final class DictationPipeline {
             return Output(text: text, raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: (clock.now - t).ms, usedLLM: true)
         }
         // With a streaming polisher, long dictations that contain a list still get their prose polished.
-        if llm == .polish, refiner.isLoaded, Self.needsPolish(text) {
+        // Contextual polish looks at every sentence (a misheard word looks clean to the rules); otherwise only at
+        // dictations with something the rules can see is off.
+        let worth = polisher?.contextual == true
+            ? text.split(separator: " ").count >= StreamingPolisher.minWords : Self.needsPolish(text)
+        // (The polisher itself only waits for sentences it checked while you spoke, or that visibly need fixing.)
+        if llm == .polish, refiner.isLoaded, worth {
             t = clock.now
             let polished: String? = if let polisher { await polisher.polish(text) }
                 else { try? await refiner.refine(text, language: language, tone: tone) }

@@ -75,15 +75,16 @@ public final class LlamaRefiner: @unchecked Sendable {
     }
 
     public func refine(_ transcript: String, language: DictationLanguage, tone: Tone = .neutral,
-                       personal: String? = nil) async throws -> String {
+                       personal: String? = nil, context: String? = nil) async throws -> String {
         let raw = try await run { [self] in
             try primePrefix(RefinePrompt.prefix(language: language, tone: tone))
-            let suffix = RefinePrompt.suffix(transcript: transcript, personal: personal,
+            let suffix = RefinePrompt.suffix(transcript: transcript, personal: personal, context: context,
                                              thinkBlock: loadedModel?.usesThinkBlock ?? true)
             let budget = RefinePrompt.maxTokens(forInputTokens: tokenize(transcript, vocab: vocab!, addSpecial: false).count)
             return try generate(suffix: suffix, maxTokens: budget)
         }
-        return RefinePrompt.accept(refined: raw, input: transcript, language: language) ?? transcript
+        let answer = RefinePrompt.dropEcho(RefinePrompt.sanitize(raw), context: context, input: transcript)
+        return RefinePrompt.accept(refined: answer, input: transcript, language: language) ?? transcript
     }
 
     /// Self-correction as deletions (see `CorrectionPrompt`). Returns nil when the model's answer

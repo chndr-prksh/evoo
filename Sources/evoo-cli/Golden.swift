@@ -72,7 +72,8 @@ struct GoldenResult: Encodable {
 }
 
 @MainActor
-func runGolden(engine: SpeechEngine, pipeline: DictationPipeline, polish: Bool, json: String?) async throws {
+func runGolden(engine: SpeechEngine, pipeline: DictationPipeline, refiner: LlamaRefiner, polish: Bool,
+               contextual: Bool = false, json: String?) async throws {
     let url = URL(fileURLWithPath: "Benchmarks/golden.tsv")
     let lines = try String(contentsOf: url, encoding: .utf8).split(separator: "\n").map(String.init)
     let targets = AppCommands.builtIn + [AppTarget(name: "Google Chrome", aliases: ["chrome"], bundleID: "com.google.Chrome"),
@@ -105,8 +106,12 @@ func runGolden(engine: SpeechEngine, pipeline: DictationPipeline, polish: Bool, 
             pass = output.hasPrefix(expected)
         default:
             t = clock.now
+            // Contextual polish: like the app on 16 GB+ (every sentence, with the ones before it as context).
+            let polisher = polish && contextual
+                ? StreamingPolisher(contextual: true) { t, earlier in try? await refiner.refine(t, language: .english, context: earlier) }
+                : nil
             let out = await pipeline.finish(raw: raw, asrMs: asrMs, language: .english, style: .markdown,
-                                            llm: polish ? .polish : .off)
+                                            llm: polish ? .polish : .off, polisher: polisher)
             rulesMs = out.postMs
             polishMs = out.refineMs
             _ = t
@@ -168,7 +173,7 @@ func residentMB() -> Double {
 /// text. "whole": today's path (speculate the whole clip at pauses, polish everything at release).
 /// "stream": commit stretches at pauses and polish finished sentences in the background.
 @MainActor
-func runStress(engine: SpeechEngine, pipeline: DictationPipeline, refiner: LlamaRefiner, polish: Bool,
+func runStress(engine: SpeechEngine, pipeline: DictationPipeline, refiner: LlamaRefiner, polish: Bool, contextual: Bool = false,
                counts: [Int], modes: [String], json: String?, text custom: String? = nil) async throws
 {
     // A custom text may carry its own pauses: "…the website [[slnc 500]] with the download link…".
@@ -188,7 +193,7 @@ func runStress(engine: SpeechEngine, pipeline: DictationPipeline, refiner: Llama
             var recorded: [Float] = []
             let whole = SpeculativeTranscriber()
             let stream = StreamingDictation()
-            let polisher = polish ? StreamingPolisher { t in try? await refiner.refine(t, language: .english) } : nil
+            let polisher = polish ? StreamingPolisher(contextual: contextual) { t, earlier in try? await refiner.refine(t, language: .english, context: earlier) } : nil
             // Exactly what the app does (DictationController.start): up to 45 s, pre-polish the whole-recording
             // transcript at each pause; beyond that, the committed pieces.
             var recordedCount = 0

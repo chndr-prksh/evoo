@@ -8,7 +8,7 @@ BIN="$(swift build -c release --show-bin-path)"
 rm -rf build/evoo-bench && mkdir -p build/evoo-bench/Benchmarks
 cp "$BIN/evoo-cli" build/evoo-bench/
 ditto "$BIN/llama.framework" build/evoo-bench/llama.framework
-cp Benchmarks/golden.tsv Benchmarks/passages.txt build/evoo-bench/Benchmarks/
+cp Benchmarks/golden.tsv Benchmarks/passages.txt Benchmarks/misheard.tsv build/evoo-bench/Benchmarks/
 codesign --force --sign - build/evoo-bench/llama.framework
 codesign --force --sign - build/evoo-bench/evoo-cli
 tar -czf build/evoo-bench.tar.gz -C build evoo-bench
