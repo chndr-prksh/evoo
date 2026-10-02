@@ -210,6 +210,8 @@ struct SettingsView: View {
                     Picker("Model", selection: $settings.refinerModel) {
                         Text(RefinerModel.qwen3_4b.title).tag(RefinerModel.qwen3_4b)
                         Text(RefinerModel.qwen3_1_7b.title).tag(RefinerModel.qwen3_1_7b)
+                        Text(RefinerModel.qwen3_0_6b.title + (SystemInfo.isLowMemory ? " · recommended here" : ""))
+                            .tag(RefinerModel.qwen3_0_6b)
                     }
                     if let progress = controller.refinerDownloadProgress {
                         ProgressView(value: progress) { Text("Downloading \(Int(progress * 100))%") }
