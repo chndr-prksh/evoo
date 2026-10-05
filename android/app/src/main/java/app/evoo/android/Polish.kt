@@ -145,13 +145,15 @@ object Polish {
         }
 
         /** Loads the model and has it read the instructions once (the slow part; ~10–20 s on a phone). */
-        fun warmUp(context: Context) = synchronized(lock) {
-            if (isWarm) return
-            val started = System.currentTimeMillis()
-            load(context)
-            LlamaNative.complete(handle, RefinePrompt.prefix.toByteArray(), ByteArray(0), 0)
-            isWarm = true
-            Log.i(TAG, "qwen ready in ${System.currentTimeMillis() - started} ms")
+        fun warmUp(context: Context) {
+            synchronized(lock) {
+                if (isWarm) return
+                val started = System.currentTimeMillis()
+                load(context)
+                LlamaNative.complete(handle, RefinePrompt.prefix.toByteArray(), ByteArray(0), 0)
+                isWarm = true
+                Log.i(TAG, "qwen ready in ${System.currentTimeMillis() - started} ms")
+            }
         }
 
         fun polish(context: Context, text: String): String? {
@@ -164,10 +166,12 @@ object Polish {
             }
         }
 
-        fun unload() = synchronized(lock) {
-            if (handle != 0L) LlamaNative.free(handle)
-            handle = 0L
-            isWarm = false
+        fun unload() {
+            synchronized(lock) {
+                if (handle != 0L) LlamaNative.free(handle)
+                handle = 0L
+                isWarm = false
+            }
         }
     }
 
