@@ -215,8 +215,8 @@ object DictationRules {
         while (i < t.size) {
             val first = valueGroup(t, i)
             if (first == null) { i += 1; continue }
-            var kept = first
-            var last = first
+            var kept: IntRange = first
+            var last: IntRange = first
             var corrected = false
             var awaitingRestatement = false
             var j = first.last + 1
