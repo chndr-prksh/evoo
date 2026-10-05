@@ -262,6 +262,13 @@ public enum DictationRules {
                 if let end = replacement.indices.last {
                     replacement[end].raw = replacement[end].bare + (tail.contains(where: { ".?!".contains($0) }) ? String(tail.last!) : "")
                 }
+                // "…tomorrow. No. Day after tomorrow.": the kept value sits mid-sentence, so it loses a capital the
+                // speech model gave it for starting a "sentence" (weekdays and months keep theirs).
+                if first.lowerBound > 0, !t[first.lowerBound - 1].endsSentence, let f = replacement.first?.raw.first, f.isUppercase,
+                   midSentenceWords.contains(replacement[0].norm) || [.number, .relativeDay].contains(WordKind(replacement[0].norm))
+                {
+                    replacement[0].raw = f.lowercased() + replacement[0].raw.dropFirst()
+                }
                 t.replaceSubrange(first.lowerBound ..< last.upperBound, with: replacement)
                 i = first.lowerBound + replacement.count
             } else {
@@ -439,6 +446,13 @@ public enum DictationRules {
                 fixed = Array(prefix[..<s]) + body
                 if s == 0, let first = fixed.first { fixed[0].raw = capitalized(first.raw) }
                 if s > 0 { fixed[s - 1].raw = fixed[s - 1].bare } // drop the comma that led into the cue
+                // The speech model may have started a new sentence at the cue ("…tomorrow. No. Day after
+                // tomorrow."): mid-sentence now, an ordinary word loses that capital (names keep theirs).
+                if s > 0, s < fixed.count, let f = fixed[s].raw.first, f.isUppercase,
+                   midSentenceWords.contains(fixed[s].norm) || WordKind(fixed[s].norm) == .number || WordKind(fixed[s].norm) == .relativeDay
+                {
+                    fixed[s].raw = f.lowercased() + fixed[s].raw.dropFirst()
+                }
             case let .swap(i):
                 fixed = prefix
                 let tail = fixed[i].trailingPunctuation
@@ -453,6 +467,11 @@ public enum DictationRules {
         }
         return tokens
     }
+
+    /// Words that are only capitalized at the start of a sentence.
+    static let midSentenceWords: Set<String> = glueWords.union(determiners).union(
+        ["day", "week", "month", "year", "morning", "evening", "night", "noon", "around", "about", "after", "before",
+         "maybe", "probably", "sometime", "early", "late", "later", "sooner"])
 
     struct Cue {
         var start: Int

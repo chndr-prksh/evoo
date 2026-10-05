@@ -247,6 +247,16 @@ object DictationRules {
                     val end = replacement.last()
                     end.raw = end.bare + (if (tail.any { it in ".?!" }) tail.last().toString() else "")
                 }
+                // "…tomorrow. No. Day after tomorrow.": the kept value sits mid-sentence, so it loses a capital the
+                // speech model gave it for starting a "sentence" (weekdays and months keep theirs).
+                if (first.first > 0 && !t[first.first - 1].endsSentence && replacement.isNotEmpty()) {
+                    val r = replacement[0]
+                    val kind = wordKind(r.norm)
+                    if (r.raw.firstOrNull()?.isUpperCase() == true &&
+                        (r.norm in midSentenceWords || kind == WordKind.NUMBER || kind == WordKind.RELATIVE_DAY)) {
+                        r.raw = r.raw.take(1).lowercase() + r.raw.drop(1)
+                    }
+                }
                 repeat(last.last + 1 - first.first) { t.removeAt(first.first) }
                 t.addAll(first.first, replacement)
                 i = first.first + replacement.size
@@ -356,6 +366,12 @@ object DictationRules {
     /** Cue words that also occur in normal speech; they only count when set off by punctuation or combined. */
     private val weakCues = setOf("no", "sorry", "wait", "actually", "make that", "make it", "correction")
 
+    /** Words that are only capitalized at the start of a sentence. */
+    private val midSentenceWords: Set<String> by lazy {
+        glueWords + determiners + setOf("day", "week", "month", "year", "morning", "evening", "night", "noon", "around",
+            "about", "after", "before", "maybe", "probably", "sometime", "early", "late", "later", "sooner")
+    }
+
     private class Cue(val start: Int, val end: Int, val isScratch: Boolean)
 
     private sealed class Plan {
@@ -415,6 +431,16 @@ object DictationRules {
                     fixed = (prefix.subList(0, plan.at).map { it.copy() } + body).toMutableList()
                     if (plan.at == 0 && fixed.isNotEmpty()) fixed[0].raw = capitalized(fixed[0].raw)
                     if (plan.at > 0) fixed[plan.at - 1].raw = fixed[plan.at - 1].bare // drop the comma that led into the cue
+                    // The speech model may have started a new sentence at the cue ("…tomorrow. No. Day after
+                    // tomorrow."): mid-sentence now, an ordinary word loses that capital (names keep theirs).
+                    if (plan.at > 0 && plan.at < fixed.size) {
+                        val t = fixed[plan.at]
+                        val kind = wordKind(t.norm)
+                        if (t.raw.firstOrNull()?.isUpperCase() == true &&
+                            (t.norm in midSentenceWords || kind == WordKind.NUMBER || kind == WordKind.RELATIVE_DAY)) {
+                            t.raw = t.raw.take(1).lowercase() + t.raw.drop(1)
+                        }
+                    }
                 }
                 is Plan.Swap -> {
                     fixed = prefix.map { it.copy() }.toMutableList()

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Evoo — Free, private voice dictation for Mac</title>
-<meta name="description" content="Hold fn, speak, release — clean text at your cursor in any app. Free, open source, and 100% on your Mac. No account, no cloud.">
+<meta name="description" content="Hold fn, speak, release — clean text at your cursor in any app. Free, open source, and 100% on your device: Mac, and now Android. No account, no cloud.">
 <meta property="og:title" content="Evoo — Free, private voice dictation for Mac">
 <meta property="og:description" content="Hold fn, speak, release. Understands what you meant, learns your names, runs entirely on your Mac. Free and open source.">
 <meta property="og:type" content="website">
@@ -181,6 +181,39 @@
   .toast { position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 20px); opacity: 0; background: var(--ink); color: #fff; padding: 9px 16px; border-radius: 999px; font-size: 14px; transition: all .2s; pointer-events: none; }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
   @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } html { scroll-behavior: auto; } }
+
+  /* Android section */
+  .android { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 56px; align-items: center; }
+  @media (max-width: 900px) { .android { grid-template-columns: 1fr; gap: 36px; } }
+  .android-copy { min-width: 0; }
+  .android .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+  .android .btn svg { width: 18px; height: 18px; }
+  .android-copy .lead { margin-bottom: 26px; }
+  .android-steps { margin: 0 0 26px; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 12px; }
+  .android-steps li { counter-increment: s; position: relative; padding-left: 40px; color: var(--ink-2); font-size: 15.5px; }
+  .android-steps li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 13px; font-weight: 650; display: grid; place-items: center; }
+  .android-steps b { color: var(--ink); }
+  .android-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  @media (max-width: 700px) { .android-facts { grid-template-columns: 1fr; } }
+  .android-facts div { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+  .android-facts b { display: block; font-size: 14.5px; margin-bottom: 4px; }
+  .android-facts span { color: var(--ink-2); font-size: 13.5px; line-height: 1.45; display: block; }
+  .phone { width: min(300px, 100%); margin: 0 auto; background: #0f1115; border-radius: 42px; padding: 10px; box-shadow: 0 30px 60px -20px rgba(15,17,21,.35), 0 0 0 1px rgba(15,17,21,.08); }
+  .phone-screen { background: #fff; border-radius: 33px; overflow: hidden; display: flex; flex-direction: column; min-height: 540px; }
+  .phone-bar { padding: 16px 18px 10px; border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 600; text-align: center; }
+  .phone-chat { flex: 1; padding: 16px 14px; display: flex; flex-direction: column; gap: 10px; background: #fbfbfc; }
+  .bubble { max-width: 82%; padding: 9px 13px; border-radius: 18px; font-size: 14px; line-height: 1.4; }
+  .bubble.them { background: #fff; border: 1px solid var(--line); align-self: flex-start; border-bottom-left-radius: 6px; }
+  .bubble.me { background: var(--ink); color: #fff; align-self: flex-end; border-bottom-right-radius: 6px; }
+  .phone-kb { background: #16181d; padding: 12px 10px 18px; }
+  .kb-status { color: #b8bcc6; font-size: 12px; text-align: center; margin-bottom: 10px; }
+  .kb-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .kb-row i { flex: 1; height: 44px; border-radius: 9px; background: #2a2d34; color: #fff; font-style: normal; font-size: 15px; display: grid; place-items: center; }
+  .kb-row.small i { height: 36px; font-size: 13px; } .kb-row i.wide { flex: 3; color: #b8bcc6; }
+  .kb-mic { flex: 1.4; display: grid; place-items: center; }
+  .kb-mic svg { width: 56px; height: 56px; padding: 15px; border-radius: 50%; background: #ff5a4f; box-shadow: 0 0 0 7px rgba(255,90,79,.22); animation: micpulse 1.8s ease-in-out infinite; }
+  @keyframes micpulse { 50% { box-shadow: 0 0 0 12px rgba(255,90,79,.08); } }
+  @media (prefers-reduced-motion: reduce) { .kb-mic svg { animation: none; } }
 </style>
 </head>
 <body>
@@ -194,6 +227,7 @@
     <div class="links">
       <a href="#features">Features</a>
       <a href="#install">Install</a>
+      <a href="#android">Android</a>
       <a href="#privacy">Privacy</a>
       <a href="#faq">FAQ</a>
       <a href="https://github.com/chndr-prksh/evoo">GitHub</a>
@@ -204,17 +238,20 @@
 
 <header class="hero" id="top">
   <div class="wrap">
-    <span class="pill-tag"><b>Free &amp; open source</b> Runs 100% on your Mac</span>
+    <span class="pill-tag"><b>Free &amp; open source</b> Runs 100% on your device · <a href="#android" style="color:inherit">now on Android</a></span>
     <h1>Hold fn. Speak.<br>It types what you meant.</h1>
-    <p class="sub">Evoo is voice dictation for Mac that fixes your self-corrections, formats lists, and learns your names — in any app, with no account and nothing sent to the cloud.</p>
+    <p class="sub">Evoo is voice dictation for Mac — and now Android — that fixes your self-corrections, formats lists, and learns your names. In any app, with no account and nothing sent to the cloud.</p>
     <div class="actions">
       <a class="btn btn-primary" href="https://github.com/chndr-prksh/evoo/releases/latest/download/Evoo.zip" data-dl>
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.62c-.02-2.3 1.88-3.4 1.97-3.46-1.07-1.57-2.74-1.78-3.33-1.8-1.42-.14-2.77.83-3.49.83-.72 0-1.83-.81-3.01-.79-1.55.02-2.98.9-3.78 2.29-1.61 2.8-.41 6.94 1.16 9.21.77 1.11 1.68 2.36 2.88 2.31 1.16-.05 1.6-.75 3-.75s1.79.75 3.01.72c1.25-.02 2.04-1.13 2.8-2.25.88-1.29 1.24-2.54 1.26-2.6-.03-.01-2.42-.93-2.44-3.7zM14.1 5.86c.64-.78 1.07-1.85.95-2.93-.92.04-2.04.61-2.7 1.39-.59.69-1.11 1.79-.97 2.85 1.03.08 2.07-.52 2.72-1.31z"/></svg>
         Download for Mac
       </a>
-      <a class="btn btn-ghost" href="#install">One-line install</a>
+      <a class="btn btn-ghost" href="#android">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.6 9.48l1.84-3.18a.38.38 0 00-.66-.38l-1.86 3.22A11.4 11.4 0 0012 8.1c-1.77 0-3.43.38-4.92 1.04L5.22 5.92a.38.38 0 10-.66.38L6.4 9.48A10.8 10.8 0 001 18h22a10.8 10.8 0 00-5.4-8.52zM7 15.25a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zm10 0a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5z"/></svg>
+        Get it for Android
+      </a>
     </div>
-    <p class="fine">Apple Silicon (M1 or newer) · macOS 14+ · First open needs one extra click — <a href="#install">see how</a></p>
+    <p class="fine">Mac: Apple Silicon (M1 or newer) · macOS 14+ · <a href="#install">one-line install</a> &nbsp;·&nbsp; Android 8+ (preview)</p>
 
     <div class="demo" aria-label="Demo of Evoo dictation">
       <div class="window">
@@ -325,7 +362,55 @@
   </div>
 </section>
 
-<section class="alt" id="privacy">
+<section class="alt" id="android">
+  <div class="wrap">
+    <div class="android">
+      <div class="android-copy">
+        <p class="kicker">Android · Preview</p>
+        <h2>Evoo on your phone.</h2>
+        <p class="lead">A voice keyboard for every app. Tap the mic, speak, tap again — the same on-device speech model and the same corrections as the Mac, with nothing sent anywhere.</p>
+        <div class="actions" style="justify-content:flex-start;margin-bottom:14px">
+          <a class="btn btn-primary" href="https://github.com/chndr-prksh/evoo/releases/download/android/Evoo-android.apk">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.6 9.48l1.84-3.18a.38.38 0 00-.66-.38l-1.86 3.22A11.4 11.4 0 0012 8.1c-1.77 0-3.43.38-4.92 1.04L5.22 5.92a.38.38 0 10-.66.38L6.4 9.48A10.8 10.8 0 001 18h22a10.8 10.8 0 00-5.4-8.52zM7 15.25a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zm10 0a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5z"/></svg>
+            Download for Android
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/chndr-prksh/evoo/tree/main/android">Source</a>
+        </div>
+        <p class="fine" style="margin:0 0 26px">Android 8 or newer · 64-bit phones · 6 GB of memory recommended · 37 MB app</p>
+        <ol class="android-steps">
+          <li><b>Install.</b> Open the downloaded file. Android asks once to allow installs from your browser — Evoo isn't on the Play Store yet.</li>
+          <li><b>Set up.</b> Open Evoo and follow the steps: microphone, a one-time speech-model download (670 MB, Wi-Fi recommended), and turning on the Evoo keyboard.</li>
+          <li><b>Dictate anywhere.</b> Switch to the Evoo keyboard in any app, tap the mic and speak. “Let's meet tomorrow, no, day after tomorrow” types the corrected sentence.</li>
+        </ol>
+        <div class="android-facts">
+          <div><b>AI polish, on the phone</b><span>Uses Google's built-in on-device AI on recent phones that have it; otherwise Evoo's own small model (400 MB, optional).</span></div>
+          <div><b>Updates itself</b><span>Evoo checks for new builds and installs them over the old one — your models and settings stay.</span></div>
+          <div><b>Private by design</b><span>The internet is used only to download models and updates. Your voice stays on the phone.</span></div>
+        </div>
+      </div>
+      <div class="phone" aria-hidden="true">
+        <div class="phone-screen">
+          <div class="phone-bar"><span>Messages</span></div>
+          <div class="phone-chat">
+            <div class="bubble them">Are we still on for the review?</div>
+            <div class="bubble me">Let's meet day after tomorrow at 4 PM.</div>
+          </div>
+          <div class="phone-kb">
+            <div class="kb-status">Listening… tap again when you're done</div>
+            <div class="kb-row">
+              <i>🌐</i><i>↶</i>
+              <span class="kb-mic"><svg viewBox="0 0 24 24" fill="#fff"><path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg></span>
+              <i>⌫</i><i>⏎</i>
+            </div>
+            <div class="kb-row small"><i>,</i><i>.</i><i>?</i><i class="wide">space</i><i>!</i><i>@</i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="privacy">
   <div class="wrap privacy">
     <div>
       <p class="kicker">Privacy</p>
@@ -358,6 +443,7 @@
     <details class="q"><summary>Is Evoo really free?</summary><p>Yes. No subscription, no trial, no account. It's open source under Apache-2.0, and every model it uses is free and open-weight.</p></details>
     <details class="q"><summary>Is it safe? macOS says it “could not verify” it.</summary><p>That message appears for every app not signed with a paid Apple developer certificate — it doesn't mean anything was detected. You can read all of Evoo's code on GitHub, releases are built there automatically, and the one-line install checks the download's checksum. Evoo only goes online to download its models and check GitHub for updates.</p></details>
     <details class="q"><summary>Does the AI polish understand context, or just grammar?</summary><p>Both. Besides fillers, self-corrections and grammar, it fixes words the speech model misheard when the meaning makes it obvious — “Jack and Gill went up the hell” becomes “Jack and Jill went up the hill”, “I need to by milk” becomes “I need to buy milk”. On Macs with 16 GB or more it also reads the sentences you said just before and the text already in the box, so it knows the topic. It never changes a word that already makes sense, and it all runs on your Mac.</p></details>
+    <details class="q"><summary>Is there a phone app?</summary><p>Yes, for Android (preview): a voice keyboard that works in any app, with the same on-device speech model and correction rules as the Mac. <a href="#android">Download it here</a>. It needs Android 8 or newer on a 64-bit phone, ideally with 6 GB of memory. Number formatting, lists, voice commands and other languages are Mac-only for now. An iPhone app isn't available yet.</p></details>
     <details class="q"><summary>Which Macs does it work on?</summary><p>Apple Silicon Macs (M1 or newer) with macOS 14 Sonoma or later. 8 GB of memory is enough for dictation; 16 GB gives the optional local AI (rewrite, reply, Class Notes) more room.</p></details>
     <details class="q"><summary>Which apps does it work in?</summary><p>Anywhere you can type: Chrome, Safari, Slack, WhatsApp, Gmail, Notion, Notes, Word, VS Code, Cursor, Terminal and more. It formats for each — Markdown in editors, plain bullets in chat, and never a line break in Terminal.</p></details>
     <details class="q"><summary>I use Wispr Flow or Apple Dictation — can I keep them?</summary><p>Yes, but don't run two fn-based dictation apps at once; both will react to the key. Set <span class="path">Keyboard › Press 🌐 key to › Do Nothing</span> so Apple's dictation doesn't pop up too.</p></details>
@@ -374,6 +460,7 @@
     <p class="lead" style="margin:0 auto">Free, private, and it gets better the more you use it.</p>
     <div class="actions">
       <a class="btn btn-primary" href="https://github.com/chndr-prksh/evoo/releases/latest/download/Evoo.zip" data-dl>Download for Mac</a>
+      <a class="btn btn-ghost" href="https://github.com/chndr-prksh/evoo/releases/download/android/Evoo-android.apk">Download for Android</a>
       <a class="btn btn-ghost" href="https://github.com/chndr-prksh/evoo">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>
         Star on GitHub

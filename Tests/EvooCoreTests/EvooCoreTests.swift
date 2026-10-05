@@ -142,6 +142,10 @@ import Testing
         #expect(fix("Call John, sorry, Mike.") == "Call Mike.")
         #expect(fix("I'll call you at 6, no wait, 7:30.") == "I'll call you at 7:30.")
         #expect(fix("Send the deck, no, the report.") == "Send the report.")
+        // The speech model put full stops around the cue: the repair isn't a new sentence.
+        #expect(fix("Let's meet tomorrow. No. Day after tomorrow.") == "Let's meet day after tomorrow.")
+        #expect(fix("Send it to Rahul. Sorry. To Priya by Friday.") == "Send it to Priya by Friday.")
+        #expect(fix("Call John. Sorry. Mike.") == "Call Mike.")
     }
 
     @Test func leavesNormalSpeechAlone() {
