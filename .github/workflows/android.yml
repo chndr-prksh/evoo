@@ -44,7 +44,8 @@ jobs:
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_VERSION}/sherpa-onnx-${SHERPA_VERSION}.aar"
           echo "${SHERPA_SHA256}  android/app/libs/sherpa-onnx.aar" | sha256sum -c -
 
-      - name: Build the APK (signed with Evoo's key, so updates install over the old version)
+      # Signed with Evoo's own key, so an update installs over the old version.
+      - name: Build the APK
         working-directory: android
         env:
           EVOO_BUILD: ${{ github.run_number }}
@@ -58,7 +59,8 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk ../Evoo-android.apk
           ls -la ../Evoo-android.apk
 
-      - name: Publish (the "android" release: what the website links to and the app checks for updates)
+      # The "android" release is what the website links to and what the app checks for updates.
+      - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
           BUILD: ${{ github.run_number }}
