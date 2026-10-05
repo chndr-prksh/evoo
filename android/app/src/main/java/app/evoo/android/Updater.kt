@@ -39,9 +39,12 @@ object Updater {
             try {
                 val json = JSONObject(open(BASE + "version.json").inputStream.bufferedReader().use { it.readText() })
                 val release = Release(json.getInt("build"), json.getString("sha256"), json.getLong("size"))
+                android.util.Log.i("EvooUpdate", "latest build ${release.build}, this is ${BuildConfig.VERSION_CODE}")
                 state = if (release.build > BuildConfig.VERSION_CODE) State.Available(release) else State.Idle
             } catch (e: Exception) {
-                if (force) state = State.Failed("Couldn't check for updates")
+                android.util.Log.w("EvooUpdate", "check failed: $e")
+                lastCheck = 0 // try again next time the app opens
+                if (force) state = State.Failed("Couldn't check for updates: ${e.message ?: "no connection"}")
             }
         }.start()
     }
@@ -81,6 +84,7 @@ object Updater {
                     .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK))
                 state = State.Available(release) // still pending until Android has installed it
             } catch (e: Exception) {
+                android.util.Log.w("EvooUpdate", "install failed: $e")
                 state = State.Failed("Update failed: ${e.message ?: "try again"}")
             }
         }.start()

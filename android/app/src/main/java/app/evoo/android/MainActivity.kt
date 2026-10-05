@@ -32,7 +32,7 @@ class MainActivity : AppCompatActivity() {
     private val tick = object : Runnable {
         override fun run() {
             refresh()
-            handler.postDelayed(this, 500)
+            handler.postDelayed(this, 1000)
         }
     }
 
@@ -59,7 +59,10 @@ class MainActivity : AppCompatActivity() {
         find<Button>(R.id.update_button).setOnClickListener {
             (Updater.state as? Updater.State.Available)?.let { Updater.install(this, it.release) }
         }
-        find<TextView>(R.id.version).setOnClickListener { Updater.check(force = true) }
+        find<TextView>(R.id.version).setOnClickListener {
+            Updater.check(force = true)
+            android.widget.Toast.makeText(this, "Checking for updates…", android.widget.Toast.LENGTH_SHORT).show()
+        }
         Polish.warmUp(this) // also asks the phone whether it has Google's built-in AI
         runTestClip(intent)
     }
