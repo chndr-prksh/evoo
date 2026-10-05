@@ -19,7 +19,11 @@ android {
         versionName = "0.1.$buildNumber"
         // Phones from the last ~8 years are all 64-bit ARM; skipping the other three keeps the download small.
         ndk { abiFilters += listOf("arm64-v8a") }
+        externalNativeBuild { cmake { arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_static") } }
     }
+
+    // llama.cpp for the small polish model (src/main/cpp).
+    externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt") } }
 
     signingConfigs {
         // A stable key when CI provides one (so updates install over the old version); otherwise the debug key.
@@ -28,8 +32,8 @@ android {
             if (store != null) {
                 storeFile = file(store)
                 storePassword = System.getenv("EVOO_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("EVOO_KEY_ALIAS")
-                keyPassword = System.getenv("EVOO_KEY_PASSWORD")
+                keyAlias = "evoo"
+                keyPassword = System.getenv("EVOO_KEYSTORE_PASSWORD")
             }
         }
     }
@@ -57,4 +61,6 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // Google's on-device AI (Gemini Nano) for polish, on phones that have it.
+    implementation("com.google.mlkit:genai-proofreading:1.0.0-beta1")
 }

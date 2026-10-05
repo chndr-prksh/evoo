@@ -25,6 +25,7 @@ class Dictation(
         object Idle : State()
         object Listening : State()
         object Thinking : State()
+        object Polishing : State()
         /** Something the person should know ("Didn't catch that"); goes back to idle on the next tap. */
         class Note(val message: String) : State()
     }
@@ -38,7 +39,7 @@ class Dictation(
     fun blocker(): String? = when {
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ->
             "Open the Evoo app to allow the microphone"
-        !ModelStore.isReady(context) -> "Open the Evoo app to download the speech model"
+        !Models.speech.isReady(context) -> "Open the Evoo app to download the speech model"
         else -> null
     }
 
@@ -49,8 +50,9 @@ class Dictation(
         blocker()?.let { return onState(State.Note(it)) }
         if (!recorder.start()) return onState(State.Note("Couldn't start the microphone"))
         onState(State.Listening)
-        // Load the model while the person is still talking.
+        // Load the models while the person is still talking.
         if (!SpeechEngine.isLoaded) scope.launch(Dispatchers.Default) { runCatching { SpeechEngine.load(context) } }
+        Polish.warmUp(context)
     }
 
     /** Stop without typing anything. */
@@ -65,17 +67,23 @@ class Dictation(
         busy = true
         onState(State.Thinking)
         scope.launch {
-            val result = withContext(Dispatchers.Default) {
-                runCatching {
-                    SpeechEngine.load(context)
-                    EvooPipeline.process(SpeechEngine.transcribe(samples)).text
-                }
-            }
+            val result = withContext(Dispatchers.Default) { runCatching { transcribe(context, samples) { onState(State.Polishing) } } }
             busy = false
             result.onSuccess { text ->
                 if (text.isEmpty()) onState(State.Note("Didn't catch that — tap and speak"))
                 else { onText(text); onState(State.Idle) }
             }.onFailure { onState(State.Note(it.message ?: "Something went wrong")) }
+        }
+    }
+
+    companion object {
+        /** Speech → rules → AI polish (when an engine is ready and there's something to fix). Background thread. */
+        fun transcribe(context: Context, samples: FloatArray, onPolishing: () -> Unit = {}): String {
+            SpeechEngine.load(context)
+            val text = EvooPipeline.process(SpeechEngine.transcribe(samples)).text
+            if (text.isEmpty() || Polish.engine(context) == Polish.Engine.NONE || !app.evoo.core.RefinePrompt.needsPolish(text)) return text
+            android.os.Handler(android.os.Looper.getMainLooper()).post(onPolishing)
+            return Polish.run(context, text)
         }
     }
 }

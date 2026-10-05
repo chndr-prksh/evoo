@@ -7,25 +7,21 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * The speech model: NVIDIA Parakeet TDT 0.6B v3 (CC-BY-4.0), the same model the Mac app uses, in the 8-bit ONNX
- * build made for phones by the sherpa-onnx project. Downloaded once (≈670 MB) by Android's own download manager —
- * it keeps going in the background and resumes after a dropped connection — then checked against pinned SHA-256s.
+ * A model Evoo downloads once: fetched by Android's own download manager (it keeps going in the background and
+ * resumes after a dropped connection), then checked against pinned SHA-256s before it is ever loaded.
  */
-object ModelStore {
+class ModelSet(
+    private val id: String,
+    private val folder: String,
+    private val base: String,
+    private val revision: String,
+    private val notificationTitle: String,
+    val files: List<ModelFile>,
+) {
     class ModelFile(val name: String, val size: Long, val sha256: String)
 
-    private const val REVISION = "2bda32ec70b097a55adaa07d9a7173915b43cc78"
-    private const val BASE =
-        "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/$REVISION/"
-    private const val FOLDER = "models/parakeet-v3-int8"
-
-    val files = listOf(
-        ModelFile("encoder.int8.onnx", 652_184_281, "acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247"),
-        ModelFile("decoder.int8.onnx", 11_845_275, "179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e"),
-        ModelFile("joiner.int8.onnx", 6_355_277, "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3"),
-        ModelFile("tokens.txt", 93_939, "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"),
-    )
     val totalBytes = files.sumOf { it.size }
+    val megabytes: Int get() = (totalBytes / 1_000_000).toInt()
 
     sealed class State {
         object Missing : State()
@@ -35,18 +31,18 @@ object ModelStore {
         class Failed(val reason: String) : State()
     }
 
-    fun dir(context: Context): File? = context.getExternalFilesDir(FOLDER)
+    fun dir(context: Context): File? = context.getExternalFilesDir(folder)
 
     fun file(context: Context, name: String): File = File(dir(context), name)
 
-    private fun marker(context: Context) = File(dir(context), ".verified-$REVISION")
+    private fun marker(context: Context) = File(dir(context), ".verified-$revision")
 
     fun isReady(context: Context): Boolean {
         dir(context) ?: return false
         return marker(context).exists() && files.all { file(context, it.name).length() == it.size }
     }
 
-    private fun prefs(context: Context) = context.getSharedPreferences("model", Context.MODE_PRIVATE)
+    private fun prefs(context: Context) = context.getSharedPreferences("model-$id", Context.MODE_PRIVATE)
 
     @Volatile private var verifying = false
     @Volatile private var failure: String? = null
@@ -61,12 +57,12 @@ object ModelStore {
             if (File(dir, f.name).length() == f.size) continue
             File(dir, f.name).delete()
             File(dir, f.name + ".part").delete()
-            val request = DownloadManager.Request(Uri.parse(BASE + f.name))
-                .setTitle("Evoo speech model")
+            val request = DownloadManager.Request(Uri.parse(base + f.name))
+                .setTitle(notificationTitle)
                 .setDescription(f.name)
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
                 .setAllowedOverMetered(true)
-                .setDestinationInExternalFilesDir(context, FOLDER, f.name + ".part")
+                .setDestinationInExternalFilesDir(context, folder, f.name + ".part")
             ids.add(manager.enqueue(request).toString())
         }
         prefs(context).edit().putStringSet("ids", ids).apply()
@@ -151,4 +147,31 @@ object ModelStore {
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
+}
+
+/**
+ * Evoo's models. Speech: NVIDIA Parakeet TDT 0.6B v3 (CC-BY-4.0), the model the Mac app uses, in the 8-bit ONNX
+ * build the sherpa-onnx project made for phones. Polish: Qwen3 0.6B (Apache-2.0), the Mac app's small polish model,
+ * in a 4-bit build that fits a phone.
+ */
+object Models {
+    val speech = ModelSet(
+        id = "speech", folder = "models/parakeet-v3-int8", revision = "2bda32ec70b097a55adaa07d9a7173915b43cc78",
+        base = "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/2bda32ec70b097a55adaa07d9a7173915b43cc78/",
+        notificationTitle = "Evoo speech model",
+        files = listOf(
+            ModelSet.ModelFile("encoder.int8.onnx", 652_184_281, "acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247"),
+            ModelSet.ModelFile("decoder.int8.onnx", 11_845_275, "179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e"),
+            ModelSet.ModelFile("joiner.int8.onnx", 6_355_277, "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3"),
+            ModelSet.ModelFile("tokens.txt", 93_939, "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"),
+        ),
+    )
+    val polish = ModelSet(
+        id = "polish", folder = "models/qwen3-0.6b-q4", revision = "50968a4468ef4233ed78cd7c3de230dd1d61a56b",
+        base = "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/50968a4468ef4233ed78cd7c3de230dd1d61a56b/",
+        notificationTitle = "Evoo polish model",
+        files = listOf(
+            ModelSet.ModelFile("Qwen3-0.6B-Q4_K_M.gguf", 396_705_472, "ac2d97712095a558e31573f62f466a3f9d93990898b0ec79d7c974c1780d524a"),
+        ),
+    )
 }

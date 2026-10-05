@@ -30,5 +30,20 @@ class RulesContractTest {
         assertEquals("hello", EvooPipeline.spaced("hello", null))
     }
 
+    @Test fun polishPromptIsTheMacApps() {
+        // Exported from the Mac app with: evoo-cli prompt-prefix > android/core/src/test/resources/polish-prefix.txt
+        assertEquals(javaClass.getResource("/polish-prefix.txt")!!.readText(), RefinePrompt.prefix)
+    }
+
+    @Test fun polishGuards() {
+        assertEquals("Let's meet Monday.", RefinePrompt.accept("<think>\n\n</think>\n\nLet's meet Monday.<|im_end|>", "let's meet monday"))
+        // The model answered instead of cleaning, or lost a "not": keep the rules' text.
+        assertEquals(null, RefinePrompt.accept("Photosynthesis is the process by which plants turn light, water and carbon dioxide into sugar and oxygen, using chlorophyll in their leaves to capture energy.", "can you explain photosynthesis"))
+        assertEquals(null, RefinePrompt.accept("I'm in the office Friday.", "I'm in the office Monday not Friday"))
+        assertTrue(RefinePrompt.needsPolish("So basically we could like ship it on Friday I guess."))
+        assertTrue(!RefinePrompt.needsPolish("The design team finished the new screens last night."))
+        assertTrue(RefinePrompt.suffix("hi there", "Earlier.").contains("<earlier>Earlier.</earlier>"))
+    }
+
     companion object { const val MAX_KNOWN_DIFFERENCES = 0 }
 }

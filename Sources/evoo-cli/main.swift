@@ -444,6 +444,11 @@ case "post":
         print("in : \(input)\nout: \(r.text)\(r.unresolved ? "   [unresolved → LLM]" : "")\(DictationPipeline.needsPolish(r.text) ? "   [AI polish]" : "")  (\(us))\n")
     }
 
+case "prompt-prefix":
+    // The polish prompt's fixed part, for the Android port's contract test (android/core/src/test/resources).
+    print(RefinePrompt.prefix(language: .english), terminator: "")
+    exit(0)
+
 case "languages":
     // The other languages Parakeet v3 speaks, checked with macOS voices (Benchmarks/languages.tsv).
     let engine = ParakeetEngine(version: .v3)

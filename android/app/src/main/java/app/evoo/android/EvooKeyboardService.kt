@@ -59,6 +59,7 @@ class EvooKeyboardService : InputMethodService() {
         super.onStartInputView(info, restarting)
         lastInserted = 0
         show(dictation.blocker()?.let { Dictation.State.Note(it) } ?: Dictation.State.Idle)
+        if (dictation.blocker() == null) Polish.warmUp(this) // ready by the time you finish speaking
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
@@ -69,7 +70,7 @@ class EvooKeyboardService : InputMethodService() {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         // Android is short of memory and the keyboard isn't in use: give back the model's ~700 MB.
-        if (level >= TRIM_MEMORY_BACKGROUND && !dictation.isListening) SpeechEngine.unload()
+        if (level >= TRIM_MEMORY_BACKGROUND && !dictation.isListening) { SpeechEngine.unload(); Polish.unload() }
     }
 
     override fun onDestroy() {
@@ -83,11 +84,12 @@ class EvooKeyboardService : InputMethodService() {
             Dictation.State.Idle -> "Tap the mic and speak" to false
             Dictation.State.Listening -> "Listening… tap again when you're done" to true
             Dictation.State.Thinking -> "Writing…" to false
+            Dictation.State.Polishing -> "Polishing…" to false
             is Dictation.State.Note -> state.message to false
         }
         status?.text = text
         mic?.setBackgroundResource(if (live) R.drawable.mic_live else R.drawable.mic_idle)
-        mic?.alpha = if (state == Dictation.State.Thinking) 0.5f else 1f
+        mic?.alpha = if (state == Dictation.State.Thinking || state == Dictation.State.Polishing) 0.5f else 1f
         // Without the microphone or the model, a tap on the note opens the app to finish setup.
         status?.setOnClickListener(if (state is Dictation.State.Note && dictation.blocker() != null) View.OnClickListener { openApp() } else null)
     }

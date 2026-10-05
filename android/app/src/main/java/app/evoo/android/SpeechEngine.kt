@@ -22,17 +22,17 @@ object SpeechEngine {
     fun load(context: Context) {
         synchronized(lock) {
             if (recognizer != null) return
-            check(ModelStore.isReady(context)) { "The speech model isn't downloaded yet" }
+            check(Models.speech.isReady(context)) { "The speech model isn't downloaded yet" }
             val threads = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
             val config = OfflineRecognizerConfig(
                 featConfig = FeatureConfig(sampleRate = 16000, featureDim = 80),
                 modelConfig = OfflineModelConfig(
                     transducer = OfflineTransducerModelConfig(
-                        encoder = ModelStore.file(context, "encoder.int8.onnx").absolutePath,
-                        decoder = ModelStore.file(context, "decoder.int8.onnx").absolutePath,
-                        joiner = ModelStore.file(context, "joiner.int8.onnx").absolutePath,
+                        encoder = Models.speech.file(context, "encoder.int8.onnx").absolutePath,
+                        decoder = Models.speech.file(context, "decoder.int8.onnx").absolutePath,
+                        joiner = Models.speech.file(context, "joiner.int8.onnx").absolutePath,
                     ),
-                    tokens = ModelStore.file(context, "tokens.txt").absolutePath,
+                    tokens = Models.speech.file(context, "tokens.txt").absolutePath,
                     numThreads = threads,
                     provider = "cpu",
                     modelType = "nemo_transducer",
