@@ -1,0 +1,8 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="32" android:viewportHeight="32">
+    <!-- Five waveform bars, as on the website and the Mac icon (scaled into the adaptive icon's safe zone). -->
+    <group android:scaleX="0.6" android:scaleY="0.6" android:pivotX="16" android:pivotY="16">
+        <path android:strokeColor="#FFFFFF" android:strokeWidth="2.6" android:strokeLineCap="round"
+            android:pathData="M8,13v6M12,10v12M16,8v16M20,11v10M24,14v4" />
+    </group>
+</vector>

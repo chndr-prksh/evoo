@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The website's look: white, near-black ink, soft grey cards. -->
+    <color name="ink">#0F1115</color>
+    <color name="ink2">#3B3F48</color>
+    <color name="muted">#666B75</color>
+    <color name="soft">#F6F7F9</color>
+    <color name="line">#E7E8EC</color>
+    <color name="green">#17803D</color>
+    <color name="red">#C62828</color>
+    <color name="white">#FFFFFF</color>
+    <color name="key">#2A2D34</color>
+    <color name="keyboard">#16181D</color>
+</resources>

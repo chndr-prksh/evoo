@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:fitsSystemWindows="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="20dp"
+        android:paddingTop="28dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="40dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Evoo"
+            android:textColor="@color/ink"
+            android:textSize="34sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Tap, speak, done. Voice typing in any app — free, and entirely on your phone. (Preview)"
+            android:textColor="@color/ink2"
+            android:textSize="16sp" />
+
+        <LinearLayout style="@style/Card">
+            <TextView android:id="@+id/mic_title" style="@style/CardTitle" android:text="1 · Microphone" />
+            <TextView android:id="@+id/mic_body" style="@style/CardBody" android:text="So Evoo can hear you. Only while you dictate." />
+            <Button android:id="@+id/mic_button" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="Allow microphone" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/Card">
+            <TextView android:id="@+id/model_title" style="@style/CardTitle" android:text="2 · Speech model" />
+            <TextView android:id="@+id/model_body" style="@style/CardBody" android:text="A one-time 670 MB download (Wi-Fi recommended). After that Evoo works offline." />
+            <ProgressBar
+                android:id="@+id/model_progress"
+                style="@android:style/Widget.Material.ProgressBar.Horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:max="1000"
+                android:visibility="gone" />
+            <Button android:id="@+id/model_button" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="Download" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/Card">
+            <TextView android:id="@+id/keyboard_title" style="@style/CardTitle" android:text="3 · Evoo keyboard" />
+            <TextView android:id="@+id/keyboard_body" style="@style/CardBody" android:text="Turn on “Evoo voice keyboard”, then switch to it whenever you want to dictate. Android shows a standard warning for every keyboard; Evoo sends nothing anywhere." />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:orientation="horizontal">
+                <Button android:id="@+id/keyboard_enable" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Turn on" />
+                <Button android:id="@+id/keyboard_switch" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:text="Switch keyboard" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout style="@style/Card">
+            <TextView style="@style/CardTitle" android:text="Try it" />
+            <TextView android:id="@+id/try_status" style="@style/CardBody" android:text="Tap the mic, say something like “Let’s meet tomorrow, no, day after tomorrow”, and tap again." />
+            <EditText
+                android:id="@+id/try_box"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@android:color/white"
+                android:gravity="top"
+                android:hint="Your words appear here"
+                android:inputType="textMultiLine|textCapSentences"
+                android:minLines="4"
+                android:padding="12dp"
+                android:textColor="@color/ink"
+                android:textSize="16sp" />
+            <Button android:id="@+id/try_button" android:layout_width="match_parent" android:layout_height="56dp" android:layout_marginTop="10dp" android:text="🎤  Tap to dictate" android:textSize="16sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/footer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="Your voice never leaves this phone: no account, no cloud. Speech model: NVIDIA Parakeet TDT 0.6B v3 (CC-BY-4.0) via sherpa-onnx (Apache-2.0). Evoo is open source."
+            android:textColor="@color/muted"
+            android:textSize="12sp" />
+    </LinearLayout>
+</ScrollView>

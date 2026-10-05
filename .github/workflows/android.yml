@@ -1,0 +1,65 @@
+# Android preview: test Evoo's rules against the Mac app's cases, build the APK, publish it as "android-preview".
+# Runs in the cloud so nothing heavy runs on a developer's Mac. Not marked "latest": the Mac app's updater and
+# the website's download link keep pointing at the Mac build.
+name: Android
+
+on:
+  push:
+    branches: [main]
+    paths: [android/**, .github/workflows/android.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      SHERPA_VERSION: 1.13.8
+      SHERPA_SHA256: 633c24321e06b1fe79feafa03ea16cbc0f8a286641e2da3559bac91bdb13bd96
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.10.2
+
+      - name: Rules match the Mac app
+        working-directory: android
+        run: gradle :core:test --console=plain
+
+      - name: Speech engine (sherpa-onnx, checksum-pinned)
+        run: |
+          curl -fsSL -o android/app/libs/sherpa-onnx.aar \
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_VERSION}/sherpa-onnx-${SHERPA_VERSION}.aar"
+          echo "${SHERPA_SHA256}  android/app/libs/sherpa-onnx.aar" | sha256sum -c -
+
+      - name: Build the APK
+        working-directory: android
+        env:
+          EVOO_BUILD: ${{ github.run_number }}
+        run: |
+          gradle :app:assembleRelease --console=plain
+          cp app/build/outputs/apk/release/app-release.apk ../Evoo-android.apk
+          ls -la ../Evoo-android.apk
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha256sum Evoo-android.apk > Evoo-android.apk.sha256
+          gh release delete android-preview --yes --cleanup-tag 2>/dev/null || true
+          gh release create android-preview Evoo-android.apk Evoo-android.apk.sha256 \
+            --latest=false --prerelease --target "$GITHUB_SHA" \
+            --title "Evoo for Android (preview ${{ github.run_number }})" \
+            --notes "Preview build of the Evoo voice keyboard for Android. On-device speech (Parakeet v3) and Evoo's correction rules. Install the APK, open Evoo, and follow the three setup steps. Signed with a temporary key: uninstall the previous preview before installing a new one."
