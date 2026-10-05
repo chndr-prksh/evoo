@@ -38,7 +38,9 @@ object SpeechEngine {
                     modelType = "nemo_transducer",
                 ),
             )
+            val started = System.currentTimeMillis()
             recognizer = OfflineRecognizer(config = config)
+            android.util.Log.i("EvooSpeech", "speech model loaded in ${System.currentTimeMillis() - started} ms, $threads threads")
         }
     }
 
@@ -53,6 +55,7 @@ object SpeechEngine {
     fun transcribe(samples: FloatArray): String {
         val speech = AudioStats.speechRange(samples) ?: return ""
         val clip = samples.copyOfRange(speech.first, speech.last + 1)
+        val started = System.currentTimeMillis()
         return pieces(clip).joinToString(" ") { piece ->
             synchronized(lock) {
                 val r = recognizer ?: error("The speech model isn't loaded")
@@ -65,7 +68,9 @@ object SpeechEngine {
                     stream.release()
                 }
             }
-        }.trim()
+        }.trim().also {
+            android.util.Log.i("EvooSpeech", "%.1f s of speech → text in %d ms: %s".format(clip.size / 16000.0, System.currentTimeMillis() - started, it))
+        }
     }
 
     /** Pieces of at most ~30 s, cut at the quietest 100 ms of each piece's last 5 s. */

@@ -86,7 +86,7 @@ Java_app_evoo_android_LlamaNative_load(JNIEnv *env, jobject, jbyteArray jpath, j
 // Returns the completion as UTF-8 bytes (null on failure). `prefix` is evaluated once and reused while it stays
 // the same; pass an empty suffix to just warm it up.
 JNIEXPORT jbyteArray JNICALL
-Java_app_evoo_android_LlamaNative_complete(JNIEnv *env, jobject, jlong handle, jbyteArray jprefix, jbyteArray jsuffix, jint maxTokens) {
+Java_app_evoo_android_LlamaNative_complete(JNIEnv *env, jobject, jlong handle, jbyteArray jprefix, jbyteArray jsuffix, jint maxTokens, jbyteArray jstate) {
     auto *engine = (Engine *) handle;
     if (!engine) return nullptr;
     std::string prefixText = fromJava(env, jprefix), suffixText = fromJava(env, jsuffix);
@@ -96,9 +96,30 @@ Java_app_evoo_android_LlamaNative_complete(JNIEnv *env, jobject, jlong handle, j
     if (prefix == engine->cachedPrefix) {
         llama_memory_seq_rm(memory, 0, (llama_pos) prefix.size(), -1);  // drop the previous dictation
     } else {
+        // Reading the instructions takes the model tens of seconds on a phone, so the result is kept on disk:
+        // the next time the keyboard starts, it is loaded back in well under a second.
+        std::string statePath = fromJava(env, jstate);
         llama_memory_clear(memory, true);
         engine->cachedPrefix.clear();
-        if (!decode(engine->ctx, prefix)) return nullptr;
+        bool restored = false;
+        if (!statePath.empty()) {
+            std::vector<llama_token> saved(prefix.size() + 16);
+            size_t count = 0;
+            if (llama_state_load_file(engine->ctx, statePath.c_str(), saved.data(), saved.size(), &count)) {
+                saved.resize(count);
+                restored = saved == prefix;
+            }
+            if (!restored) llama_memory_clear(memory, true);
+        }
+        if (!restored) {
+            if (!decode(engine->ctx, prefix)) return nullptr;
+            if (!statePath.empty()) {
+                bool ok = llama_state_save_file(engine->ctx, statePath.c_str(), prefix.data(), prefix.size());
+                LOGI("instructions evaluated, %s", ok ? "saved" : "not saved");
+            }
+        } else {
+            LOGI("instructions restored from disk");
+        }
         engine->cachedPrefix = prefix;
     }
 

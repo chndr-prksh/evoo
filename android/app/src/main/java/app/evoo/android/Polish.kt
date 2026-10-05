@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
 object LlamaNative {
     init { System.loadLibrary("evoollama") }
     external fun load(path: ByteArray, threads: Int): Long
-    external fun complete(handle: Long, prefix: ByteArray, suffix: ByteArray, maxTokens: Int): ByteArray?
+    external fun complete(handle: Long, prefix: ByteArray, suffix: ByteArray, maxTokens: Int, statePath: ByteArray): ByteArray?
     external fun free(handle: Long)
 }
 
@@ -144,13 +144,21 @@ object Polish {
             check(handle != 0L) { "Couldn't load the polish model" }
         }
 
-        /** Loads the model and has it read the instructions once (the slow part; ~10–20 s on a phone). */
+        /** Where the model's "I've read the instructions" state is kept, named after the exact instructions and model. */
+        private fun statePath(context: Context): ByteArray {
+            val name = "polish-${RefinePrompt.prefix.hashCode().toUInt()}-${Models.polish.files[0].sha256.take(8)}.state"
+            val dir = java.io.File(context.filesDir, "polish-state").apply { mkdirs() }
+            dir.listFiles()?.filter { it.name != name }?.forEach { it.delete() } // older instructions or model
+            return java.io.File(dir, name).absolutePath.toByteArray()
+        }
+
+        /** Loads the model and has it read the instructions once (slow the very first time; after that the result is restored from disk). */
         fun warmUp(context: Context) {
             synchronized(lock) {
                 if (isWarm) return
                 val started = System.currentTimeMillis()
                 load(context)
-                LlamaNative.complete(handle, RefinePrompt.prefix.toByteArray(), ByteArray(0), 0)
+                LlamaNative.complete(handle, RefinePrompt.prefix.toByteArray(), ByteArray(0), 0, statePath(context))
                 isWarm = true
                 Log.i(TAG, "qwen ready in ${System.currentTimeMillis() - started} ms")
             }
@@ -162,7 +170,7 @@ object Polish {
             return synchronized(lock) {
                 val words = text.split(' ').count { it.isNotEmpty() }
                 LlamaNative.complete(handle, RefinePrompt.prefix.toByteArray(), RefinePrompt.suffix(text).toByteArray(),
-                    RefinePrompt.maxTokens(words))?.toString(Charsets.UTF_8)
+                    RefinePrompt.maxTokens(words), statePath(context))?.toString(Charsets.UTF_8)
             }
         }
 

@@ -31,31 +31,41 @@ class ModelSet(
         class Failed(val reason: String) : State()
     }
 
-    fun dir(context: Context): File? = context.getExternalFilesDir(folder)
+    /** Where the model lives once verified: the app's private storage (fast to load, invisible to other apps). */
+    fun dir(context: Context): File = File(context.filesDir, folder).apply { mkdirs() }
+
+    /** Where Android's download manager puts it first (it can only write to shared storage). */
+    private fun staging(context: Context): File? = context.getExternalFilesDir(folder)
 
     fun file(context: Context, name: String): File = File(dir(context), name)
 
     private fun marker(context: Context) = File(dir(context), ".verified-$revision")
 
-    fun isReady(context: Context): Boolean {
-        dir(context) ?: return false
-        return marker(context).exists() && files.all { file(context, it.name).length() == it.size }
-    }
+    fun isReady(context: Context): Boolean =
+        marker(context).exists() && files.all { file(context, it.name).length() == it.size }
 
     private fun prefs(context: Context) = context.getSharedPreferences("model-$id", Context.MODE_PRIVATE)
 
     @Volatile private var verifying = false
     @Volatile private var failure: String? = null
 
+    /** A downloaded copy waiting in staging (from this run, or an earlier version of the app). */
+    private fun staged(context: Context, f: ModelFile, ids: Collection<Long>): File? {
+        val dir = staging(context) ?: return null
+        // A ".part" is only complete once its download has finished: Android reserves the full size up front.
+        val part = File(dir, f.name + ".part")
+        if (ids.isEmpty() && part.length() == f.size) return part
+        return File(dir, f.name).takeIf { it.length() == f.size }
+    }
+
     /** Starts (or continues) the download of whatever is missing. */
     fun download(context: Context) {
-        val dir = dir(context) ?: run { failure = "No storage available for the model"; return }
+        val dir = staging(context) ?: run { failure = "No storage available for the model"; return }
         failure = null
         val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val ids = mutableSetOf<String>()
         for (f in files) {
-            if (File(dir, f.name).length() == f.size) continue
-            File(dir, f.name).delete()
+            if (file(context, f.name).length() == f.size || File(dir, f.name).length() == f.size) continue
             File(dir, f.name + ".part").delete()
             val request = DownloadManager.Request(Uri.parse(base + f.name))
                 .setTitle(notificationTitle)
@@ -75,9 +85,17 @@ class ModelSet(
         failure?.let { return State.Failed(it) }
         if (verifying) return State.Verifying
         val ids = prefs(context).getStringSet("ids", emptySet())!!.mapNotNull { it.toLongOrNull() }
-        if (ids.isEmpty()) return State.Missing
+        if (ids.isEmpty()) {
+            // Downloaded by an earlier version of the app (models used to stay in shared storage): move them over.
+            if (files.all { file(context, it.name).length() == it.size || staged(context, it, ids) != null } &&
+                files.any { staged(context, it, ids) != null }) {
+                verify(context)
+                return State.Verifying
+            }
+            return State.Missing
+        }
         val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        var done = files.filter { file(context, it.name).length() == it.size }.sumOf { it.size }
+        var done = 0L
         var running = 0
         var failed: String? = null
         manager.query(DownloadManager.Query().setFilterById(*ids.toLongArray()))?.use { c ->
@@ -85,10 +103,11 @@ class ModelSet(
             val soFar = c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
             val reason = c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON)
             while (c.moveToNext()) {
+                done += maxOf(0L, c.getLong(soFar))
                 when (c.getInt(status)) {
                     DownloadManager.STATUS_FAILED -> failed = "Download failed (code ${c.getInt(reason)}). Check the connection and try again."
                     DownloadManager.STATUS_SUCCESSFUL -> {}
-                    else -> { running += 1; done += maxOf(0L, c.getLong(soFar)) }
+                    else -> running += 1
                 }
             }
         }
@@ -97,38 +116,37 @@ class ModelSet(
             return State.Failed(it)
         }
         if (running == 0) {
+            prefs(context).edit().remove("ids").apply()
             verify(context)
             return State.Verifying
         }
-        // Finished parts are still named ".part" until everything is verified.
-        done += files.filter { File(dir(context), it.name + ".part").length() == it.size }.sumOf { it.size }
         return State.Downloading((done.toDouble() / totalBytes).toFloat().coerceIn(0f, 0.99f))
     }
 
-    /** Checks every file against its pinned SHA-256, then marks the model usable. */
+    /** Checks every file against its pinned SHA-256, moves it into private storage, then marks the model usable. */
     private fun verify(context: Context) {
         if (verifying) return
         verifying = true
         Thread {
             try {
-                val dir = dir(context)!!
                 for (f in files) {
-                    val final = File(dir, f.name)
-                    val part = File(dir, f.name + ".part")
-                    if (final.length() != f.size) {
-                        if (part.length() != f.size) throw IllegalStateException("${f.name} is incomplete — tap Download again")
-                        if (sha256(part) != f.sha256) {
-                            part.delete()
-                            throw IllegalStateException("${f.name} didn't verify — tap Download again")
-                        }
-                        if (!part.renameTo(final)) throw IllegalStateException("Couldn't save ${f.name}")
+                    val final = file(context, f.name)
+                    if (final.length() == f.size) continue
+                    val source = staged(context, f, emptyList()) ?: throw IllegalStateException("${f.name} is incomplete — tap Download again")
+                    if (sha256(source) != f.sha256) {
+                        source.delete()
+                        throw IllegalStateException("${f.name} didn't verify — tap Download again")
                     }
+                    final.delete()
+                    if (!source.renameTo(final)) { // different storage: copy, then remove the staged copy
+                        source.copyTo(final, overwrite = true)
+                        source.delete()
+                    }
+                    if (final.length() != f.size) throw IllegalStateException("Couldn't save ${f.name}")
                 }
                 marker(context).writeText("ok")
-                prefs(context).edit().remove("ids").apply()
             } catch (e: Exception) {
                 failure = e.message ?: "The model didn't verify"
-                prefs(context).edit().remove("ids").apply()
             } finally {
                 verifying = false
             }
