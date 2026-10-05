@@ -23,7 +23,8 @@ class RulesContractTest {
 
     @Test fun pipelineBasics() {
         assertEquals("", EvooPipeline.process("[BLANK_AUDIO]").text)
-        assertEquals("So I think we should ship it on Friday.", EvooPipeline.process("Um, so, uh, I think we should, we should ship it on Friday.").text.let { it })
+        assertEquals("I think we should ship it on Friday.", EvooPipeline.process("Um, so, uh, I think we should, we should ship it on Friday.").text)
+        assertEquals("I will call you, and I'm on my way.", EvooPipeline.process("i will call you, and i'm on my way.").text)
         assertEquals(" hello", EvooPipeline.spaced("hello", 'a'))
         assertEquals("hello", EvooPipeline.spaced("hello", ' '))
         assertEquals("hello", EvooPipeline.spaced("hello", null))
