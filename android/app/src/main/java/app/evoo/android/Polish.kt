@@ -33,6 +33,10 @@ object Polish {
     enum class Engine { GOOGLE, QWEN, NONE }
 
     private const val TAG = "EvooPolish"
+    /** The longest a dictation waits for polish. */
+    const val LIMIT_MS = 4000L
+    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val busy = java.util.concurrent.atomic.AtomicBoolean(false)
     private const val PREFS = "polish"
 
     fun isEnabled(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("enabled", true)
@@ -61,14 +65,23 @@ object Polish {
      */
     fun run(context: Context, text: String): String {
         if (!RefinePrompt.needsPolish(text)) return text
+        val which = engine(context)
+        if (which == Engine.NONE) return text
+        // The model is still on an earlier dictation that ran over the limit: don't queue behind it.
+        if (!busy.compareAndSet(false, true)) return text
         val started = System.currentTimeMillis()
-        val (engine, answer) = when (engine(context)) {
-            Engine.GOOGLE -> "google" to runCatching { Google.proofread(context, text) }.getOrNull()
-            Engine.QWEN -> "qwen" to runCatching { Qwen.polish(context, text) }.getOrNull()
-            Engine.NONE -> return text
+        val job = worker.submit<String?> {
+            try {
+                runCatching { if (which == Engine.GOOGLE) Google.proofread(context, text) else Qwen.polish(context, text) }.getOrNull()
+            } finally {
+                busy.set(false)
+            }
         }
+        // Never keep the person waiting on polish: past the limit, the rules' text goes in as it is.
+        val answer = try { job.get(LIMIT_MS, TimeUnit.MILLISECONDS) } catch (e: Exception) { null }
         val accepted = answer?.let { RefinePrompt.accept(it, text) }
-        Log.i(TAG, "$engine polish ${System.currentTimeMillis() - started} ms, ${if (accepted != null) "used" else "kept the rules' text"}")
+        val took = System.currentTimeMillis() - started
+        Log.i(TAG, "$which polish $took ms, ${if (accepted != null) "used" else if (took >= LIMIT_MS) "too slow — kept the rules' text" else "kept the rules' text"}")
         return accepted ?: text
     }
 
