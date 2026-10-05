@@ -31,7 +31,7 @@ public final class ParakeetEngine: SpeechEngine {
         var state = TdtDecoderState.make(decoderLayers: version.decoderLayers)
         // v3 speaks 25 languages and can drift into Cyrillic on short phrases ("Ол кабс" for "All caps").
         // Telling it the language restricts decoding to Latin-script tokens.
-        let hint: Language? = language == .english ? .english : nil
+        let hint = Language(rawValue: language.code) // also keeps Polish, Czech… in Latin letters
         return try await manager.transcribe(samples, decoderState: &state, language: hint).text
     }
 

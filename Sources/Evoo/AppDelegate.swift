@@ -191,7 +191,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         if Features.multilingual {
             let languages = NSMenu()
-            for language in Features.languages {
+            for language in Features.quickLanguages {
                 let entry = item(language.title, #selector(selectLanguage(_:)))
                 entry.representedObject = language.rawValue
                 entry.state = settings.language == language ? .on : .off

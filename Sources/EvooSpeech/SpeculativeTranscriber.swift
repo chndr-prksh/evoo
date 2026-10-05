@@ -26,6 +26,9 @@ public final class SpeculativeTranscriber {
     /// Call periodically while recording with everything recorded so far.
     /// `every`: also transcribe this often while the person keeps talking (no pause needed), so finished sentences
     /// can be polished during fluent speech — people often don't pause 0.3 s between sentences.
+    /// The language being dictated (a hint for the speech model).
+    public var language: DictationLanguage = .english
+
     public func consider(_ samples: [Float], engine: SpeechEngine, every: Duration? = nil) {
         guard !running, samples.count > 8_000 else { return }
         let paused = AudioStats.endsInPause(samples, seconds: 0.3)
@@ -34,9 +37,10 @@ public final class SpeculativeTranscriber {
         running = true
         lastStart = ContinuousClock.now
         let clip = Array(samples[speech])
+        let language = self.language
         job = (speech, Task { [weak self] in
             defer { Task { @MainActor in self?.running = false } }
-            let text = try await engine.transcribe(clip, language: .english)
+            let text = try await engine.transcribe(clip, language: language)
             await MainActor.run { self?.onResult?(text, paused) }
             return text
         })
@@ -49,6 +53,6 @@ public final class SpeculativeTranscriber {
             reuseCount += 1
             return (try await job.task.value, true)
         }
-        return (try await engine.transcribe(Array(samples[speech]), language: .english), false)
+        return (try await engine.transcribe(Array(samples[speech]), language: language), false)
     }
 }

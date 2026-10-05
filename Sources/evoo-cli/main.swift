@@ -96,13 +96,14 @@ case "golden", "stress":
     let polish = flag("--polish")
     let contextual = flag("--contextual")
     let json = option("--json")
+    let external = option("--external")
     pipeline.dictionary = PersonalDictionary(["Divya", "Aarav", "Kubernetes", "Priya", "Rahul"])
     if polish {
         try await refiner.load(option("--polish-model").flatMap(RefinerModel.init(rawValue:)) ?? .qwen3_4b, language: .english)
         if let a = option("--adapter") { print("adapter loaded: \(try await refiner.setAdapter(path: a))") }
     }
     if command == "golden" {
-        try await runGolden(engine: engine, pipeline: pipeline, refiner: refiner, polish: polish, contextual: contextual, json: json)
+        try await runGolden(engine: engine, pipeline: pipeline, refiner: refiner, polish: polish, contextual: contextual, json: json, external: external)
     } else {
         let counts = (option("--sentences") ?? "1,5,10,30,50").split(separator: ",").compactMap { Int($0) }
         let modes = (option("--modes") ?? "whole,stream").split(separator: ",").map(String.init)
@@ -442,6 +443,31 @@ case "post":
         let us = (clock.now - t0).formatted(.units(allowed: [.microseconds]))
         print("in : \(input)\nout: \(r.text)\(r.unresolved ? "   [unresolved → LLM]" : "")\(DictationPipeline.needsPolish(r.text) ? "   [AI polish]" : "")  (\(us))\n")
     }
+
+case "languages":
+    // The other languages Parakeet v3 speaks, checked with macOS voices (Benchmarks/languages.tsv).
+    let engine = ParakeetEngine(version: .v3)
+    try await engine.load { _ in }
+    var perLanguage: [String: (errors: Double, n: Int)] = [:]
+    var order: [String] = []
+    for line in try String(contentsOf: URL(fileURLWithPath: "Benchmarks/languages.tsv"), encoding: .utf8)
+        .split(separator: "\n").map(String.init) where !line.hasPrefix("#")
+    {
+        let f = line.components(separatedBy: "\t")
+        guard f.count == 3, let lang = DictationLanguage(rawValue: f[0]) else { continue }
+        guard let clip = try? speech(f[2], voice: f[1]), clip.count > 8_000,
+              let heard = try? await engine.transcribe(clip, language: lang)
+        else { print("  [\(f[0])] no audio from voice \(f[1]) — skipped"); continue }
+        let out = pipeline.postProcess(heard, language: lang).text
+        let w = wer(f[2], out)
+        if perLanguage[f[0]] == nil { order.append(f[0]) }
+        perLanguage[f[0], default: (0, 0)].errors += w
+        perLanguage[f[0], default: (0, 0)].n += 1
+        print("\(w == 0 ? "✓" : " ") [\(f[0])] \(f[2])\n    → \(out)")
+    }
+    print("")
+    for l in order { print(String(format: "%@ %.0f%% words wrong", l.padding(toLength: 12, withPad: " ", startingAt: 0), perLanguage[l]!.errors / Double(perLanguage[l]!.n) * 100)) }
+    await engine.unload()
 
 case "misheard":
     // Contextual polish: misheard words fixed, correct words kept (Benchmarks/misheard.tsv).

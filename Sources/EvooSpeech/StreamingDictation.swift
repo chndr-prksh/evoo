@@ -72,8 +72,8 @@ public final class StreamingDictation {
             let clip = Array(pending[0 ..< cut])
             committedEnd = end
             tail = nil
-            busy = Task { [weak self] in
-                let text = (try? await Self.transcribe(clip, engine: engine)) ?? ""
+            busy = Task { [weak self, language] in
+                let text = (try? await Self.transcribe(clip, engine: engine, language: language)) ?? ""
                 guard let self else { return }
                 if !text.isEmpty { self.committed.append(text) }
                 self.committedSeconds = Double(end) / rate
@@ -84,7 +84,7 @@ public final class StreamingDictation {
             // Short stretch: speculate, reuse at release if nothing more is said.
             let clip = Array(pending[speech])
             let start = committedEnd
-            let task = Task { try await engine.transcribe(clip, language: .english) }
+            let task = Task { [language] in try await engine.transcribe(clip, language: language) }
             tail = (speech, start, task)
             busy = Task { [weak self] in
                 _ = try? await task.value
@@ -101,6 +101,8 @@ public final class StreamingDictation {
     }
 
     private let whole = SpeculativeTranscriber()
+    /// The language being dictated (a hint for the speech model).
+    public var language: DictationLanguage = .english { didSet { whole.language = language } }
     /// The whole dictation so far, transcribed at a pause (up to `wholeClipLimit`).
     public var onWholeResult: ((String, Bool) -> Void)? {
         get { whole.onResult }
@@ -122,7 +124,7 @@ public final class StreamingDictation {
                 last = try await tail.task.value
                 reused = true
             } else {
-                last = try await engine.transcribe(Array(rest[speech]), language: .english)
+                last = try await engine.transcribe(Array(rest[speech]), language: language)
             }
         } else {
             reused = !committed.isEmpty
@@ -132,9 +134,9 @@ public final class StreamingDictation {
         return (text, reused)
     }
 
-    private static func transcribe(_ clip: [Float], engine: SpeechEngine) async throws -> String {
+    private static func transcribe(_ clip: [Float], engine: SpeechEngine, language: DictationLanguage) async throws -> String {
         guard let speech = AudioStats.speechRange(clip) else { return "" }
-        return try await engine.transcribe(Array(clip[speech]), language: .english)
+        return try await engine.transcribe(Array(clip[speech]), language: language)
     }
 
     /// Index of the quietest 100 ms in the last `within` samples (to cut a long stretch between words).

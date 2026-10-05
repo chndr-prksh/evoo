@@ -368,6 +368,7 @@ extension DictationLanguage {
         case .english: "EN"
         case .hinglish: "HI·EN"
         case .hindi: "HI"
+        default: code.uppercased()
         }
     }
 }

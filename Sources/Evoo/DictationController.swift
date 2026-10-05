@@ -54,7 +54,8 @@ final class DictationController: ObservableObject {
     /// A quick fn tap: still recording for a moment (in case a second tap makes it hands-free), but the pill
     /// already looks idle — a tap shouldn't leave anything on screen.
     @Published private(set) var provisional = false
-    private let engines = SpeechEngines(parakeetVersion: AppSettings.shared.fastestModel ? .tdtCtc110m : .v3)
+    /// The small 110M model only knows English; every other language needs the 0.6B (v3).
+    private let engines = SpeechEngines(parakeetVersion: AppSettings.shared.fastestModel && AppSettings.shared.language == .english ? .tdtCtc110m : .v3)
     private let refiner = LlamaRefiner()
     private lazy var pipeline = DictationPipeline(refiner: refiner)
     private let injector = TextInjector()
@@ -128,9 +129,9 @@ final class DictationController: ObservableObject {
                 self.updateMicStandby()
             }
         }
-        settings.$fastestModel.dropFirst()
-            .sink { [weak self] fastest in
-                self?.engines.setParakeetVersion(fastest ? .tdtCtc110m : .v3)
+        settings.$fastestModel.combineLatest(settings.$language).dropFirst()
+            .sink { [weak self] fastest, language in
+                self?.engines.setParakeetVersion(fastest && language == .english ? .tdtCtc110m : .v3)
                 self?.prepareSpeechModel()
             }
             .store(in: &cancellables)
@@ -345,7 +346,7 @@ final class DictationController: ObservableObject {
         guard engines.ready(settings.resolvedEngine) != nil else {
             gesture.reset()
             prepareSpeechModel()
-            let what = settings.resolvedEngine == .whisper ? "Hindi/Hinglish" : "English"
+            let what = settings.language.englishName
             return show("\(what) model is still preparing (first time only) — try again shortly")
         }
         permissions.refresh()
@@ -400,6 +401,7 @@ final class DictationController: ObservableObject {
         // Long dictations: finished stretches are transcribed while you speak, and (with AI polish on) finished
         // sentences are polished in the background — so releasing fn only leaves the last few seconds to do.
         streaming.reset()
+        streaming.language = settings.language
         polisher = nil
         if smartCleanupReady, settings.language == .english {
             let refiner = self.refiner
@@ -554,8 +556,11 @@ final class DictationController: ObservableObject {
             let (raw, reused) = try await streaming.finish(samples, engine: engine)
             let asrMs = (ContinuousClock.now - asrStart).ms
             let afterASR = ContinuousClock.now
-            if await runMacCommand(raw) { return }
-            if runAppCommand(raw) { return }
+            // Voice commands are English phrases; in other languages everything you say is text.
+            if language.usesEnglishRules {
+                if await runMacCommand(raw) { return }
+                if runAppCommand(raw) { return }
+            }
             if selectionAtStart == nil { selectionAtStart = await Self.value(of: selectionTask, within: 100) ?? nil }
             if try await rewriteSelectionIfAsked(raw, selection: selectionAtStart, session: session) { return }
             if try await composeIfAsked(raw, session: session) { return }

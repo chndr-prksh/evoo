@@ -9,7 +9,7 @@ final class AppSettings: ObservableObject {
     private let defaults = UserDefaults.standard
 
     @Published var activationMode: ActivationMode { didSet { save(activationMode.rawValue, "activationMode") } }
-    @Published var language: DictationLanguage { didSet { save(language.rawValue, "language") } }
+    @Published var language: DictationLanguage { didSet { save(language.rawValue, "language"); Features.noteUsed(language) } }
     @Published var engine: EnginePreference { didSet { save(engine.rawValue, "engine") } }
     @Published var refinementEnabled: Bool { didSet { save(refinementEnabled, "refinementEnabled") } }
     @Published var refinerModel: RefinerModel { didSet { save(refinerModel.rawValue, "refinerModel") } }
@@ -81,7 +81,7 @@ final class AppSettings: ObservableObject {
         activationMode = value("activationMode", .hybrid)
         // English unless the Hinglish add-on is installed; Hindi (Devanagari) and the old Whisper + LLM path are off.
         let saved: DictationLanguage = value("language", .english)
-        language = Features.languages.contains(saved) && (saved != .hinglish || Features.multilingual) ? saved : .english
+        language = Features.languages.contains(saved) ? saved : .english
         engine = value("engine", .automatic)
         refinementEnabled = bool("refinementEnabled", true)
         // Dictation polish: the 4B model polishes ~4 words/s on an 8 GB Mac — slower than people speak — so smaller

@@ -62,13 +62,17 @@ struct SettingsView: View {
                 Picker("Fn key", selection: $settings.activationMode) {
                     ForEach(ActivationMode.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
-                if hinglishInstalled {
-                    Picker("Language", selection: $settings.language) {
-                        ForEach(Features.languages, id: \.self) { Text($0.title).tag($0) }
-                    }
+                Picker("Language", selection: $settings.language) {
+                    ForEach(Features.languages, id: \.self) { Text($0.title).tag($0) }
+                }
+                if DictationLanguage.european.contains(settings.language) {
+                    Text("\(settings.language.englishName) (beta): Evoo writes what the speech model hears. Self-corrections, number formatting, lists, voice commands and AI polish are English-only for now. Languages you pick here also appear in the pill's 🌐 menu.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 Toggle("Fastest speech model", isOn: $settings.fastestModel)
-                Text(settings.fastestModel
+                    .disabled(settings.language != .english)
+                Text(settings.language != .english ? "Other languages always use the accurate model (Parakeet 0.6B)."
+                    : settings.fastestModel
                     ? "Parakeet 110M: about 2× faster, but less accurate with names and casing."
                     : "Parakeet 0.6B: most accurate. Text is usually ready the instant you release fn.")
                     .font(.caption).foregroundStyle(.secondary)

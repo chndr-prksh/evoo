@@ -18,7 +18,17 @@ func speech(_ text: String, voice: String = "Samantha") throws -> [Float] {
     if !FileManager.default.fileExists(atPath: file.path) {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/say")
-        p.arguments = ["-v", voice, "-o", file.path, "--data-format=LEI16@16000", text]
+        // Process hands arguments over in decomposed Unicode, which `say` doesn't match against voice names with
+        // accents ("Mónica", "Tünde") — it silently reads with the default voice. So spell the name out as bytes.
+        if voice.unicodeScalars.allSatisfy(\.isASCII) {
+            p.arguments = ["-v", voice, "-o", file.path, "--data-format=LEI16@16000", text]
+        } else {
+            let bytes = voice.precomposedStringWithCanonicalMapping.utf8.map { String(format: "\\%03o", $0) }.joined()
+            let textFile = dir.appendingPathComponent("say-input.txt")
+            try text.write(to: textFile, atomically: true, encoding: .utf8)
+            p.executableURL = URL(fileURLWithPath: "/bin/sh")
+            p.arguments = ["-c", "/usr/bin/say -v \"$(printf '\(bytes)')\" -o '\(file.path)' --data-format=LEI16@16000 -f '\(textFile.path)'"]
+        }
         try p.run()
         p.waitUntilExit()
     }
@@ -73,7 +83,13 @@ struct GoldenResult: Encodable {
 
 @MainActor
 func runGolden(engine: SpeechEngine, pipeline: DictationPipeline, refiner: LlamaRefiner, polish: Bool,
-               contextual: Bool = false, json: String?) async throws {
+               contextual: Bool = false, json: String?, external: String? = nil) async throws {
+    // --external file.json: score another speech engine through the same rules. The file maps each clip's name
+    // (the cached WAVs in $TMPDIR/evoo-golden, without ".wav") to what that engine heard.
+    let heard: [String: String]? = try external.map {
+        try JSONDecoder().decode([String: String].self, from: Data(contentsOf: URL(fileURLWithPath: $0)))
+    }
+    var werSum = 0.0
     let url = URL(fileURLWithPath: "Benchmarks/golden.tsv")
     let lines = try String(contentsOf: url, encoding: .utf8).split(separator: "\n").map(String.init)
     let targets = AppCommands.builtIn + [AppTarget(name: "Google Chrome", aliases: ["chrome"], bundleID: "com.google.Chrome"),
@@ -87,8 +103,11 @@ func runGolden(engine: SpeechEngine, pipeline: DictationPipeline, refiner: Llama
         let expected = f.count > 3 ? f[3] : ""
         let samples = try speech(said)
         var t = clock.now
-        let raw = try await engine.transcribe(samples, language: .english)
+        let raw: String
+        if let h = heard?[stableHash("Samantha" + said)] { raw = h }
+        else { raw = try await engine.transcribe(samples, language: .english) }
         let asrMs = (clock.now - t).ms
+        werSum += wer(said, raw)
         var output = "", pass = false, rulesMs = 0, polishMs = 0
         switch check {
         case "mac", "nocommand":
@@ -132,6 +151,7 @@ func runGolden(engine: SpeechEngine, pipeline: DictationPipeline, refiner: Llama
     }
     let passed = results.filter(\.pass).count
     print("\nPASSED \(passed)/\(results.count)")
+    print(String(format: "WORD ERRORS %.1f%% (what was heard vs what was said, before rules)", werSum / Double(max(1, results.count)) * 100))
     for cat in Array(Set(results.map(\.category))).sorted() {
         let c = results.filter { $0.category == cat }
         print("  \(cat): \(c.filter(\.pass).count)/\(c.count)")

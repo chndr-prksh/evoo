@@ -914,3 +914,20 @@ struct ContextPromptTests {
         #expect(RefinePrompt.suffix(transcript: "hi there", context: "Earlier.", thinkBlock: false).contains("<earlier>Earlier.</earlier>"))
     }
 }
+
+struct LanguageTests {
+    @Test func europeanLanguagesUseTheBuiltInModelAndSkipEnglishRules() {
+        #expect(DictationLanguage.european.count == 24)
+        for l in DictationLanguage.european {
+            #expect(l.parakeetSupported)
+            #expect(!l.usesEnglishRules)
+            #expect(l.code.count == 2)
+            #expect(EnginePreference.automatic.resolve(for: l) == .parakeet)
+        }
+        #expect(Set(DictationLanguage.european.map(\.code)).count == 24)
+        #expect(DictationLanguage.english.usesEnglishRules && DictationLanguage.hinglish.usesEnglishRules)
+        #expect(EnginePreference.automatic.resolve(for: .english) == .parakeet)
+        #expect(EnginePreference.automatic.resolve(for: .hinglish) == .hinglish)
+        #expect(!DictationLanguage.hindi.parakeetSupported)
+    }
+}

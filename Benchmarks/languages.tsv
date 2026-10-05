@@ -1,0 +1,29 @@
+# Other languages (Parakeet v3): language <TAB> macOS voice <TAB> sentence. Clean text-to-speech, so this only shows
+# the language works at all — real voices and accents will do worse. No usable voice on macOS for Estonian, Latvian, Lithuanian, Maltese.
+spanish	Mónica	Mañana tenemos una reunión a las diez para hablar del nuevo proyecto.
+spanish	Mónica	No, gracias, prefiero ir caminando porque hace buen tiempo.
+french	Jacques	Demain nous avons une réunion à dix heures pour parler du nouveau projet.
+french	Jacques	Je voudrais réserver une table pour quatre personnes ce soir.
+german	Anna	Morgen haben wir um zehn Uhr eine Besprechung über das neue Projekt.
+german	Anna	Können Sie mir bitte die Unterlagen bis Freitag schicken?
+italian	Alice	Domani abbiamo una riunione alle dieci per parlare del nuovo progetto.
+italian	Alice	Vorrei prenotare un tavolo per quattro persone questa sera.
+portuguese	Joana	Amanhã temos uma reunião às dez horas para falar do novo projeto.
+portuguese	Luciana	Você pode me enviar os documentos até sexta-feira, por favor?
+dutch	Xander	Morgen hebben we om tien uur een vergadering over het nieuwe project.
+dutch	Xander	Kun je me de documenten voor vrijdag sturen, alsjeblieft?
+polish	Zosia	Jutro mamy spotkanie o dziesiątej, żeby porozmawiać o nowym projekcie.
+polish	Zosia	Czy możesz wysłać mi dokumenty do piątku?
+romanian	Ioana	Mâine avem o ședință la ora zece pentru a discuta despre noul proiect.
+swedish	Alva	I morgon har vi ett möte klockan tio för att prata om det nya projektet.
+danish	Sara	I morgen har vi et møde klokken ti for at tale om det nye projekt.
+finnish	Satu	Huomenna meillä on kokous kello kymmenen uudesta projektista.
+hungarian	Tünde	Holnap tíz órakor megbeszélést tartunk az új projektről.
+czech	Zuzana	Zítra máme v deset hodin schůzku o novém projektu.
+slovak	Laura	Zajtra máme o desiatej stretnutie o novom projekte.
+slovenian	Tina	Jutri imamo ob desetih sestanek o novem projektu.
+croatian	Lana	Sutra u deset sati imamo sastanak o novom projektu.
+bulgarian	Daria	Утре в десет часа имаме среща за новия проект.
+greek	Melina	Αύριο στις δέκα έχουμε συνάντηση για το νέο έργο.
+russian	Milena	Завтра в десять часов у нас встреча по новому проекту.
+ukrainian	Lesya	Завтра о десятій годині у нас зустріч щодо нового проєкту.

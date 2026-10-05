@@ -21,6 +21,7 @@ one-line install below. Evoo updates itself after that.
 - 100% local: speech recognition and text cleanup run on-device. No accounts, no cloud, no API keys.
 - Understands what you *meant*: "let's meet tomorrow, no, day after tomorrow" → **"Let's meet day after tomorrow."**
 - Works everywhere you can paste: Chrome, Slack, Gmail, Notion, VS Code, Cursor, Terminal, Office…
+- **24 more European languages (beta)** from the same built-in speech model (Parakeet TDT v3) — Spanish, French, German, Italian, Portuguese, Dutch, Polish, Russian, Ukrainian and others: pick one in Settings › Language. They get the speech model's text as heard; Evoo's rules, voice commands and AI polish are English-only for now.
 - English, plus a **Hinglish add-on (beta)**: download it from Settings (133 MB) and switch languages on the pill. It uses its own model (Oriserve Whisper-Hindi2Hinglish, Apache-2.0), writes Roman Hinglish ("kal meeting hai, please confirm kar dena"), and handles Hinglish self-corrections; English keeps its own model and is unaffected.
 - Speculative transcription: Evoo starts transcribing when you pause, so text is usually ready the instant fn goes up.
 - Personal dictionary for names and jargon (Divya, Aarav, Kubernetes).

@@ -167,9 +167,9 @@ private struct HomeView: View {
             Spacer()
             if Features.multilingual {
                 Picker("Language", selection: $settings.language) {
-                    ForEach(Features.languages, id: \.self) { Text($0.title).tag($0) }
+                    ForEach(Features.quickLanguages, id: \.self) { Text($0.title).tag($0) }
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
                 .labelsHidden()
                 .frame(width: 200)
             }

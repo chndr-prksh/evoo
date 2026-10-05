@@ -190,6 +190,12 @@ public final class DictationPipeline {
     public func postProcess(_ raw: String, language: DictationLanguage, style: OutputStyle? = .plain,
                             contextTerms: [String] = []) -> Processed
     {
+        // Other European languages: the speech model's own text. Evoo's rules below are written for English and
+        // would misfire ("no" starts a correction in English, not in Spanish) — and the name fixer treats every
+        // word that isn't English as a possibly misheard name.
+        guard language.usesEnglishRules else {
+            return Processed(text: TextCleaner.clean(raw), unresolved: false, action: nil)
+        }
         // Spoken commands first ("capitalize each word, …", "… press enter", "undo that").
         let command = DictationCommands.parse(TextCleaner.clean(raw))
         // Voice shortcuts are swapped for placeholders so nothing below alters them.
