@@ -935,3 +935,35 @@ struct LanguageTests {
         #expect(!DictationLanguage.hindi.parakeetSupported)
     }
 }
+
+struct CommandChainTests {
+    let targets = AppCommands.builtIn + [AppTarget(name: "Slack", bundleID: "com.tinyspeck.slackmacgap"),
+                                         AppTarget(name: "Google Chrome", aliases: ["chrome"], bundleID: "com.google.Chrome")]
+    func chain(_ s: String) -> [String]? {
+        CommandChain.parts(s) { MacCommands.parse($0) != nil || AppCommands.parse($0, targets: targets) != nil }
+    }
+
+    @Test func chainsOfCommands() {
+        #expect(chain("Close the tab and switch to Claude.") == ["Close the tab", "switch to Claude"])
+        #expect(chain("Mute, then open Slack") == ["Mute", "open Slack"])
+        #expect(chain("Copy that. New tab. Paste.") == ["Copy that", "New tab", "Paste"])
+        #expect(chain("Volume thirty and then open Chrome and new tab") == ["Volume thirty", "open Chrome", "new tab"])
+        #expect(chain("search Google for flights to Delhi and switch to Slack") == ["search Google for flights to Delhi", "switch to Slack"])
+        #expect(CommandChain.summary(["close the tab", "switch to Claude"]) == "Close the tab → Switch to Claude")
+    }
+
+    @Test func ordinarySpeechIsNeverSplit() {
+        #expect(chain("Buy milk and eggs.") == nil)
+        #expect(chain("Open Slack") == nil) // one command: handled as before
+        #expect(chain("search Google for salt and pepper") == nil) // the whole thing is one search
+        #expect(chain("I closed the tab and switched to Claude.") == nil)
+        #expect(chain("Close the tab and tell me a joke") == nil)
+        #expect(chain("Remind me to buy milk and eggs") == nil)
+    }
+
+    @Test func articlesInKeyCommands() {
+        #expect(MacCommands.parse("Close the tab") == MacCommands.parse("close tab"))
+        #expect(MacCommands.parse("close the current tab") == MacCommands.parse("close tab"))
+        #expect(MacCommands.parse("refresh this page") != nil || MacCommands.parse("refresh the page") != nil)
+    }
+}

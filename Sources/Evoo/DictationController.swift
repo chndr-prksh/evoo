@@ -558,6 +558,7 @@ final class DictationController: ObservableObject {
             let afterASR = ContinuousClock.now
             // Voice commands are English phrases; in other languages everything you say is text.
             if language.usesEnglishRules {
+                if await runCommandChain(raw) { return }
                 if await runMacCommand(raw) { return }
                 if runAppCommand(raw) { return }
             }
@@ -655,6 +656,32 @@ final class DictationController: ObservableObject {
 
     /// Controlling the Mac by voice (keys, Spotlight, Shortcuts, volume, windows, clicks, reminders, notes…).
     /// Returns true if the dictation was such a command.
+    /// Several commands in one breath ("close the tab and switch to Claude"): each runs in turn, waiting for an
+    /// app switch to land before the next step so its keys reach the right app.
+    private func runCommandChain(_ raw: String) async -> Bool {
+        guard settings.appCommands else { return false }
+        let targets = InstalledApps.shared.targets(custom: settings.customApps)
+        let isApp: (String) -> Bool = { AppCommands.parse($0, targets: targets) != nil }
+        guard let parts = CommandChain.parts(TextCleaner.clean(raw), isCommand: { MacCommands.parse($0) != nil || isApp($0) })
+        else { return false }
+        markUsed("chains")
+        for (i, part) in parts.enumerated() {
+            let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            let opensApp = MacCommands.parse(part) == nil && isApp(part)
+            if !(await runMacCommand(part)) { _ = runAppCommand(part) }
+            guard i < parts.count - 1 else { break }
+            if opensApp {
+                // Up to 2 s for the app to come forward, then a moment for it to take the keyboard.
+                for _ in 0 ..< 20 where NSWorkspace.shared.frontmostApplication?.processIdentifier == front {
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+            }
+            try? await Task.sleep(for: .milliseconds(300))
+        }
+        show(CommandChain.summary(parts))
+        return true
+    }
+
     private func runMacCommand(_ raw: String) async -> Bool {
         guard settings.appCommands, let command = MacCommands.parse(TextCleaner.clean(raw)) else { return false }
         switch command {

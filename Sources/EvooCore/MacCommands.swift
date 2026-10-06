@@ -72,7 +72,10 @@ public enum MacCommands {
             return (0 ..< m.numberOfRanges).map { Range(m.range(at: $0), in: n).map { String(n[$0]) } ?? "" }
         }
         // Keys: named actions first, then "press <combo>", then a key said on its own ("spacebar", "escape")
-        if let (combo, name) = namedKeys[n.replacingOccurrences(of: "please ", with: "")] {
+        let plain = n.replacingOccurrences(of: "please ", with: "")
+        // "close the tab", "close the current tab", "copy this" → "close tab", "copy"
+        let bare = plain.replacingOccurrences(of: #"\b(?:the|this|that|my|current) "#, with: "", options: .regularExpression)
+        if let (combo, name) = namedKeys[plain] ?? namedKeys[bare] {
             return .keys(combo, name: name)
         }
         if let m = matchN(#"(?:press|hit|type|tap|push) (?:the |on )?(.+?)(?: key| button)?"#), let combo = combo(m[1]) {
