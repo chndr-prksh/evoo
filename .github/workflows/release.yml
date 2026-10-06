@@ -5,7 +5,7 @@ name: Release
 on:
   push:
     branches: [main]
-    paths-ignore: [site/**, .github/workflows/pages.yml, "*.md", android/**, .github/workflows/android.yml]
+    paths-ignore: [site/**, .github/workflows/pages.yml, "*.md"]
   workflow_dispatch:
 
 permissions:
