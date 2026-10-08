@@ -181,6 +181,56 @@
   .toast { position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 20px); opacity: 0; background: var(--ink); color: #fff; padding: 9px 16px; border-radius: 999px; font-size: 14px; transition: all .2s; pointer-events: none; }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
   @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } html { scroll-behavior: auto; } }
+
+  /* ── Polish pass ── */
+  .hero { position: relative; overflow: hidden; }
+  .hero::before { content: ""; position: absolute; inset: -40px 0 auto 0; height: 620px; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(600px 300px at 50% 0%, rgba(47,107,255,.10), transparent 70%),
+      radial-gradient(circle at 1px 1px, rgba(15,17,21,.07) 1px, transparent 1.5px) 0 0 / 22px 22px;
+    -webkit-mask-image: linear-gradient(to bottom, #000 35%, transparent 100%); mask-image: linear-gradient(to bottom, #000 35%, transparent 100%); }
+  .hero > .wrap { position: relative; z-index: 1; }
+  .proof { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
+  .proof span, .proof a { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px; background: #fff; font-size: 13px; color: var(--ink-2); text-decoration: none; }
+  .proof a:hover { border-color: #cfd2da; color: var(--ink); }
+  .proof b { color: var(--ink); font-weight: 650; font-variant-numeric: tabular-nums; }
+  .proof svg { width: 14px; height: 14px; }
+  .grid .card { display: flex; flex-direction: column; transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; }
+  .grid .card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-color: #d9dbe2; }
+  .grid .card .ex { margin-top: auto; }
+  .grid .card p { margin-bottom: 12px; }
+  .card .ico { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .setup .card .ico { background: var(--soft); color: inherit; border-color: var(--line); }
+  .install { align-items: start; }
+  .does { list-style: none; margin: 18px 0 0; padding: 16px 0 0; border-top: 1px solid var(--line); display: grid; gap: 9px; font-size: 14.5px; color: var(--ink-2); }
+  .does li { display: flex; gap: 10px; align-items: flex-start; }
+  .does li::before { content: "✓"; flex: none; width: 18px; height: 18px; border-radius: 50%; background: #e9f8f0; color: var(--green); font-size: 11px; font-weight: 700; display: grid; place-items: center; margin-top: 2px; }
+
+  /* Voice commands (dark band) */
+  .cmd { background: #0f1115; color: #e8eaf0; border: 0; }
+  .cmd .kicker { color: #8fb0ff; } .cmd h2 { color: #fff; } .cmd .lead { color: #b3b8c4; }
+  .cmd-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: center; }
+  @media (max-width: 900px) { .cmd-grid { grid-template-columns: 1fr; gap: 36px; } }
+  .cmd-grid > div { min-width: 0; }
+  .keys { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 22px; font-size: 15px; color: #b3b8c4; }
+  .keys kbd { font: 600 13px/1 ui-rounded, -apple-system, system-ui, sans-serif; background: #23262d; border: 1px solid #343842; border-bottom-width: 2px; border-radius: 7px; padding: 6px 9px; color: #fff; }
+  .says { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+  .says li { background: #171a20; border: 1px solid #262a33; border-radius: 12px; padding: 12px 14px; font-size: 15px; color: #e8eaf0; min-width: 0; }
+  .says li small { display: block; color: #8b92a1; font-size: 13px; margin-top: 3px; }
+  .stage2 { background: radial-gradient(420px 220px at 50% 100%, rgba(47,107,255,.22), transparent 70%), #171a20; border: 1px solid #262a33; border-radius: 20px; padding: 34px 20px 30px; display: flex; flex-direction: column; align-items: center; gap: 14px; min-height: 300px; justify-content: flex-end; }
+  .steps { display: grid; gap: 8px; width: 100%; max-width: 330px; margin-bottom: auto; }
+  .steps div { display: flex; align-items: center; gap: 10px; background: #0f1115; border: 1px solid #262a33; border-radius: 10px; padding: 9px 12px; font-size: 14px; color: #b3b8c4; opacity: .45; transition: opacity .3s, border-color .3s, color .3s; }
+  .steps div i { flex: none; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid #4a4f5c; font-style: normal; font-size: 11px; display: grid; place-items: center; color: transparent; }
+  .steps div.done { opacity: 1; color: #fff; border-color: #2e5a44; }
+  .steps div.done i { background: var(--green); border-color: var(--green); color: #fff; }
+  .liveline { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; background: #000; border: 1px solid #343842; border-radius: 999px; padding: 6px 13px 6px 7px; font-size: 13px; font-weight: 500; color: #fff; }
+  .liveline b { background: #fff; color: #000; border-radius: 999px; padding: 2px 8px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+  .liveline span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pill2 { display: inline-flex; align-items: center; gap: 4px; background: #000; border: 1px solid #343842; border-radius: 999px; padding: 9px 16px; }
+  .pill2 i { width: 3px; border-radius: 2px; background: #fff; animation: bar 1s ease-in-out infinite; }
+  .pill2 i:nth-child(1){height:8px;animation-delay:-.2s} .pill2 i:nth-child(2){height:16px;animation-delay:-.5s} .pill2 i:nth-child(3){height:22px;animation-delay:-.1s} .pill2 i:nth-child(4){height:13px;animation-delay:-.7s} .pill2 i:nth-child(5){height:19px;animation-delay:-.35s} .pill2 i:nth-child(6){height:9px;animation-delay:-.6s} .pill2 i:nth-child(7){height:15px;animation-delay:-.45s}
+  @keyframes bar { 50% { transform: scaleY(.45); } }
+  @media (prefers-reduced-motion: reduce) { .pill2 i { animation: none; } .grid .card { transition: none; } }
 </style>
 </head>
 <body>
@@ -193,6 +243,7 @@
     </a>
     <div class="links">
       <a href="#features">Features</a>
+      <a href="#commands">Commands</a>
       <a href="#install">Install</a>
       <a href="#privacy">Privacy</a>
       <a href="#faq">FAQ</a>
@@ -215,6 +266,11 @@
       <a class="btn btn-ghost" href="#install">One-line install</a>
     </div>
     <p class="fine">Apple Silicon (M1 or newer) · macOS 14+ · First open needs one extra click — <a href="#install">see how</a></p>
+    <div class="proof">
+      <a href="https://github.com/chndr-prksh/evoo"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 00-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.46-1.16-1.11-1.47-1.11-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.6 9.6 0 015 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0012 2z"/></svg>Open source on GitHub</a>
+      <span id="dlcount" hidden><b id="dlnum">0</b> downloads</span>
+      <span>No account · No cloud</span>
+    </div>
 
     <div class="demo" aria-label="Demo of Evoo dictation">
       <div class="window">
@@ -263,6 +319,32 @@
   </div>
 </section>
 
+<section class="cmd" id="commands">
+  <div class="wrap">
+    <div class="cmd-grid">
+      <div>
+        <p class="kicker">Voice commands</p>
+        <h2>Tell your Mac what to do.</h2>
+        <p class="lead">Add Control to give a command instead of dictating — and say several at once. Evoo runs them in order and shows each step.</p>
+        <p class="keys">Hold <kbd>fn</kbd> <kbd>⌃ control</kbd> and say:</p>
+        <ul class="says">
+          <li>“Close the tab and switch to Claude”<small>Two steps: closes the tab, then brings Claude forward.</small></li>
+          <li>“Copy that, new tab, then paste”<small>Three steps, one breath.</small></li>
+          <li>“Search Google for flights to Delhi and mute”<small>Opens the search, turns the sound off.</small></li>
+        </ul>
+      </div>
+      <div class="stage2" aria-hidden="true">
+        <div class="steps" id="steps">
+          <div><i>✓</i>Close the tab</div>
+          <div><i>✓</i>Switch to Claude</div>
+        </div>
+        <div class="liveline"><b>⌘ Command</b><span id="cmdtext">Close the tab and switch to Claude</span></div>
+        <div class="pill2"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section class="alt">
   <div class="wrap">
     <p class="kicker">Speed</p>
@@ -290,6 +372,12 @@
         <p>Open <b>Terminal</b> (press <span class="path">⌘ Space</span>, type “Terminal”), paste this, and press Return. It downloads the latest version, verifies it, installs it to Applications and opens it — no warning.</p>
         <div class="code"><code><span class="p">$ </span>curl -fsSL https://raw.githubusercontent.com/chndr-prksh/evoo/main/install.sh | bash</code><button class="copy" data-copy="curl -fsSL https://raw.githubusercontent.com/chndr-prksh/evoo/main/install.sh | bash">Copy</button></div>
         <p style="margin:14px 0 0;font-size:13.5px;color:var(--ink-3)">Want to see what it runs first? <a href="https://github.com/chndr-prksh/evoo/blob/main/install.sh">Read install.sh</a> — it's short.</p>
+        <ul class="does">
+          <li>Downloads the latest build from GitHub</li>
+          <li>Checks it against its published SHA-256</li>
+          <li>Installs it to Applications and opens it</li>
+          <li>No warning to click through, nothing else touched</li>
+        </ul>
       </div>
 
       <div class="opt">
@@ -384,7 +472,7 @@
 
 <footer>
   <div class="wrap">
-    <span>© Evoo · Apache-2.0 open source</span>
+    <span>© Evoo · Apache-2.0 open source<span id="dlfoot" hidden> · <b id="dlnum2">0</b> downloads</span></span>
     <div class="right">
       <a href="https://github.com/chndr-prksh/evoo">GitHub</a>
       <a href="https://github.com/chndr-prksh/evoo/releases">Releases</a>
@@ -456,6 +544,38 @@
   }
   document.querySelectorAll('[data-demo]').forEach(b => b.addEventListener('click', () => { auto = false; play(+b.dataset.demo); }));
   play(0);
+
+  // Download count, straight from GitHub (new installs only — updates use a separate file). Hidden if it can't load.
+  (async () => {
+    try {
+      let total = 0;
+      for (let page = 1; page <= 3; page++) {
+        const r = await fetch(`https://api.github.com/repos/chndr-prksh/evoo/releases?per_page=100&page=${page}`);
+        if (!r.ok) return;
+        const list = await r.json();
+        for (const rel of list) for (const a of rel.assets || []) if (a.name === 'Evoo.zip') total += a.download_count;
+        if (list.length < 100) break;
+      }
+      if (total < 1) return;
+      const text = total.toLocaleString('en-US');
+      document.getElementById('dlnum').textContent = text;
+      document.getElementById('dlnum2').textContent = text;
+      document.getElementById('dlcount').hidden = false;
+      document.getElementById('dlfoot').hidden = false;
+    } catch (e) {}
+  })();
+
+  // The command demo: steps tick off one after another, then start over.
+  (() => {
+    const steps = [...document.querySelectorAll('#steps div')];
+    if (!steps.length || matchMedia('(prefers-reduced-motion: reduce)').matches) { steps.forEach(s => s.classList.add('done')); return; }
+    let n = 0;
+    setInterval(() => {
+      if (n > steps.length + 1) { n = 0; steps.forEach(s => s.classList.remove('done')); return; }
+      if (n < steps.length) steps[n].classList.add('done');
+      n++;
+    }, 900);
+  })();
 </script>
 </body>
 </html>
