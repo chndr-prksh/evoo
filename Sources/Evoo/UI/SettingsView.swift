@@ -333,6 +333,7 @@ struct SettingsView: View {
                 }
                 Text("Or drag the pill anywhere along the bottom, or up the left or right side of the screen.")
                     .font(.caption).foregroundStyle(.secondary)
+                Toggle("Show words above the pill as you speak", isOn: $settings.livePreview)
                 Toggle("Show occasional tips about features", isOn: $settings.showTips)
                 Toggle("Play sounds", isOn: $settings.playSounds)
                 Toggle("Restore clipboard after pasting", isOn: $settings.restoreClipboard)

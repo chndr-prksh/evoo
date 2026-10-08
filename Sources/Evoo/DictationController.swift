@@ -22,6 +22,10 @@ final class DictationController: ObservableObject {
     /// Recent input levels for the pill waveform — its own object, so a level update redraws only the waveform,
     /// not everything that watches the controller.
     let meter = LevelMeterModel()
+    /// What shows above the pill while you speak: the words so far, and whether this is a command.
+    let live = LivePreviewModel()
+    /// fn + ⌃: everything said in this recording is a command (or a chain of them), never typed as text.
+    private var commandMode = false
     var levels: [Float] { meter.levels }
     @Published private(set) var lastText: String?
     @Published private(set) var lastTimings: String?
@@ -198,6 +202,23 @@ final class DictationController: ObservableObject {
         pipeline.dictionary = PersonalDictionary(settings.personalWords)
     }
 
+    /// On 8 GB Macs the polish model gives its memory back after a while without dictating; it reloads (about a
+    /// second) the next time fn goes down.
+    private var idleUnload: Task<Void, Never>?
+    private static let idleUnloadMinutes = 10
+
+    private func scheduleIdleUnload() {
+        idleUnload?.cancel()
+        guard SystemInfo.isLowMemory else { return }
+        idleUnload = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.idleUnloadMinutes * 60))
+            guard !Task.isCancelled, let self, self.phase == .idle, self.refiner.isLoaded,
+                  ClassNotesModel.shared.recorder == nil, ClassNotesModel.shared.makingStudyPack == nil else { return }
+            self.refiner.unload()
+            self.log.notice("polish model unloaded after \(Self.idleUnloadMinutes) idle minutes")
+        }
+    }
+
     func prepareRefiner() {
         let wanted = settings.smartCleanup && SystemInfo.canRunSmartCleanup
         guard wanted else { return refiner.unload() }
@@ -282,6 +303,12 @@ final class DictationController: ObservableObject {
             return editWatcher.observe() // "send" — see what the user changed before it's gone
         case .fnDown where handsFreeFromUI && phase == .recording:
             return stop()
+        case .commandKey:
+            if phase == .recording, !commandMode, settings.appCommands {
+                commandMode = true
+                live.command = true
+            }
+            return
         case .fnDown: apply(gesture.handle(.fnDown(at: now)))
         case .fnUp: apply(gesture.handle(.fnUp(at: now)))
         case .otherKey: apply(gesture.handle(.otherKey(at: now)))
@@ -358,6 +385,9 @@ final class DictationController: ObservableObject {
         // The pill opens on the very next frame; the mic starts in the background (40–200 ms) and the audio
         // from that moment on is kept. Nothing on the main thread waits for it.
         meter.reset()
+        commandMode = false
+        live.reset()
+        scheduleIdleUnload()
         phase = .recording
         provisional = false
         mark("pillShown")
@@ -429,13 +459,17 @@ final class DictationController: ObservableObject {
             ? OutputStyle.forApp(NSWorkspace.shared.frontmostApplication?.bundleIdentifier) : nil
         // When you pause (most people do, just before letting go), the whole dictation so far is transcribed —
         // and now polished too, so a release right after the pause finds it ready.
+        let showWords = settings.livePreview
         streaming.onWholeResult = { [weak self] raw, atPause in
+            if showWords, let self, self.phase == .recording { self.live.show(raw) }
             guard let self, let polisher = self.polisher, !raw.isEmpty else { return }
             let post = self.pipeline.postProcess(raw, language: self.settings.language, style: startStyle)
             // Mid-speech: polish the sentences already finished. At a pause: the last one too.
             if atPause { polisher.prefetchAll(post.text) } else { polisher.prefetch(post.text) }
         }
         streaming.onCommit = { [weak self] raw, partial in
+            if showWords, let self, self.phase == .recording,
+               self.recorder.sampleCount > Int(StreamingDictation.wholeClipLimit * AudioRecorder.sampleRate) { self.live.show(raw) }
             // Up to 45 s the final text comes from the whole-recording transcript, so that is what gets
             // pre-polished (onWholeResult above); pieces only beyond that. Mixing the two meant nothing matched
             // at release (measured: 6.9 s of polish left for a 41 s dictation).
@@ -536,6 +570,7 @@ final class DictationController: ObservableObject {
     }
 
     private func endRecordingSession() {
+        live.reset(keepCommand: true)
 
         maxDurationTimer?.cancel()
         speculationLoop?.cancel()
@@ -558,6 +593,7 @@ final class DictationController: ObservableObject {
             let afterASR = ContinuousClock.now
             // Voice commands are English phrases; in other languages everything you say is text.
             if language.usesEnglishRules {
+                if commandMode { await Self.waitForControlRelease() } // a held ⌃ would turn ⌘W into ⌃⌘W
                 if await runCommandChain(raw) { return }
                 if await runMacCommand(raw) { return }
                 if runAppCommand(raw) { return }
@@ -565,6 +601,11 @@ final class DictationController: ObservableObject {
             if selectionAtStart == nil { selectionAtStart = await Self.value(of: selectionTask, within: 100) ?? nil }
             if try await rewriteSelectionIfAsked(raw, selection: selectionAtStart, session: session) { return }
             if try await composeIfAsked(raw, session: session) { return }
+            // Command mode never types: if nothing above recognised it, say so instead of pasting it somewhere.
+            if commandMode {
+                let said = TextCleaner.clean(raw)
+                return show(said.isEmpty ? "Didn't catch a command" : "Not a command I know: “\(said.prefix(60))”")
+            }
             // Smart cleanup (16 GB+): the local LLM polishes the dictation after the rules.
             // Otherwise the LLM only runs for Hinglish (multilingual builds).
             // Hinglish is written by its own model and cleaned by the Hinglish rules; the small local AIs handle it badly.
@@ -656,6 +697,13 @@ final class DictationController: ObservableObject {
 
     /// Controlling the Mac by voice (keys, Spotlight, Shortcuts, volume, windows, clicks, reminders, notes…).
     /// Returns true if the dictation was such a command.
+    /// Up to a second for the Control key to come up after a fn + ⌃ command.
+    private static func waitForControlRelease() async {
+        for _ in 0 ..< 20 where CGEventSource.flagsState(.combinedSessionState).contains(.maskControl) {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+    }
+
     /// Several commands in one breath ("close the tab and switch to Claude"): each runs in turn, waiting for an
     /// app switch to land before the next step so its keys reach the right app.
     private func runCommandChain(_ raw: String) async -> Bool {
@@ -1134,4 +1182,32 @@ private final class Once: @unchecked Sendable {
 
 private extension Duration {
     var ms: Int { Int(components.seconds * 1000 + components.attoseconds / 1_000_000_000_000_000) }
+}
+
+/// The line above the pill while recording: the last words heard so far, and a "Command" badge for fn + ⌃.
+/// Its own model, so updating it doesn't redraw the pill.
+@MainActor
+final class LivePreviewModel: ObservableObject {
+    @Published private(set) var text = ""
+    @Published var command = false
+    static let maxCharacters = 44
+
+    /// Shows the tail of what's been heard (the pill has room for about eight words).
+    func show(_ transcript: String) {
+        var tail: [Substring] = []
+        var length = 0
+        let words = transcript.split(separator: " ")
+        for word in words.reversed() {
+            guard length + word.count + 1 <= Self.maxCharacters || tail.isEmpty else { break }
+            tail.insert(word, at: 0)
+            length += word.count + 1
+        }
+        let shown = (tail.count < words.count ? "… " : "") + tail.joined(separator: " ")
+        if shown != text { text = shown }
+    }
+
+    func reset(keepCommand: Bool = false) {
+        if !text.isEmpty { text = "" }
+        if !keepCommand, command { command = false }
+    }
 }

@@ -6,7 +6,11 @@ import EvooCore
 final class FnKeyMonitor {
     enum Event {
         case fnDown, fnUp, otherKey, escape, returnKey
+        /// Control pressed while fn is down (or already down when fn was pressed): "this is a command".
+        case commandKey
     }
+
+    private static let controlKeyCodes: Set<Int64> = [59, 62] // kVK_Control, kVK_RightControl
 
     private static let fnKeyCode: Int64 = 63 // kVK_Function
     private static let escapeKeyCode: Int64 = 53 // kVK_Escape
@@ -67,6 +71,10 @@ final class FnKeyMonitor {
                 guard down != fnIsDown else { return }
                 fnIsDown = down
                 onEvent?(down ? .fnDown : .fnUp)
+                if down, event.flags.contains(.maskControl) { onEvent?(.commandKey) } // ⌃ was already held
+            } else if fnIsDown, Self.controlKeyCodes.contains(keyCode) {
+                // fn + ⌃: Command mode. Letting go of ⌃ early changes nothing.
+                if event.flags.contains(.maskControl) { onEvent?(.commandKey) }
             } else if fnIsDown {
                 onEvent?(.otherKey) // Fn + another modifier
             }

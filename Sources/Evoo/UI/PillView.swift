@@ -60,6 +60,8 @@ struct PillView: View {
             } else if look == .hover, !model.vertical { // on a screen edge the wide hint would be cut off
                 Hint(mode: settings.activationMode)
                     .transition(.opacity.combined(with: .offset(y: 4)))
+            } else if look == .recording || look == .working, !model.vertical {
+                LiveLine(live: controller.live)
             }
             capsule
         }
@@ -260,6 +262,45 @@ private struct TipBanner: View {
     }
 }
 
+/// Above the pill while you speak: a "Command" badge (fn + ⌃) and the last words recognised so far.
+private struct LiveLine: View {
+    @ObservedObject var live: LivePreviewModel
+
+    var body: some View {
+        if live.command || !live.text.isEmpty {
+            HStack(spacing: 7) {
+                if live.command {
+                    HStack(spacing: 4) {
+                        Image(systemName: "command").font(.system(size: 9, weight: .bold))
+                        Text("Command")
+                    }
+                    .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(.white))
+                }
+                if !live.text.isEmpty {
+                    Text(live.text)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                } else if live.command {
+                    Text("say what to do").foregroundStyle(.white.opacity(0.6))
+                }
+            }
+            .font(.system(size: 11.5, weight: .medium))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .fixedSize()
+            .background(Capsule(style: .continuous).fill(.black.opacity(0.9)))
+            .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.16), lineWidth: 1))
+            .transition(.opacity)
+            .animation(.easeOut(duration: 0.12), value: live.text)
+        }
+    }
+}
+
 private struct Hint: View {
     let mode: ActivationMode
 
@@ -270,6 +311,8 @@ private struct Hint: View {
                 Text("Double-tap"); Key(); Text("to dictate")
             default:
                 Text("Hold"); Key(); Text("to dictate")
+                Text("·").foregroundStyle(.white.opacity(0.4))
+                Key(); Key(label: "⌃"); Text("for commands")
             }
         }
         .font(.system(size: 11.5, weight: .medium))
@@ -281,8 +324,9 @@ private struct Hint: View {
     }
 
     private struct Key: View {
+        var label = "fn"
         var body: some View {
-            Text("fn")
+            Text(label)
                 .font(.system(size: 10.5, weight: .bold, design: .rounded))
                 .padding(.horizontal, 5)
                 .padding(.vertical, 1)

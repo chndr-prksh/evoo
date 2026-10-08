@@ -36,6 +36,8 @@ enum PillSnapshots {
             ("1-idle", .idle, false),
             ("2-hover", .idle, true),
             ("3-recording", .recording, false),
+            ("3-recording-live", .recording, false), ("3-recording-command", .recording, false),
+            ("3-recording-command-empty", .recording, false),
             ("4-working", .transcribing, false),
             ("6-tip", .idle, false),
             ("7-tip-long", .idle, false),
@@ -47,7 +49,18 @@ enum PillSnapshots {
             controller.debugSet(phase: phase, levels: wave)
             model.hovering = hovering
             model.vertical = name.hasPrefix("8-side")
+            controller.live.reset()
             switch name {
+            case "3-recording-live":
+                controller.live.show("So I wanted to give everyone a quick update on where we are with the launch")
+                model.dismissTip()
+            case "3-recording-command":
+                controller.live.command = true
+                controller.live.show("Close the tab and switch to Claude")
+                model.dismissTip()
+            case "3-recording-command-empty":
+                controller.live.command = true
+                model.dismissTip()
             case "6-tip": model.present(Tips.all[1])
             case "7-tip-long": model.present(Tips.all[4]) // longest phrase
             default: model.dismissTip()

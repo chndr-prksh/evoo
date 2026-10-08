@@ -163,6 +163,8 @@ private struct HomeView: View {
                         .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.line))
                     Text("in any app, speak, and let go.").foregroundStyle(.secondary)
                 }
+                Text("Add ⌃ (fn + Control) to give a command instead: “close the tab and switch to Claude”.")
+                    .font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
             if Features.multilingual {

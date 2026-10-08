@@ -94,6 +94,7 @@ final class Updater: ObservableObject {
                 try run("/usr/bin/ditto", ["-x", "-k", zip.path, work.path])
                 let newApp = work.appendingPathComponent("Evoo.app")
                 guard fm.fileExists(atPath: newApp.path) else { throw UpdateError.malformedRelease }
+                try validate(newApp, expectedBuild: latest.build)
                 relaunch(replacing: Bundle.main.bundleURL, with: newApp)
             } catch {
                 log.error("update failed: \(error.localizedDescription, privacy: .public)")
@@ -157,6 +158,17 @@ final class Updater: ObservableObject {
         state = .failed("Last update didn't install: \(last.dropFirst(8)). Download Evoo again from the website.")
     }
 
+    /// Before anything is swapped: the download must really be Evoo, the build the release announced, and carry an
+    /// intact signature (a bundle changed after it was built fails this).
+    private func validate(_ app: URL, expectedBuild: Int) throws {
+        guard let bundle = Bundle(url: app), bundle.bundleIdentifier == Bundle.main.bundleIdentifier,
+              let build = Int(bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""),
+              build == expectedBuild, build > currentBuild
+        else { throw UpdateError.notEvoo }
+        do { try run("/usr/bin/codesign", ["--verify", "--deep", "--strict", app.path]) }
+        catch { throw UpdateError.badSignature }
+    }
+
     private func run(_ tool: String, _ args: [String]) throws {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: tool)
@@ -177,9 +189,11 @@ final class Updater: ObservableObject {
     }
 
     enum UpdateError: LocalizedError {
-        case malformedRelease, checksumMismatch, unpackFailed
+        case malformedRelease, checksumMismatch, unpackFailed, notEvoo, badSignature
         var errorDescription: String? {
             switch self {
+            case .notEvoo: "the download isn't the Evoo build that was announced"
+            case .badSignature: "the download's signature didn't check out"
             case .malformedRelease: "the release is missing files"
             case .checksumMismatch: "the download didn't verify"
             case .unpackFailed: "couldn't unpack the download"

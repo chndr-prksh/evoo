@@ -33,6 +33,8 @@ final class AppSettings: ObservableObject {
     @Published var formatText: Bool { didSet { save(formatText, "formatText") } }
     /// Parakeet 110M instead of 0.6B: about 2× faster, less accurate with names.
     @Published var fastestModel: Bool { didSet { save(fastestModel, "fastestModel") } }
+    /// Show the words above the pill as they're recognised.
+    @Published var livePreview: Bool { didSet { save(livePreview, "livePreview") } }
     /// Spell names seen on screen (chat header, recipients, text near the cursor) correctly.
     @Published var useScreenContext: Bool { didSet { save(useScreenContext, "useScreenContext") } }
     /// Learn names and per-app habits from how the user edits dictated text.
@@ -104,6 +106,7 @@ final class AppSettings: ObservableObject {
         // Accurate by default: the golden set scores 67/69 vs 58/69 for the 110M model (it mishears short commands —
         // "Mute" → "Mud", "space bar" → "face bar"), and streaming means long dictations don't wait for it anyway.
         fastestModel = bool("fastestModel", false)
+        livePreview = bool("livePreview", true)
         useScreenContext = bool("useScreenContext", true)
         learnFromEdits = bool("learnFromEdits", true)
         snippets = UserDefaults.standard.data(forKey: "snippets")

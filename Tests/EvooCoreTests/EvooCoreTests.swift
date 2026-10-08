@@ -967,3 +967,14 @@ struct CommandChainTests {
         #expect(MacCommands.parse("refresh this page") != nil || MacCommands.parse("refresh the page") != nil)
     }
 }
+
+struct CommandModeGestureTests {
+    /// Pressing Control while fn is held marks a command; it must not cancel the recording the way other keys do.
+    @Test func otherKeysCancelButTheGestureItselfDoesNot() {
+        var g = HotkeyGesture(mode: .hold)
+        #expect(g.handle(.fnDown(at: 0)) == .start)
+        // (fn + ⌃ is filtered out by the key monitor and never reaches the gesture as an "other key".)
+        #expect(g.isRecording)
+        #expect(g.handle(.otherKey(at: 0.5)) == .cancel)
+    }
+}
