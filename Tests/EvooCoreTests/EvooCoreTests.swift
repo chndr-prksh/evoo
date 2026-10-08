@@ -146,6 +146,14 @@ import Testing
         #expect(fix("Let's meet tomorrow. No. Day after tomorrow.") == "Let's meet day after tomorrow.")
         #expect(fix("Send it to Rahul. Sorry. To Priya by Friday.") == "Send it to Priya by Friday.")
         #expect(fix("Call John. Sorry. Mike.") == "Call Mike.")
+        // "I'm sorry" as the cue, and a repair that restarts a word that came out wrong.
+        #expect(fix("Multi-tab I'm sorry, multi command not working.") == "Multi command not working.")
+        #expect(fix("Send it to Rahul, I'm sorry, to Priya.") == "Send it to Priya.")
+        #expect(fix("Book the perf, sorry, performance review for Friday.") == "Book the performance review for Friday.")
+        // Not corrections:
+        #expect(fix("I'm sorry I'm late.") == "I'm sorry I'm late.")
+        #expect(fix("Tell her I'm sorry about yesterday.") == "Tell her I'm sorry about yesterday.")
+        #expect(fix("I told him I'm sorry, he said it was fine.") == "I told him I'm sorry, he said it was fine.")
     }
 
     @Test func leavesNormalSpeechAlone() {
@@ -948,6 +956,10 @@ struct CommandChainTests {
         #expect(chain("Mute, then open Slack") == ["Mute", "open Slack"])
         #expect(chain("Copy that. New tab. Paste.") == ["Copy that", "New tab", "Paste"])
         #expect(chain("Volume thirty and then open Chrome and new tab") == ["Volume thirty", "open Chrome", "new tab"])
+        #expect(chain("Copy, then open new tab and then paste.") == ["Copy", "open new tab", "paste"])
+        #expect(chain("Copy it, open a new tab and paste it here") == ["Copy it", "open a new tab", "paste it here"])
+        #expect(MacCommands.parse("open a new tab") == MacCommands.parse("new tab"))
+        #expect(MacCommands.parse("paste it") == MacCommands.parse("paste"))
         #expect(chain("search Google for flights to Delhi and switch to Slack") == ["search Google for flights to Delhi", "switch to Slack"])
         #expect(CommandChain.summary(["close the tab", "switch to Claude"]) == "Close the tab → Switch to Claude")
     }

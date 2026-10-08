@@ -353,6 +353,10 @@ public enum DictationRules {
     static let restatementFillers: Set<String> = intensifiers.union(["not", "no", "i", "mean", "sorry", "actually",
                                                                     "like", "or", "rather"])
 
+    static let subjects: Set<String> = ["i", "im", "ive", "ill", "id", "we", "were", "weve", "well", "you", "youre", "youve",
+                                        "he", "hes", "she", "shes", "they", "theyre", "theyve", "it", "its", "that",
+                                        "thats", "this", "there", "theres"]
+
     /// A word said again with a sharper modifier replaces the first attempt:
     ///   "It's still bad, very bad"               → "It's still very bad"
     ///   "The dictation is still bad, not no bad, very bad" → "The dictation is still very bad"
@@ -363,7 +367,9 @@ public enum DictationRules {
             changed = false
             for i in t.indices {
                 let w = t[i].norm
-                guard !w.isEmpty, !functionWords.contains(w), !restatementFillers.contains(w), !t[i].endsSentence
+                // "I'm sorry I'm late", "we know we can": a repeated subject is ordinary speech, not a restatement.
+                guard !w.isEmpty, !functionWords.contains(w), !restatementFillers.contains(w), !subjects.contains(w),
+                      !t[i].endsSentence
                 else { continue }
                 // The same word again within 5 words, with only fillers in between.
                 guard let j = (i + 1 ..< min(t.count, i + 6)).first(where: { t[$0].norm == w }),
@@ -397,11 +403,12 @@ public enum DictationRules {
     static let cueWords: Set<String> = ["no", "sorry", "wait", "actually", "nahi", "nahin", "matlab"]
     static let cuePhrases: [[String]] = [
         ["i", "mean"], ["make", "that"], ["make", "it"], ["or", "rather"], ["scratch", "that"],
-        ["correction"], ["mera", "matlab"],
+        ["correction"], ["mera", "matlab"], ["im", "sorry"], ["i", "am", "sorry"],
     ]
     /// Cue words that also occur in normal speech; they only count when set off by punctuation
     /// or combined with another cue ("there is no milk" is not a correction).
-    static let weakCues: Set<String> = ["no", "sorry", "wait", "actually", "make that", "make it", "correction"]
+    static let weakCues: Set<String> = ["no", "sorry", "wait", "actually", "make that", "make it", "correction",
+                                        "im sorry", "i am sorry"]
 
     static func applyCorrections(_ input: [Token], unresolved: inout Bool) -> [Token] {
         var tokens = input
@@ -540,6 +547,11 @@ public enum DictationRules {
         let head = repair[0].norm
         // 1. The repair restarts from a word already said: "to Rahul, sorry, to Priya".
         if let i = prefix.lastIndex(where: { $0.norm == head }) { return .truncate(at: i) }
+        // 1b. The repair restarts a word that came out wrong: "Multi-tab, I'm sorry, multi command…",
+        //     "the perf, sorry, performance review".
+        if head.count >= 4, let i = prefix.lastIndex(where: { $0.norm.hasPrefix(head) || (head.hasPrefix($0.norm) && $0.norm.count >= 4) }) {
+            return .truncate(at: i)
+        }
         // 2. Same kind of value: numbers/times, weekdays, months, relative days.
         if let kind = WordKind(head) {
             var end = prefix.count

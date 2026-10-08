@@ -74,8 +74,12 @@ public enum MacCommands {
         // Keys: named actions first, then "press <combo>", then a key said on its own ("spacebar", "escape")
         let plain = n.replacingOccurrences(of: "please ", with: "")
         // "close the tab", "close the current tab", "copy this" → "close tab", "copy"
-        let bare = plain.replacingOccurrences(of: #"\b(?:the|this|that|my|current) "#, with: "", options: .regularExpression)
-        if let (combo, name) = namedKeys[plain] ?? namedKeys[bare] {
+        let bare = plain.replacingOccurrences(of: #"\b(?:the|this|that|my|current|a|an) "#, with: "", options: .regularExpression)
+        // The many ways people say the same key: "open a new tab", "do a paste", "copy it", "paste it here".
+        let core = bare
+            .replacingOccurrences(of: #"^(?:open|create|make|start|do|just|now|and|then) (?:up )?"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"(?: (?:it|that|this|here|now|again|please|for me))+$"#, with: "", options: .regularExpression)
+        if let (combo, name) = namedKeys[plain] ?? namedKeys[bare] ?? namedKeys[core] {
             return .keys(combo, name: name)
         }
         if let m = matchN(#"(?:press|hit|type|tap|push) (?:the |on )?(.+?)(?: key| button)?"#), let combo = combo(m[1]) {
