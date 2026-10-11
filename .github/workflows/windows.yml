@@ -1,6 +1,6 @@
 # Windows preview: test Evoo's rules against the Mac app's cases, run speech → text end to end on real Windows,
-# build the app, self-test it, and keep the build as a downloadable artifact of the run.
-# It is NOT published as a release or linked from the website: that waits for a go/no-go.
+# build the app, self-test it, and publish it as the "windows" release (what the website links to).
+# Never marked "latest": the Mac app's updater and the Mac download keep pointing at the Mac build.
 name: Windows
 
 on:
@@ -8,6 +8,9 @@ on:
     branches: [main]
     paths: [windows/**, .github/workflows/windows.yml]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 concurrency:
   group: windows
@@ -55,8 +58,22 @@ jobs:
           Compress-Archive -Path out/Evoo -DestinationPath Evoo-windows.zip
           "{0:N1} MB" -f ((Get-Item Evoo-windows.zip).Length / 1MB)
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Evoo-windows-preview-${{ github.run_number }}
-          path: Evoo-windows.zip
-          retention-days: 30
+      - name: Publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD: ${{ github.run_number }}
+        run: |
+          SHA=$(sha256sum Evoo-windows.zip | cut -d' ' -f1)
+          SIZE=$(stat -c %s Evoo-windows.zip)
+          echo "$SHA  Evoo-windows.zip" > Evoo-windows.zip.sha256
+          printf '{"build": %s, "version": "0.1.%s", "sha256": "%s", "size": %s}\n' "$BUILD" "$BUILD" "$SHA" "$SIZE" > version.json
+          cat version.json
+          NOTES="Evoo for Windows, preview build $BUILD. Hold Ctrl + Win, speak, let go: the text is typed at the cursor. Speech recognition and Evoo's correction rules run on the PC. Unzip, run Evoo.exe (SmartScreen: More info → Run anyway; the build isn't code-signed yet), and follow the setup window."
+          if gh release view windows >/dev/null 2>&1; then
+            gh release upload windows Evoo-windows.zip Evoo-windows.zip.sha256 version.json --clobber
+            gh release edit windows --title "Evoo for Windows (preview build $BUILD)" --notes "$NOTES" --latest=false --prerelease
+          else
+            gh release create windows Evoo-windows.zip Evoo-windows.zip.sha256 version.json \
+              --latest=false --prerelease --target "$GITHUB_SHA" --title "Evoo for Windows (preview build $BUILD)" --notes "$NOTES"
+          fi
