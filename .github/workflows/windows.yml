@@ -1,0 +1,62 @@
+# Windows preview: test Evoo's rules against the Mac app's cases, run speech → text end to end on real Windows,
+# build the app, self-test it, and keep the build as a downloadable artifact of the run.
+# It is NOT published as a release or linked from the website: that waits for a go/no-go.
+name: Windows
+
+on:
+  push:
+    branches: [main]
+    paths: [windows/**, .github/workflows/windows.yml]
+  workflow_dispatch:
+
+concurrency:
+  group: windows
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      EVOO_MODEL_DIR: ${{ github.workspace }}\models
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Rules match the Mac app
+        run: dotnet test windows/Evoo.Core.Tests --logger "console;verbosity=detailed"
+
+      - name: Speech model (cached between runs)
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: parakeet-v3-int8-2bda32ec
+
+      - name: End to end — a voice speaks, Evoo writes
+        run: dotnet run --project windows/Evoo.E2E -c Release
+
+      - name: Build the app
+        run: dotnet publish windows/Evoo.Windows -c Release -o out/Evoo -p:Version=0.1.${{ github.run_number }}
+
+      - name: Self-test the built app
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath out/Evoo/Evoo.exe -ArgumentList '--self-test', "$PWD\self-test.txt" -PassThru -Wait
+          Get-Content self-test.txt
+          if ($p.ExitCode -ne 0) { throw "self-test failed with exit code $($p.ExitCode)" }
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Compress-Archive -Path out/Evoo -DestinationPath Evoo-windows.zip
+          "{0:N1} MB" -f ((Get-Item Evoo-windows.zip).Length / 1MB)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Evoo-windows-preview-${{ github.run_number }}
+          path: Evoo-windows.zip
+          retention-days: 30

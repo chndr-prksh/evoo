@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- End-to-end check for CI on Windows: a Windows voice speaks, the speech model listens, the rules clean up. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Speech" Version="8.0.0" />
+    <ProjectReference Include="..\Evoo.Speech\Evoo.Speech.csproj" />
+  </ItemGroup>
+</Project>

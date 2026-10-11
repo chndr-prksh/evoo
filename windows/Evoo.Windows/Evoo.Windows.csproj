@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <!-- WPF and Windows Forms share many type names (Application, MessageBox…): every file lists its own usings. -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>Evoo</AssemblyName>
+    <RootNamespace>Evoo.Windows</RootNamespace>
+    <ApplicationIcon>evoo.ico</ApplicationIcon>
+    <Product>Evoo</Product>
+    <Company>Evoo open source</Company>
+    <Version>0.1.0</Version>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <ProjectReference Include="..\Evoo.Core\Evoo.Core.csproj" />
+    <ProjectReference Include="..\Evoo.Speech\Evoo.Speech.csproj" />
+    <EmbeddedResource Include="evoo.ico" LogicalName="evoo.ico" />
+  </ItemGroup>
+</Project>
