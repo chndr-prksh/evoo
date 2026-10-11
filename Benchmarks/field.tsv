@@ -1,0 +1,24 @@
+# Field set: things that actually went wrong for a real user, written exactly as the speech model wrote them.
+# Unlike golden.tsv (clean computer voice reading sentences we chose), every row here is a real failure report.
+# kind <TAB> what the speech model wrote <TAB> check <TAB> expected
+#   text/has/not = run through the app's text path (rules, then AI polish as an 8 GB Mac would)
+#   chain = must split into this many commands;  mac = must parse as this command
+# ── Self-corrections people actually make
+correction	Multi-tab I'm sorry, multi command not working.	text	Multi command not working.
+correction	I'm sorry I'm late for the call.	text	I'm sorry I'm late for the call.
+correction	Let's meet tomorrow. No. Day after tomorrow.	text	Let's meet day after tomorrow.
+# ── Commands, phrased the way they were really said
+command	Copy, then open new tab and then paste.	chain	3
+command	Close the tab and switch to Claude.	chain	2
+command	Volume, thirty.	mac	volume(30)
+command	Press space bar.	mac	keys
+# ── Words the speech model misheard (accent, product names, jargon)
+misheard	Do you think I should use Whistle to sip an Android API?	has	ship|Android app
+misheard	Open my Outlook and send a Maymail to the team saying the launch moved.	has	email
+misheard	I want to draw a stark difference between AI valves, which developers use, and how users use it.	has	evals
+misheard	I couldn't find the Queen .6 B model in settings.	has	Qwen
+misheard	Can we ship an AI policing feature over there or not?	has	polishing
+misheard	How can I beat with S4Flow?	has	Wispr Flow
+misheard	Why after some time the pill starts lagging to load on Evil?	has	Evoo
+# ── Rambling speech (a competitor's own homepage demo)
+ramble	Hey so um can you actually wait can you tell the team that the the launch is gonna slip I think to like not Friday the following Monday because we're still waiting on uh legal to sign off on the the new terms page and uh yeah just let them know we'll have a real timeline by by end of week sorry end of day Thursday	not	not Friday|end of week|um|uh

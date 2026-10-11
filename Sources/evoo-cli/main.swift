@@ -474,6 +474,48 @@ case "languages":
     for l in order { print(String(format: "%@ %.0f%% words wrong", l.padding(toLength: 12, withPad: " ", startingAt: 0), perLanguage[l]!.errors / Double(perLanguage[l]!.n) * 100)) }
     await engine.unload()
 
+case "field":
+    // Real failure reports, at the text level (Benchmarks/field.tsv):  evoo-cli field [--model qwen3_0_6b] [--no-polish]
+    let polish = !flag("--no-polish")
+    if polish { try await loadRefiner() }
+    pipeline.dictionary = PersonalDictionary(["Divya", "Aarav", "Kubernetes", "Priya", "Rahul"])
+    let targets = AppCommands.builtIn + [AppTarget(name: "Google Chrome", aliases: ["chrome"], bundleID: "com.google.Chrome")]
+    var passed: [String: Int] = [:], total: [String: Int] = [:], order: [String] = []
+    for line in try String(contentsOf: URL(fileURLWithPath: "Benchmarks/field.tsv"), encoding: .utf8)
+        .split(separator: "\n").map(String.init) where !line.hasPrefix("#")
+    {
+        let f = line.components(separatedBy: "\t")
+        guard f.count == 4 else { continue }
+        let (kind, said, check, want) = (f[0], f[1], f[2], f[3])
+        var got = "", ok = false
+        switch check {
+        case "chain":
+            let parts = CommandChain.parts(TextCleaner.clean(said)) { MacCommands.parse($0) != nil || AppCommands.parse($0, targets: targets) != nil }
+            got = parts.map { "\($0.count) steps: " + CommandChain.summary($0) } ?? "typed as text"
+            ok = parts?.count == Int(want)
+        case "mac":
+            let c = MacCommands.parse(TextCleaner.clean(said))
+            got = c.map { String(describing: $0) } ?? "typed as text"
+            ok = got.lowercased().hasPrefix(want.lowercased())
+        default:
+            let out = await pipeline.finish(raw: said, asrMs: 0, language: .english, style: .plain, llm: polish ? .polish : .off)
+            got = out.text + (out.usedLLM ? "  [AI]" : "  [rules only]")
+            let pieces = want.split(separator: "|").map(String.init)
+            switch check {
+            case "text": ok = loose(out.text) == loose(want)
+            case "has": ok = pieces.allSatisfy { out.text.localizedCaseInsensitiveContains($0) }
+            default: ok = !pieces.contains { out.text.range(of: "\\b" + NSRegularExpression.escapedPattern(for: $0) + "\\b", options: [.regularExpression, .caseInsensitive]) != nil }
+            }
+        }
+        if total[kind] == nil { order.append(kind) }
+        total[kind, default: 0] += 1
+        if ok { passed[kind, default: 0] += 1 }
+        print("\(ok ? "✅" : "❌") [\(kind)] \(said.prefix(90))\n    → \(got.prefix(230))")
+    }
+    print("")
+    for k in order { print("\(k): \(passed[k, default: 0])/\(total[k]!)") }
+    print("FIELD \(passed.values.reduce(0, +))/\(total.values.reduce(0, +))")
+
 case "misheard":
     // Contextual polish: misheard words fixed, correct words kept (Benchmarks/misheard.tsv).
     //   evoo-cli misheard --model qwen3_4b [--no-context]
