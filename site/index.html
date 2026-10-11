@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Evoo — Free, private voice dictation for Mac</title>
-<meta name="description" content="Hold fn, speak, release — clean text at your cursor in any app. Free, open source, and 100% on your Mac. No account, no cloud.">
+<meta name="description" content="Hold fn, speak, release — clean text at your cursor in any app. Free, open source, and 100% on your computer: Mac, and now Windows. No account, no cloud.">
 <meta property="og:title" content="Evoo — Free, private voice dictation for Mac">
 <meta property="og:description" content="Hold fn, speak, release. Understands what you meant, learns your names, runs entirely on your Mac. Free and open source.">
 <meta property="og:type" content="website">
@@ -231,6 +231,23 @@
   .pill2 i:nth-child(1){height:8px;animation-delay:-.2s} .pill2 i:nth-child(2){height:16px;animation-delay:-.5s} .pill2 i:nth-child(3){height:22px;animation-delay:-.1s} .pill2 i:nth-child(4){height:13px;animation-delay:-.7s} .pill2 i:nth-child(5){height:19px;animation-delay:-.35s} .pill2 i:nth-child(6){height:9px;animation-delay:-.6s} .pill2 i:nth-child(7){height:15px;animation-delay:-.45s}
   @keyframes bar { 50% { transform: scaleY(.45); } }
   @media (prefers-reduced-motion: reduce) { .pill2 i { animation: none; } .grid .card { transition: none; } }
+
+  /* Windows section */
+  .win { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: start; }
+  @media (max-width: 900px) { .win { grid-template-columns: 1fr; gap: 32px; } }
+  .win > * { min-width: 0; }
+  .win-copy .lead { margin-bottom: 22px; }
+  .win-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+  .win-actions .btn svg, .hero .btn-ghost svg { width: 17px; height: 17px; }
+  .keys.light { color: var(--ink-2); }
+  .keys.light kbd { background: #fff; border-color: #d5d8df; color: var(--ink); }
+  .keys.light span { color: var(--ink-3); font-size: 14px; }
+  .win-steps { margin: 0; padding: 0; list-style: none; counter-reset: w; display: grid; gap: 12px; }
+  .win-steps li { counter-increment: w; position: relative; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px 16px 56px; color: var(--ink-2); font-size: 15px; }
+  .win-steps li::before { content: counter(w); position: absolute; left: 16px; top: 16px; width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 13px; font-weight: 650; display: grid; place-items: center; }
+  .win-steps b { color: var(--ink); }
+  .win-steps li.honest { background: #fffbeb; border-color: #f3e3b3; }
+  .win-steps li.honest::before { content: "i"; background: var(--amber); font-style: italic; font-family: Georgia, serif; }
 </style>
 </head>
 <body>
@@ -245,6 +262,7 @@
       <a href="#features">Features</a>
       <a href="#commands">Commands</a>
       <a href="#install">Install</a>
+      <a href="#windows">Windows</a>
       <a href="#privacy">Privacy</a>
       <a href="#faq">FAQ</a>
       <a href="https://github.com/chndr-prksh/evoo">GitHub</a>
@@ -255,17 +273,20 @@
 
 <header class="hero" id="top">
   <div class="wrap">
-    <span class="pill-tag"><b>Free &amp; open source</b> Runs 100% on your Mac</span>
+    <span class="pill-tag"><b>Free &amp; open source</b> Runs 100% on your computer</span>
     <h1>Hold fn. Speak.<br>It types what you meant.</h1>
-    <p class="sub">Evoo is voice dictation for Mac that fixes your self-corrections, formats lists, and learns your names — in any app, with no account and nothing sent to the cloud.</p>
+    <p class="sub">Evoo is voice dictation for Mac — and now Windows — that fixes your self-corrections, formats lists, and learns your names. In any app, with no account and nothing sent to the cloud.</p>
     <div class="actions">
       <a class="btn btn-primary" href="https://github.com/chndr-prksh/evoo/releases/latest/download/Evoo.zip" data-dl>
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.62c-.02-2.3 1.88-3.4 1.97-3.46-1.07-1.57-2.74-1.78-3.33-1.8-1.42-.14-2.77.83-3.49.83-.72 0-1.83-.81-3.01-.79-1.55.02-2.98.9-3.78 2.29-1.61 2.8-.41 6.94 1.16 9.21.77 1.11 1.68 2.36 2.88 2.31 1.16-.05 1.6-.75 3-.75s1.79.75 3.01.72c1.25-.02 2.04-1.13 2.8-2.25.88-1.29 1.24-2.54 1.26-2.6-.03-.01-2.42-.93-2.44-3.7zM14.1 5.86c.64-.78 1.07-1.85.95-2.93-.92.04-2.04.61-2.7 1.39-.59.69-1.11 1.79-.97 2.85 1.03.08 2.07-.52 2.72-1.31z"/></svg>
         Download for Mac
       </a>
-      <a class="btn btn-ghost" href="#install">One-line install</a>
+      <a class="btn btn-ghost" href="#windows">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.1l7.4-1v7.2H3V5.1zm8.3-1.1L21 2.6v8.7h-9.7V4zM3 12.2h7.4v7.2L3 18.4v-6.2zm8.3 0H21v8.7l-9.7-1.4v-7.3z"/></svg>
+        Windows (preview)
+      </a>
     </div>
-    <p class="fine">Apple Silicon (M1 or newer) · macOS 14+ · First open needs one extra click — <a href="#install">see how</a></p>
+    <p class="fine">Mac: Apple Silicon (M1 or newer) · macOS 14+ · <a href="#install">one-line install</a> &nbsp;·&nbsp; Windows 10 and 11 (preview)</p>
     <div class="proof">
       <a href="https://github.com/chndr-prksh/evoo"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 00-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.46-1.16-1.11-1.47-1.11-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.6 9.6 0 015 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0012 2z"/></svg>Open source on GitHub</a>
       <span id="dlcount" hidden><b id="dlnum">0</b> downloads</span>
@@ -413,7 +434,34 @@
   </div>
 </section>
 
-<section class="alt" id="privacy">
+<section class="alt" id="windows">
+  <div class="wrap">
+    <div class="win">
+      <div class="win-copy">
+        <p class="kicker">Windows · Preview</p>
+        <h2>Evoo on your PC.</h2>
+        <p class="lead">The same on-device speech model and the same corrections as the Mac. Hold two keys, speak, let go — the text is typed wherever your cursor is.</p>
+        <p class="keys light">Hold <kbd>Ctrl</kbd> <kbd>⊞ Win</kbd> and speak. <span>Esc cancels.</span></p>
+        <div class="win-actions">
+          <a class="btn btn-primary" href="https://github.com/chndr-prksh/evoo/releases/download/windows/Evoo-windows.zip">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.1l7.4-1v7.2H3V5.1zm8.3-1.1L21 2.6v8.7h-9.7V4zM3 12.2h7.4v7.2L3 18.4v-6.2zm8.3 0H21v8.7l-9.7-1.4v-7.3z"/></svg>
+            Download for Windows
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/chndr-prksh/evoo/tree/main/windows">Source</a>
+        </div>
+        <p class="fine" style="margin:14px 0 0">Windows 10 or 11, 64-bit · 75 MB download · plus a one-time 670 MB speech model</p>
+      </div>
+      <ol class="win-steps">
+        <li><b>Unzip and run Evoo.exe.</b> Windows SmartScreen warns about apps it doesn't know yet: click <b>More info</b>, then <b>Run anyway</b>. The build isn't code-signed.</li>
+        <li><b>Download the speech model</b> from Evoo's setup window. It's a one-time 670 MB download; after that Evoo works offline.</li>
+        <li><b>Dictate anywhere.</b> Click into any text box, hold Ctrl + Win, and speak. Evoo lives next to the clock; right-click its icon to quit.</li>
+        <li class="honest"><b>What “preview” means.</b> It passes its automated checks on Windows, but it's brand new and real people haven't used it yet, so expect rough edges. AI polish, voice commands, lists and other languages are Mac-only for now. <a href="https://github.com/chndr-prksh/evoo/issues">Tell us what breaks.</a></li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<section id="privacy">
   <div class="wrap privacy">
     <div>
       <p class="kicker">Privacy</p>
@@ -446,6 +494,7 @@
     <details class="q"><summary>Is Evoo really free?</summary><p>Yes. No subscription, no trial, no account. It's open source under Apache-2.0, and every model it uses is free and open-weight.</p></details>
     <details class="q"><summary>Is it safe? macOS says it “could not verify” it.</summary><p>That message appears for every app not signed with a paid Apple developer certificate — it doesn't mean anything was detected. You can read all of Evoo's code on GitHub, releases are built there automatically, and the one-line install checks the download's checksum. Evoo only goes online to download its models and check GitHub for updates.</p></details>
     <details class="q"><summary>Does the AI polish understand context, or just grammar?</summary><p>Both. Besides fillers, self-corrections and grammar, it fixes words the speech model misheard when the meaning makes it obvious — “Jack and Gill went up the hell” becomes “Jack and Jill went up the hill”, “I need to by milk” becomes “I need to buy milk”. On Macs with 16 GB or more it also reads the sentences you said just before and the text already in the box, so it knows the topic. It never changes a word that already makes sense, and it all runs on your Mac.</p></details>
+    <details class="q"><summary>Is there a Windows version?</summary><p>Yes, as a preview: <a href="#windows">download it here</a>. Hold Ctrl + Win, speak, and let go. It uses the same on-device speech model and correction rules as the Mac, on 64-bit Windows 10 or 11. Windows SmartScreen will warn about it because the build isn't code-signed yet. AI polish, voice commands, lists and other languages are Mac-only for now.</p></details>
     <details class="q"><summary>Which Macs does it work on?</summary><p>Apple Silicon Macs (M1 or newer) with macOS 14 Sonoma or later. 8 GB of memory is enough for dictation; 16 GB gives the optional local AI (rewrite, reply, Class Notes) more room.</p></details>
     <details class="q"><summary>Which apps does it work in?</summary><p>Anywhere you can type: Chrome, Safari, Slack, WhatsApp, Gmail, Notion, Notes, Word, VS Code, Cursor, Terminal and more. It formats for each — Markdown in editors, plain bullets in chat, and never a line break in Terminal.</p></details>
     <details class="q"><summary>I use Wispr Flow or Apple Dictation — can I keep them?</summary><p>Yes, but don't run two fn-based dictation apps at once; both will react to the key. Set <span class="path">Keyboard › Press 🌐 key to › Do Nothing</span> so Apple's dictation doesn't pop up too.</p></details>
@@ -462,6 +511,7 @@
     <p class="lead" style="margin:0 auto">Free, private, and it gets better the more you use it.</p>
     <div class="actions">
       <a class="btn btn-primary" href="https://github.com/chndr-prksh/evoo/releases/latest/download/Evoo.zip" data-dl>Download for Mac</a>
+      <a class="btn btn-ghost" href="https://github.com/chndr-prksh/evoo/releases/download/windows/Evoo-windows.zip">Download for Windows</a>
       <a class="btn btn-ghost" href="https://github.com/chndr-prksh/evoo">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>
         Star on GitHub
@@ -553,7 +603,7 @@
         const r = await fetch(`https://api.github.com/repos/chndr-prksh/evoo/releases?per_page=100&page=${page}`);
         if (!r.ok) return;
         const list = await r.json();
-        for (const rel of list) for (const a of rel.assets || []) if (a.name === 'Evoo.zip') total += a.download_count;
+        for (const rel of list) for (const a of rel.assets || []) if (a.name === 'Evoo.zip' || a.name === 'Evoo-windows.zip') total += a.download_count;
         if (list.length < 100) break;
       }
       if (total < 1) return;
