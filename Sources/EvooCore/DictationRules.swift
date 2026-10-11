@@ -303,6 +303,8 @@ public enum DictationRules {
             return i ..< i + 2 // "next Monday"
         }
         guard let cls = valueClass(t[i]) else { return nil }
+        // "am"/"pm" only belong to a time that came before them; alone they're words ("I am sorry I am late").
+        if ["am", "pm"].contains(t[i].norm) { return nil }
         var end = i + 1
         // A group ends at punctuation or after AM/PM ("4 PM 5 PM" is two times).
         while end < t.count, !t[end - 1].endsClause, !t[end - 1].endsSentence,
@@ -355,7 +357,10 @@ public enum DictationRules {
 
     static let subjects: Set<String> = ["i", "im", "ive", "ill", "id", "we", "were", "weve", "well", "you", "youre", "youve",
                                         "he", "hes", "she", "shes", "they", "theyre", "theyve", "it", "its", "that",
-                                        "thats", "this", "there", "theres"]
+                                        "thats", "this", "there", "theres",
+                                        // …and the small verbs that follow them: "I am sorry I am late".
+                                        "am", "are", "be", "been", "have", "has", "had", "do", "does", "did", "will",
+                                        "would", "can", "could", "should", "shall", "may", "might", "must"]
 
     /// A word said again with a sharper modifier replaces the first attempt:
     ///   "It's still bad, very bad"               → "It's still very bad"

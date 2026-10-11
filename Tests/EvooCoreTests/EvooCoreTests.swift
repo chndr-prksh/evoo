@@ -152,6 +152,8 @@ import Testing
         #expect(fix("Book the perf, sorry, performance review for Friday.") == "Book the performance review for Friday.")
         // Not corrections:
         #expect(fix("I'm sorry I'm late.") == "I'm sorry I'm late.")
+        #expect(fix("I am sorry I am late for the call.") == "I am sorry I am late for the call.")
+        #expect(fix("We can do it if we can get the budget.") == "We can do it if we can get the budget.")
         #expect(fix("Tell her I'm sorry about yesterday.") == "Tell her I'm sorry about yesterday.")
         #expect(fix("I told him I'm sorry, he said it was fine.") == "I told him I'm sorry, he said it was fine.")
     }

@@ -275,6 +275,8 @@ public static class DictationRules
             return (i, i + 2); // "next Monday"
         var cls = ValueClass(t[i]);
         if (cls is null) return null;
+        // "am"/"pm" only belong to a time that came before them; alone they're words ("I am sorry I am late").
+        if (t[i].Norm is "am" or "pm") return null;
         var end = i + 1;
         // A group ends at punctuation or after AM/PM ("4 PM 5 PM" is two times).
         while (end < t.Count && !t[end - 1].EndsClause && !t[end - 1].EndsSentence &&
@@ -327,7 +329,8 @@ public static class DictationRules
     /// <summary>Words that may sit between a word and its restatement: "bad, not no bad, very bad".</summary>
     private static readonly HashSet<string> RestatementFillers = new(Intensifiers.Concat(Set("not no i mean sorry actually like or rather")));
     /// <summary>"I'm sorry I'm late", "we know we can": a repeated subject is ordinary speech, not a restatement.</summary>
-    private static readonly HashSet<string> Subjects = Set("i im ive ill id we were weve well you youre youve he hes she shes they theyre theyve it its that thats this there theres");
+    private static readonly HashSet<string> Subjects = Set("i im ive ill id we were weve well you youre youve he hes she shes they theyre theyve it its that thats this there theres " +
+        "am are be been have has had do does did will would can could should shall may might must"); // "I am sorry I am late"
 
     /// <summary>A word said again with a sharper modifier replaces the first attempt: "still bad, very bad" → "still very bad".</summary>
     private static List<Token> CollapseRestatements(List<Token> input)
