@@ -474,6 +474,56 @@ case "languages":
     for l in order { print(String(format: "%@ %.0f%% words wrong", l.padding(toLength: 12, withPad: " ", startingAt: 0), perLanguage[l]!.errors / Double(perLanguage[l]!.n) * 100)) }
     await engine.unload()
 
+case "tools-eval":
+    // Tool calling: how often the model picks the right tool with the right arguments.
+    //   evoo-cli tools-eval --gguf model.gguf [--data Tools/data/test.jsonl] [--limit 100] [--show]
+    guard let gguf = option("--gguf") else { print("usage: evoo-cli tools-eval --gguf model.gguf"); exit(2) }
+    setvbuf(stdout, nil, _IOLBF, 0)
+    let dataPath = option("--data") ?? "Tools/data/test.jsonl"
+    let limit = Int(option("--limit") ?? "") ?? Int.max
+    let show = flag("--show")
+    struct ToolRow: Decodable { struct Call: Decodable { let name: String; let args: [String: AnyValue] }; let user: String; let calls: [Call] }
+    enum AnyValue: Decodable {
+        case s(String)
+        init(from d: Decoder) throws {
+            let c = try d.singleValueContainer()
+            if let i = try? c.decode(Int.self) { self = .s(String(i)) } else { self = .s(try c.decode(String.self)) }
+        }
+        var text: String { if case let .s(v) = self { return v }; return "" }
+    }
+    let rows = try String(contentsOf: URL(fileURLWithPath: dataPath), encoding: .utf8).split(separator: "\n").prefix(limit)
+        .map { try JSONDecoder().decode(ToolRow.self, from: Data($0.utf8)) }
+    let caller = ToolCaller()
+    let prefixText = try String(contentsOf: URL(fileURLWithPath: "Tools/prefix.txt"), encoding: .utf8)
+    let loadTime = try await clock.measure { try await caller.load(path: gguf, prefix: prefixText) }
+    print("loaded in \(loadTime.ms) ms · tool list: \(caller.prefixTokens) tokens · \(rows.count) cases")
+    var full = 0, toolsRight = 0, totalMs = 0
+    var byKind: [String: (ok: Int, n: Int)] = [:]
+    for row in rows {
+        let want = row.calls.map { ToolCall(name: $0.name, args: $0.args.mapValues(\.text)) }
+        var raw = ""
+        let t = try await clock.measure { raw = try await caller.complete(row.user) }
+        totalMs += t.ms
+        let got = ToolCall.parse(raw)
+        let ok = got.count == want.count && zip(got, want).allSatisfy { $0.matches($1) }
+        let names = got.map(\.name) == want.map(\.name)
+        if ok { full += 1 }
+        if names { toolsRight += 1 }
+        let kind = want.count > 1 ? "chains" : want[0].name
+        byKind[kind, default: (0, 0)].n += 1
+        if ok { byKind[kind, default: (0, 0)].ok += 1 }
+        if show, !ok {
+            print("❌ \(row.user)\n   want: \(want.map { "\($0.name)\($0.args)" }.joined(separator: " → "))\n   got:  \(got.isEmpty ? raw.prefix(120).description : got.map { "\($0.name)\($0.args)" }.joined(separator: " → "))")
+        }
+    }
+    print("")
+    for (kind, r) in byKind.sorted(by: { Double($0.value.ok) / Double($0.value.n) < Double($1.value.ok) / Double($1.value.n) }) {
+        print("\(kind.padding(toLength: 18, withPad: " ", startingAt: 0)) \(r.ok)/\(r.n)")
+    }
+    print(String(format: "\nTOOLS fully right %d/%d (%.1f%%) · right tool(s), any arguments %d/%d (%.1f%%) · %d ms avg",
+                 full, rows.count, Double(full) / Double(rows.count) * 100, toolsRight, rows.count, Double(toolsRight) / Double(rows.count) * 100, totalMs / max(1, rows.count)))
+    caller.unload()
+
 case "field":
     // Real failure reports, at the text level (Benchmarks/field.tsv):  evoo-cli field [--model qwen3_0_6b] [--no-polish]
     let polish = !flag("--no-polish")

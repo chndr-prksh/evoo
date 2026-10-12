@@ -992,3 +992,31 @@ struct CommandModeGestureTests {
         #expect(g.handle(.otherKey(at: 0.5)) == .cancel)
     }
 }
+
+struct ToolCallTests {
+    @Test func parsesCalls() {
+        let one = ToolCall.parse("<start_function_call>call:set_volume{percent:30}<end_function_call><start_function_response>")
+        #expect(one == [ToolCall(name: "set_volume", args: ["percent": "30"])])
+        #expect(one[0].int("percent") == 30)
+        let two = ToolCall.parse("<start_function_call>call:browser{action:<escape>close_tab<escape>}<end_function_call><start_function_call>call:open_app{name:<escape>Claude<escape>}<end_function_call>")
+        #expect(two.map(\.name) == ["browser", "open_app"])
+        #expect(two[1].args["name"] == "Claude")
+        let text = ToolCall.parse("<start_function_call>call:add_reminder{task:<escape>call Raj, then mom<escape>,when:<escape>tomorrow at 5<escape>}<end_function_call>")
+        #expect(text[0].args == ["task": "call Raj, then mom", "when": "tomorrow at 5"])
+        #expect(ToolCall.parse("<start_function_call>call:no_action{}<end_function_call>") == [ToolCall(name: "no_action")])
+    }
+
+    @Test func survivesGarbage() {
+        #expect(ToolCall.parse("I cannot help with that.").isEmpty)
+        #expect(ToolCall.parse("<start_function_call>call:tabulate<end_function_call> then {").isEmpty)
+        #expect(ToolCall.parse("<start_function_call>call:open_app{name:<escape>Chrome").first?.args["name"] == "Chrome")
+        #expect(ToolCall.parse("<start_function_call>call:").isEmpty)
+    }
+
+    @Test func matching() {
+        #expect(ToolCall(name: "open_app", args: ["name": "claude"]).matches(ToolCall(name: "open_website", args: ["site": "Claude"])))
+        #expect(ToolCall(name: "web_search", args: ["query": "Flights to Delhi.", "site": "google"]).matches(ToolCall(name: "web_search", args: ["query": "flights to delhi", "site": "google"])))
+        #expect(!ToolCall(name: "mute", args: ["state": "on"]).matches(ToolCall(name: "mute", args: ["state": "off"])))
+        #expect(!ToolCall(name: "set_timer", args: ["minutes": "10"]).matches(ToolCall(name: "set_timer", args: ["minutes": "10", "label": "tea"])))
+    }
+}

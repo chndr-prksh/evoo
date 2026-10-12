@@ -1,0 +1,552 @@
+{
+ "comment": "Everything Evoo can do by voice, as tools for the on-device tool-calling model (FunctionGemma). One source of truth: the training data, the model's prompt and the app's executors are all built from this list.",
+ "tools": [
+  {
+   "name": "open_app",
+   "description": "Open or switch to an app",
+   "params": {
+    "name": {
+     "type": "string",
+     "description": "App"
+    }
+   },
+   "required": [
+    "name"
+   ]
+  },
+  {
+   "name": "quit_app",
+   "description": "Quit an app",
+   "params": {
+    "name": {
+     "type": "string",
+     "description": "App"
+    }
+   },
+   "required": [
+    "name"
+   ]
+  },
+  {
+   "name": "open_website",
+   "description": "Open a website",
+   "params": {
+    "site": {
+     "type": "string",
+     "description": "Site"
+    }
+   },
+   "required": [
+    "site"
+   ]
+  },
+  {
+   "name": "web_search",
+   "description": "Search the web or a site",
+   "params": {
+    "query": {
+     "type": "string",
+     "description": "Query"
+    },
+    "site": {
+     "type": "string",
+     "description": "Site",
+     "enum": [
+      "google",
+      "youtube",
+      "wikipedia",
+      "amazon",
+      "maps",
+      "github",
+      "reddit",
+      "chatgpt",
+      "claude",
+      "perplexity"
+     ]
+    }
+   },
+   "required": [
+    "query"
+   ]
+  },
+  {
+   "name": "find_file",
+   "description": "Find a file or document on this computer",
+   "params": {
+    "query": {
+     "type": "string",
+     "description": "Query"
+    }
+   },
+   "required": [
+    "query"
+   ]
+  },
+  {
+   "name": "press_keys",
+   "description": "Press a key or key combination",
+   "params": {
+    "keys": {
+     "type": "string",
+     "description": "Keys"
+    }
+   },
+   "required": [
+    "keys"
+   ]
+  },
+  {
+   "name": "edit",
+   "description": "Editing action in the current app",
+   "params": {
+    "action": {
+     "type": "string",
+     "description": "Action",
+     "enum": [
+      "copy",
+      "cut",
+      "paste",
+      "undo",
+      "redo",
+      "select_all",
+      "save",
+      "find",
+      "bold",
+      "italic",
+      "underline",
+      "print",
+      "delete_word",
+      "delete_line"
+     ]
+    }
+   },
+   "required": [
+    "action"
+   ]
+  },
+  {
+   "name": "browser",
+   "description": "Tab, window or page action",
+   "params": {
+    "action": {
+     "type": "string",
+     "description": "Action",
+     "enum": [
+      "new_tab",
+      "close_tab",
+      "reopen_tab",
+      "next_tab",
+      "previous_tab",
+      "back",
+      "forward",
+      "refresh",
+      "new_window",
+      "close_window",
+      "zoom_in",
+      "zoom_out"
+     ]
+    }
+   },
+   "required": [
+    "action"
+   ]
+  },
+  {
+   "name": "scroll",
+   "description": "Scroll the page",
+   "params": {
+    "direction": {
+     "type": "string",
+     "description": "Direction",
+     "enum": [
+      "up",
+      "down",
+      "top",
+      "bottom"
+     ]
+    }
+   },
+   "required": [
+    "direction"
+   ]
+  },
+  {
+   "name": "set_volume",
+   "description": "Set the volume to a level",
+   "params": {
+    "percent": {
+     "type": "integer",
+     "description": "0-100"
+    }
+   },
+   "required": [
+    "percent"
+   ]
+  },
+  {
+   "name": "change_volume",
+   "description": "Make it louder or quieter",
+   "params": {
+    "direction": {
+     "type": "string",
+     "description": "Direction",
+     "enum": [
+      "up",
+      "down"
+     ]
+    }
+   },
+   "required": [
+    "direction"
+   ]
+  },
+  {
+   "name": "mute",
+   "description": "Mute or unmute the sound",
+   "params": {
+    "state": {
+     "type": "string",
+     "description": "State",
+     "enum": [
+      "on",
+      "off"
+     ]
+    }
+   },
+   "required": [
+    "state"
+   ]
+  },
+  {
+   "name": "media",
+   "description": "Control music or video playback",
+   "params": {
+    "action": {
+     "type": "string",
+     "description": "Action",
+     "enum": [
+      "play_pause",
+      "next",
+      "previous"
+     ]
+    }
+   },
+   "required": [
+    "action"
+   ]
+  },
+  {
+   "name": "brightness",
+   "description": "Make the screen brighter or dimmer",
+   "params": {
+    "direction": {
+     "type": "string",
+     "description": "Direction",
+     "enum": [
+      "up",
+      "down"
+     ]
+    }
+   },
+   "required": [
+    "direction"
+   ]
+  },
+  {
+   "name": "dark_mode",
+   "description": "Turn dark mode on or off",
+   "params": {
+    "state": {
+     "type": "string",
+     "description": "State",
+     "enum": [
+      "on",
+      "off"
+     ]
+    }
+   },
+   "required": [
+    "state"
+   ]
+  },
+  {
+   "name": "window",
+   "description": "Move or resize the current window",
+   "params": {
+    "action": {
+     "type": "string",
+     "description": "Action",
+     "enum": [
+      "left",
+      "right",
+      "top",
+      "bottom",
+      "maximize",
+      "center",
+      "full_screen",
+      "minimize"
+     ]
+    }
+   },
+   "required": [
+    "action"
+   ]
+  },
+  {
+   "name": "click",
+   "description": "Click a button or link by its name",
+   "params": {
+    "label": {
+     "type": "string",
+     "description": "Label"
+    }
+   },
+   "required": [
+    "label"
+   ]
+  },
+  {
+   "name": "system",
+   "description": "System action",
+   "params": {
+    "action": {
+     "type": "string",
+     "description": "Action",
+     "enum": [
+      "lock_screen",
+      "screenshot",
+      "mission_control",
+      "show_desktop"
+     ]
+    }
+   },
+   "required": [
+    "action"
+   ]
+  },
+  {
+   "name": "type_text",
+   "description": "Type these exact words",
+   "params": {
+    "text": {
+     "type": "string",
+     "description": "Text"
+    }
+   },
+   "required": [
+    "text"
+   ]
+  },
+  {
+   "name": "add_reminder",
+   "description": "Create a reminder",
+   "params": {
+    "task": {
+     "type": "string",
+     "description": "Task"
+    },
+    "when": {
+     "type": "string",
+     "description": "When"
+    }
+   },
+   "required": [
+    "task"
+   ]
+  },
+  {
+   "name": "add_event",
+   "description": "Add a calendar event",
+   "params": {
+    "title": {
+     "type": "string",
+     "description": "Title"
+    },
+    "when": {
+     "type": "string",
+     "description": "When"
+    },
+    "minutes": {
+     "type": "integer",
+     "description": "Minutes"
+    }
+   },
+   "required": [
+    "title",
+    "when"
+   ]
+  },
+  {
+   "name": "set_timer",
+   "description": "Start a countdown timer",
+   "params": {
+    "minutes": {
+     "type": "integer",
+     "description": "Minutes"
+    },
+    "label": {
+     "type": "string",
+     "description": "Label"
+    }
+   },
+   "required": [
+    "minutes"
+   ]
+  },
+  {
+   "name": "save_note",
+   "description": "Save a quick note",
+   "params": {
+    "text": {
+     "type": "string",
+     "description": "Text"
+    }
+   },
+   "required": [
+    "text"
+   ]
+  },
+  {
+   "name": "search_history",
+   "description": "Search what I dictated before",
+   "params": {
+    "query": {
+     "type": "string",
+     "description": "Query"
+    }
+   },
+   "required": [
+    "query"
+   ]
+  },
+  {
+   "name": "compose_email",
+   "description": "Start a new email",
+   "params": {
+    "to": {
+     "type": "string",
+     "description": "To"
+    },
+    "subject": {
+     "type": "string",
+     "description": "Subject"
+    },
+    "body": {
+     "type": "string",
+     "description": "Body"
+    }
+   },
+   "required": []
+  },
+  {
+   "name": "get_directions",
+   "description": "Directions to a place",
+   "params": {
+    "destination": {
+     "type": "string",
+     "description": "Place"
+    }
+   },
+   "required": [
+    "destination"
+   ]
+  },
+  {
+   "name": "rewrite_selection",
+   "description": "Rewrite the selected text",
+   "params": {
+    "instruction": {
+     "type": "string",
+     "description": "How"
+    }
+   },
+   "required": [
+    "instruction"
+   ]
+  },
+  {
+   "name": "reply",
+   "description": "Write a reply to what is on screen",
+   "params": {
+    "intent": {
+     "type": "string",
+     "description": "What to say"
+    }
+   },
+   "required": [
+    "intent"
+   ]
+  },
+  {
+   "name": "translate",
+   "description": "Translate what I say",
+   "params": {
+    "text": {
+     "type": "string",
+     "description": "Text"
+    },
+    "language": {
+     "type": "string",
+     "description": "Language"
+    }
+   },
+   "required": [
+    "text",
+    "language"
+   ]
+  },
+  {
+   "name": "read_aloud",
+   "description": "Read the selected text aloud, or stop reading",
+   "params": {
+    "action": {
+     "type": "string",
+     "description": "Action",
+     "enum": [
+      "start",
+      "stop"
+     ]
+    }
+   },
+   "required": [
+    "action"
+   ]
+  },
+  {
+   "name": "class_notes",
+   "description": "Lecture notes: start taking them, or search them",
+   "params": {
+    "query": {
+     "type": "string",
+     "description": "Query"
+    }
+   },
+   "required": []
+  },
+  {
+   "name": "run_shortcut",
+   "description": "Run an Apple Shortcut by name",
+   "params": {
+    "name": {
+     "type": "string",
+     "description": "App"
+    }
+   },
+   "required": [
+    "name"
+   ]
+  },
+  {
+   "name": "transcribe_file",
+   "description": "Transcribe an audio or video file",
+   "params": {},
+   "required": []
+  },
+  {
+   "name": "no_action",
+   "description": "The words are not a request to do anything",
+   "params": {},
+   "required": []
+  }
+ ]
+}

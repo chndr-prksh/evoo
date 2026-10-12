@@ -1,0 +1,80 @@
+# Fine-tunes Evoo's tool-calling model (FunctionGemma 270M) on the examples from Tools/build_dataset.py, scores it
+# on phrasings it never saw, converts it to GGUF and publishes it as a release asset (never "latest").
+# Run by hand:  gh workflow run tools-train.yml -f iters=3000 -f version=v1
+name: Train tools model
+
+on:
+  workflow_dispatch:
+    inputs:
+      iters:
+        description: Training steps (30 for a quick check of the pipeline)
+        default: "3000"
+      version:
+        description: Release suffix, e.g. v1 (leave empty to keep the model as a run artifact only)
+        default: ""
+      eval_limit:
+        description: How many test cases to score
+        default: "344"
+
+permissions:
+  contents: write
+
+jobs:
+  train:
+    runs-on: macos-15
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Tools
+        run: |
+          python -m pip install -q "mlx-lm==0.29.1" gguf numpy
+          python -c "import mlx.core as mx; print('metal:', mx.metal.is_available()); print(mx.metal.device_info() if mx.metal.is_available() else 'cpu only')"
+          sysctl -n machdep.cpu.brand_string hw.memsize
+
+      - name: Examples
+        run: python Tools/build_dataset.py
+
+      - name: Before training
+        run: python Tools/eval_mlx.py --model unsloth/functiongemma-270m-it --limit 60 --show 3 | tail -6
+
+      - name: Train
+        run: |
+          sed -i '' "s/^iters: .*/iters: ${{ inputs.iters }}/" Tools/lora.yaml
+          python Tools/train.py --config Tools/lora.yaml
+
+      - name: After training (phrasings the model never saw)
+        run: python Tools/eval_mlx.py --model unsloth/functiongemma-270m-it --adapter Tools/out/adapter --limit ${{ inputs.eval_limit }} | tee Tools/out/eval.txt
+
+      - name: Merge and convert to GGUF
+        run: |
+          python -m mlx_lm fuse --model unsloth/functiongemma-270m-it --adapter-path Tools/out/adapter --save-path Tools/out/fused
+          git clone -q --depth 1 --branch b11155 https://github.com/ggml-org/llama.cpp.git llama.cpp
+          python -m pip install -q torch transformers sentencepiece protobuf "numpy<3"
+          python llama.cpp/convert_hf_to_gguf.py Tools/out/fused --outfile Tools/out/evoo-tools-q8_0.gguf --outtype q8_0
+          ls -la Tools/out/
+          shasum -a 256 Tools/out/evoo-tools-q8_0.gguf | tee Tools/out/evoo-tools-q8_0.gguf.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evoo-tools-model
+          path: |
+            Tools/out/evoo-tools-q8_0.gguf
+            Tools/out/evoo-tools-q8_0.gguf.sha256
+            Tools/out/eval.txt
+          retention-days: 30
+
+      - name: Publish
+        if: inputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="tools-model-${{ inputs.version }}"
+          cp Tools/prefix.txt Tools/out/prefix.txt
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" Tools/out/evoo-tools-q8_0.gguf Tools/out/evoo-tools-q8_0.gguf.sha256 Tools/out/eval.txt Tools/out/prefix.txt Tools/tools.json \
+            --latest=false --prerelease --target "$GITHUB_SHA" --title "Evoo tool-calling model ${{ inputs.version }}" \
+            --notes "FunctionGemma 270M fine-tuned on Evoo's tools (Tools/tools.json). Built from google/functiongemma-270m-it, which is provided under and subject to the Gemma Terms of Use (ai.google.dev/gemma/terms). Scores on unseen phrasings are in eval.txt."
