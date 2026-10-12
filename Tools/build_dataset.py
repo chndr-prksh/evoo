@@ -321,6 +321,9 @@ DURS = [(1, ["1 minute", "one minute", "a minute"]), (2, ["2 minutes", "two minu
         (60, ["an hour", "one hour", "60 minutes"]), (90, ["an hour and a half", "90 minutes", "ninety minutes"]), (120, ["two hours", "2 hours"])]
 DURS_TEST = [(3, ["three minutes"]), (40, ["forty minutes"]), (75, ["an hour and fifteen minutes"]), (180, ["three hours"])]
 
+MORE_SUBJECTS, MORE_LABELS = [], []
+VOLUMES = [5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 100]
+
 def fill(rng, phrasing, args, test):
     """One concrete example from a phrasing: picks values for every {slot}."""
     pick = lambda train, tst: rng.choice(tst if test else train)
@@ -336,14 +339,14 @@ def fill(rng, phrasing, args, test):
     if "{event}" in phrasing: v["event"] = pick(EVENTS, EVENTS_TEST)
     if "{note}" in phrasing: v["note"] = pick(NOTES, NOTES_TEST)
     if "{person}" in phrasing: v["person"] = pick(PEOPLE, PEOPLE_TEST)
-    if "{subject}" in phrasing: v["subject"] = rng.choice(SUBJECTS)
+    if "{subject}" in phrasing: v["subject"] = rng.choice(SUBJECTS if test else SUBJECTS + MORE_SUBJECTS)
     if "{reply}" in phrasing: v["reply"] = pick(REPLIES, REPLIES_TEST)
     if "{place}" in phrasing: v["place"] = pick(PLACES, PLACES_TEST)
     if "{rewrite}" in phrasing: v["rewrite"] = pick(REWRITES, REWRITES_TEST)
     if "{phrase}" in phrasing: v["phrase"] = pick(PHRASES, PHRASES_TEST)
     if "{lang}" in phrasing: v["lang"] = pick(LANGS, LANGS_TEST)
     if "{sc}" in phrasing: v["sc"] = pick(SHORTCUTS, SHORTCUTS_TEST)
-    if "{label}" in phrasing: v["label"] = rng.choice(LABELS)
+    if "{label}" in phrasing: v["label"] = rng.choice(LABELS if test else LABELS + MORE_LABELS)
     if "{keyname}" in phrasing:
         keys, names = pick(KEYS, KEYS_TEST)
         v["keyname"], v["keys"] = rng.choice(names), keys
@@ -351,7 +354,7 @@ def fill(rng, phrasing, args, test):
         minutes, names = pick(DURS, DURS_TEST)
         v["dur"], v["durm"] = rng.choice(names), minutes
     if "{n}" in phrasing:
-        n = rng.choice([5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 100] if not test else [35, 45, 55, 65, 85, 0])
+        n = rng.choice(VOLUMES if not test else [35, 45, 55, 65, 85, 0])
         v["n"], v["nval"] = (NUM_WORDS[n] if rng.random() < 0.5 else str(n)), n
     text = phrasing
     for k, val in v.items(): text = text.replace("{" + k + "}", str(val))
@@ -402,14 +405,14 @@ def chain(rng, pool, test):
     if rng.random() < 0.3: text = rng.choice(["please ", "can you ", "okay "]) + text
     return text, calls
 
-MIN_PER_TOOL = 110
+MIN_PER_TOOL = 300
 
 def build(seed, per_phrasing, chains, test):
     rng = random.Random(seed)
     src = TEST if test else TRAIN
     rows = []
     for phrasing, tool, args in src:
-        for i in range(per_phrasing if "{" in phrasing else max(2, per_phrasing // 3)):
+        for i in range(per_phrasing if "{" in phrasing else max(2, per_phrasing // 2)):
             text, calls = example(rng, phrasing, tool, args, test, plain=(i == 0))
             rows.append((roughen(rng, text), calls))
     pool = [t for t in src if t[1] in CHAINABLE]
@@ -417,7 +420,7 @@ def build(seed, per_phrasing, chains, test):
         text, calls = chain(rng, pool, test)
         rows.append((roughen(rng, text), calls))
     for neg in (NEGATIVES_TEST if test else NEGATIVES):
-        for _ in range(1 if test else 6):
+        for _ in range(1 if test else 2):
             rows.append((roughen(rng, neg), [("no_action", {})]))
     # Every tool gets a fair share: top up the ones with few phrasings (more fillings, more polite forms).
     if not test:
@@ -450,11 +453,14 @@ FIELD = [("Copy, then open new tab and then paste.", [("edit", {"action": "copy"
          ("Multi command not working.", [("no_action", {})]),
          ("Search Google for flights to Delhi and mute", [("web_search", {"query": "flights to Delhi", "site": "google"}), ("mute", {"state": "on"})])]
 
+import more
+more.extend(globals())   # training only: far more names to fill in and ways to ask (see more.py)
+
 def main():
     data = ROOT / "data"; data.mkdir(exist_ok=True)
     pre = prefix()
     (ROOT / "prefix.txt").write_text(pre)
-    train = build(1, per_phrasing=7, chains=1800, test=False)
+    train = build(1, per_phrasing=9, chains=5000, test=False)
     test = build(2, per_phrasing=2, chains=80, test=True) + [(t, c) for t, c in FIELD]
     train_texts = {t.lower() for t, _ in train}
     test = [(t, c) for t, c in test if t.lower() not in train_texts]
