@@ -12,6 +12,9 @@ on:
       version:
         description: Release suffix, e.g. v1 (leave empty to keep the model as a run artifact only)
         default: ""
+      batch:
+        description: Examples per step
+        default: "4"
       eval_limit:
         description: How many test cases to score
         default: "344"
@@ -43,7 +46,8 @@ jobs:
 
       - name: Train
         run: |
-          sed -i '' "s/^iters: .*/iters: ${{ inputs.iters }}/" Tools/lora.yaml
+          sed -i '' -e "s/^iters: .*/iters: ${{ inputs.iters }}/" -e "s/^batch_size: .*/batch_size: ${{ inputs.batch }}/" Tools/lora.yaml
+          if [ "${{ inputs.iters }}" -lt 200 ]; then sed -i '' -e "s/^steps_per_report: .*/steps_per_report: 10/" -e "s/^steps_per_eval: .*/steps_per_eval: 20/" -e "s/^val_batches: .*/val_batches: 4/" Tools/lora.yaml; fi
           python Tools/train.py --config Tools/lora.yaml
 
       - name: After training (phrasings the model never saw)
