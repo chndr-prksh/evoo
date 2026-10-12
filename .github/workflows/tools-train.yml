@@ -37,6 +37,8 @@ jobs:
           python -m pip install -q "mlx-lm==0.29.1" gguf numpy
           python -c "import mlx.core as mx; print('metal:', mx.metal.is_available()); print(mx.metal.device_info() if mx.metal.is_available() else 'cpu only')"
           sysctl -n machdep.cpu.brand_string hw.memsize
+          python -c "from huggingface_hub import snapshot_download; snapshot_download('unsloth/functiongemma-270m-it', local_dir='Tools/out/base')"
+          sed -i '' "s|^model: .*|model: Tools/out/base|" Tools/lora.yaml
 
       - name: Examples
         run: python Tools/build_dataset.py
@@ -44,7 +46,7 @@ jobs:
       - name: Before training (untrained model, given the full tool descriptions)
         run: |
           python Tools/build_dataset.py --full
-          python Tools/eval_mlx.py --model unsloth/functiongemma-270m-it --limit 60 --show 3 | tail -6
+          python Tools/eval_mlx.py --model Tools/out/base --limit 60 --show 3 | tail -6
           python Tools/build_dataset.py
 
       - name: Train
@@ -54,11 +56,11 @@ jobs:
           python Tools/train.py --config Tools/lora.yaml
 
       - name: After training (phrasings the model never saw)
-        run: python Tools/eval_mlx.py --model unsloth/functiongemma-270m-it --adapter Tools/out/adapter --limit ${{ inputs.eval_limit }} | tee Tools/out/eval.txt
+        run: python Tools/eval_mlx.py --model Tools/out/base --adapter Tools/out/adapter --limit ${{ inputs.eval_limit }} | tee Tools/out/eval.txt
 
       - name: Merge and convert to GGUF
         run: |
-          python -m mlx_lm fuse --model unsloth/functiongemma-270m-it --adapter-path Tools/out/adapter --save-path Tools/out/fused
+          python -m mlx_lm fuse --model Tools/out/base --adapter-path Tools/out/adapter --save-path Tools/out/fused
           git clone -q --depth 1 --branch b11155 https://github.com/ggml-org/llama.cpp.git llama.cpp
           python -m pip install -q torch transformers sentencepiece protobuf "numpy<3"
           python llama.cpp/convert_hf_to_gguf.py Tools/out/fused --outfile Tools/out/evoo-tools-q8_0.gguf --outtype q8_0

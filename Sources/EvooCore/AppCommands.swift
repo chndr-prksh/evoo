@@ -165,6 +165,12 @@ public enum AppCommands {
         return URL(string: template.replacingOccurrences(of: "{query}", with: q))
     }
 
+    /// The app or site people mean by a spoken name ("vs code", "Chrome", "google mail").
+    public static func target(named spoken: String, in targets: [AppTarget]) -> AppTarget? {
+        let n = normalize(spoken)
+        return targets.first { $0.spokenNames.map(normalize).contains(n) }
+    }
+
     static func normalize(_ s: String) -> String {
         s.lowercased().filter { $0.isLetter || $0.isNumber }
     }
