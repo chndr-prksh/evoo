@@ -463,7 +463,8 @@ final class DictationController: ObservableObject {
         let showWords = settings.livePreview
         streaming.onWholeResult = { [weak self] raw, atPause in
             if showWords, let self, self.phase == .recording { self.live.show(raw) }
-            guard let self, let polisher = self.polisher, !raw.isEmpty else { return }
+            // A command is never polished, so don't spend the Mac's effort preparing a polish for it.
+            guard let self, !self.commandMode, let polisher = self.polisher, !raw.isEmpty else { return }
             let post = self.pipeline.postProcess(raw, language: self.settings.language, style: startStyle)
             // Mid-speech: polish the sentences already finished. At a pause: the last one too.
             if atPause { polisher.prefetchAll(post.text) } else { polisher.prefetch(post.text) }
@@ -474,7 +475,7 @@ final class DictationController: ObservableObject {
             // Up to 45 s the final text comes from the whole-recording transcript, so that is what gets
             // pre-polished (onWholeResult above); pieces only beyond that. Mixing the two meant nothing matched
             // at release (measured: 6.9 s of polish left for a 41 s dictation).
-            guard let self, let polisher = self.polisher,
+            guard let self, !self.commandMode, let polisher = self.polisher,
                   self.recorder.sampleCount > Int(StreamingDictation.wholeClipLimit * AudioRecorder.sampleRate)
             else { return }
             let post = self.pipeline.postProcess(raw, language: self.settings.language, style: startStyle)
