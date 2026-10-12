@@ -10,7 +10,7 @@ and then roughened the way speech recognition does (no capitals, stray commas, "
 The TEST set uses different phrasings and different apps/queries/names from the training set, so a good score
 means the model understood the request — not that it memorised a sentence.
 """
-import json, random, re, pathlib
+import json, sys, random, re, pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent
 TOOLS = json.loads((ROOT / "tools.json").read_text())["tools"]
@@ -31,8 +31,14 @@ def declaration(tool):
     return f"<start_function_declaration>declaration:{tool['name']}{{description:{E}{tool['description']}{E},parameters:{{{params}}}<end_function_declaration>"
 
 def prefix():
-    return ("<start_of_turn>developer\nYou are a model that can do function calling with the following functions"
-            + "".join(declaration(t) for t in TOOLS) + "<end_of_turn>\n")
+    """What every prompt starts with. The fine-tuned model has learned Evoo's tools, so it only needs their names
+    (~150 tokens). `--full` writes the complete declarations instead (~2,000 tokens: what an untrained model needs,
+    but twenty times slower to train on and to load)."""
+    if "--full" in sys.argv:
+        return ("<start_of_turn>developer\nYou are a model that can do function calling with the following functions"
+                + "".join(declaration(t) for t in TOOLS) + "<end_of_turn>\n")
+    return ("<start_of_turn>developer\nYou are a model that can do function calling with the following functions: "
+            + ", ".join(t["name"] for t in TOOLS) + "<end_of_turn>\n")
 
 def user_turn(text):
     return f"<start_of_turn>user\n{text}<end_of_turn>\n<start_of_turn>model\n"

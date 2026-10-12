@@ -1,6 +1,6 @@
 # Fine-tunes Evoo's tool-calling model (FunctionGemma 270M) on the examples from Tools/build_dataset.py, scores it
 # on phrasings it never saw, converts it to GGUF and publishes it as a release asset (never "latest").
-# Run by hand:  gh workflow run tools-train.yml -f iters=3000 -f version=v1
+# Run by hand:  gh workflow run tools-train.yml -f iters=2500 -f version=v1
 name: Train tools model
 
 on:
@@ -8,13 +8,13 @@ on:
     inputs:
       iters:
         description: Training steps (30 for a quick check of the pipeline)
-        default: "3000"
+        default: "2500"
       version:
         description: Release suffix, e.g. v1 (leave empty to keep the model as a run artifact only)
         default: ""
       batch:
         description: Examples per step
-        default: "4"
+        default: "8"
       eval_limit:
         description: How many test cases to score
         default: "344"
@@ -41,8 +41,11 @@ jobs:
       - name: Examples
         run: python Tools/build_dataset.py
 
-      - name: Before training
-        run: python Tools/eval_mlx.py --model unsloth/functiongemma-270m-it --limit 60 --show 3 | tail -6
+      - name: Before training (untrained model, given the full tool descriptions)
+        run: |
+          python Tools/build_dataset.py --full
+          python Tools/eval_mlx.py --model unsloth/functiongemma-270m-it --limit 60 --show 3 | tail -6
+          python Tools/build_dataset.py
 
       - name: Train
         run: |

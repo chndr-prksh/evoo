@@ -5,14 +5,14 @@ data: Tools/data
 adapter_path: Tools/out/adapter
 fine_tune_type: lora
 num_layers: -1
-batch_size: 4
-iters: 3000
+batch_size: 8
+iters: 2500
 learning_rate: 0.0002
 steps_per_report: 50
 steps_per_eval: 500
 val_batches: 20
 save_every: 500
-max_seq_length: 2400
+max_seq_length: 512
 mask_prompt: true
 lora_parameters:
   rank: 16
