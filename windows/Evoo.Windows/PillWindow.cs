@@ -35,7 +35,8 @@ internal sealed class PillWindow : Window
         for (var i = 0; i < levels.Length; i++)
             bars.Children.Add(new Rectangle { Width = 3, Height = 4, RadiusX = 1.5, RadiusY = 1.5, Fill = Brushes.White, Margin = new Thickness(1.5, 0, 1.5, 0), VerticalAlignment = VerticalAlignment.Center });
 
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Height = 26 };
+        // Centered: Windows gives even a borderless window a minimum width, wider than a short message.
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Height = 26, HorizontalAlignment = HorizontalAlignment.Center };
         row.Children.Add(dot);
         row.Children.Add(bars);
         row.Children.Add(label);
