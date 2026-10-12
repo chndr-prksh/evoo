@@ -34,10 +34,10 @@ def process(self, d):
 
 def loss(model, batch, lengths):
     inputs, targets = batch[:, :-1], batch[:, 1:]
-    if not hasattr(model, "lm_head") or not hasattr(model, "model"):
-        return trainer.default_loss(model, batch, lengths)
     hidden = model.model(inputs)[:, start:]
-    logits = model.lm_head(hidden)
+    # Gemma shares one table for reading and writing words; models that don't have their own output layer.
+    head = model.lm_head if "lm_head" in model else model.model.embed_tokens.as_linear
+    logits = head(hidden)
     steps = mx.arange(start + 1, targets.shape[1] + 1)
     mask = mx.logical_and(steps >= lengths[:, 0:1], steps <= lengths[:, 1:])
     ce = nn.losses.cross_entropy(logits, targets[:, start:]) * mask
