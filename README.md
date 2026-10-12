@@ -13,7 +13,7 @@ Hold `fn`, speak, release — clean text appears at your cursor in any app.
   </a>
 </p>
 
-**Windows (preview):** [download Evoo-windows.zip](https://github.com/chndr-prksh/evoo/releases/download/windows/Evoo-windows.zip) — hold Ctrl + Win to dictate. See [windows/](windows/) for what works and what doesn't yet.
+**Windows (preview):** [download Evoo-windows.zip](https://github.com/chndr-prksh/evoo/releases/download/windows/Evoo-windows.zip) — hold Ctrl + Win to dictate, with voice commands and optional on-device AI polish. See [windows/](windows/) for what works and what doesn't yet.
 
 Apple Silicon Mac (M1 or newer), macOS 14+. After downloading: unzip, drag **Evoo** to Applications, open it.
 The first time, macOS says it "could not verify" Evoo (it isn't signed with a paid Apple certificate) — open

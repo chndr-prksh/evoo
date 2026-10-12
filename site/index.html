@@ -233,7 +233,6 @@
   @media (prefers-reduced-motion: reduce) { .pill2 i { animation: none; } .grid .card { transition: none; } }
 
   /* Windows section */
-  .win { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: start; }
   @media (max-width: 900px) { .win { grid-template-columns: 1fr; gap: 32px; } }
   .win > * { min-width: 0; }
   .win-copy .lead { margin-bottom: 22px; }
@@ -248,6 +247,44 @@
   .win-steps b { color: var(--ink); }
   .win-steps li.honest { background: #fffbeb; border-color: #f3e3b3; }
   .win-steps li.honest::before { content: "i"; background: var(--amber); font-style: italic; font-family: Georgia, serif; }
+
+  /* Windows section, with pictures of the real app */
+  .win-head { display: flex; gap: 32px; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; margin-bottom: 26px; }
+  .win-head > div { min-width: 0; } .win-head .lead { margin-bottom: 0; }
+  .win-cta .btn svg { width: 17px; height: 17px; } .win-cta .fine { margin: 10px 0 0; }
+  .win-keys { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+  @media (max-width: 760px) { .win-keys { grid-template-columns: 1fr; } }
+  .win-keys > div { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: grid; gap: 3px; min-width: 0; }
+  .win-keys .k { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+  .win-keys kbd { font: 600 12.5px/1 ui-rounded, "Segoe UI", system-ui, sans-serif; background: var(--soft); border: 1px solid #d5d8df; border-bottom-width: 2px; border-radius: 7px; padding: 6px 9px; color: var(--ink); }
+  .win-keys b { font-size: 15.5px; } .win-keys small { color: var(--ink-3); font-size: 13.5px; }
+  .win-feats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  @media (max-width: 980px) { .win-feats { grid-template-columns: 1fr; } }
+  .wf { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 14px 14px 18px; min-width: 0; display: flex; flex-direction: column; }
+  .wf h3 { margin: 16px 6px 6px; font-size: 18px; letter-spacing: -.01em; } .wf > p { margin: 0 6px 12px; color: var(--ink-2); font-size: 15px; }
+  .desk { border-radius: 11px; min-height: 190px; padding: 14px 14px 12px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 12px;
+    background: radial-gradient(520px 240px at 20% 0%, #5aa0ff 0%, transparent 60%), radial-gradient(420px 260px at 100% 100%, #1f4fd8 0%, transparent 65%), #2f6fe8; }
+  .desk.stack { justify-content: center; gap: 12px; }
+  .desk img { height: 40px; width: auto; max-width: 100%; filter: drop-shadow(0 6px 14px rgba(0,0,0,.28)); }
+  .desk .doc { align-self: stretch; background: #fff; border-radius: 8px; box-shadow: 0 8px 22px rgba(10,30,90,.25); padding: 10px 12px 12px; min-height: 92px; }
+  .desk .app { display: block; font-size: 11.5px; color: var(--ink-3); border-bottom: 1px solid var(--line); padding-bottom: 6px; margin-bottom: 8px; }
+  .desk .doc p { margin: 0; font-size: 14.5px; line-height: 1.45; color: var(--ink); }
+  .desk .doc i { display: inline-block; width: 2px; height: 1.05em; background: var(--accent); vertical-align: -3px; margin-left: 2px; animation: blink 1s steps(1) infinite; }
+  .wf .ex { margin: auto 6px 0; font-size: 13.5px; background: var(--soft); border-radius: 10px; padding: 10px 12px; color: var(--ink-2); line-height: 1.45; }
+  .wf .ex span { display: block; font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 2px; }
+  .wf .ex span + * , .wf .ex b { color: var(--ink); } .wf .ex span:nth-of-type(2) { margin-top: 8px; }
+  .chips { list-style: none; margin: auto 6px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips li { font-size: 13.5px; background: var(--soft); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; color: var(--ink); }
+  .win-setup { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 40px; align-items: start; margin-top: 44px; }
+  @media (max-width: 900px) { .win-setup { grid-template-columns: 1fr; gap: 28px; } }
+  .win-setup > * { min-width: 0; }
+  .win-h3 { margin: 0 0 14px; font-size: 22px; letter-spacing: -.015em; }
+  .shot { margin: 0; }
+  .shot .bar { display: flex; align-items: center; gap: 8px; background: #f3f3f3; border: 1px solid #d9dbe2; border-bottom: 0; border-radius: 10px 10px 0 0; padding: 8px 12px; font-size: 12.5px; color: var(--ink-2); }
+  .shot .bar i { width: 14px; height: 14px; border-radius: 4px; background: #111; flex: none; } .shot .bar em { margin-left: auto; font-style: normal; letter-spacing: .5em; color: var(--ink-3); }
+  .shot .scroll { border: 1px solid #d9dbe2; border-radius: 0 0 10px 10px; max-height: 520px; overflow-y: auto; background: #fff; box-shadow: var(--shadow); }
+  .shot img { display: block; width: 100%; height: auto; }
+  .shot figcaption { font-size: 13px; color: var(--ink-3); margin-top: 10px; text-align: center; }
 </style>
 </head>
 <body>
@@ -436,27 +473,82 @@
 
 <section class="alt" id="windows">
   <div class="wrap">
-    <div class="win">
-      <div class="win-copy">
+    <div class="win-head">
+      <div>
         <p class="kicker">Windows · Preview</p>
         <h2>Evoo on your PC.</h2>
-        <p class="lead">The same on-device speech model and the same corrections as the Mac. Hold two keys, speak, let go — the text is typed wherever your cursor is.</p>
-        <p class="keys light">Hold <kbd>Ctrl</kbd> <kbd>⊞ Win</kbd> and speak. <span>Esc cancels.</span></p>
-        <div class="win-actions">
-          <a class="btn btn-primary" href="https://github.com/chndr-prksh/evoo/releases/download/windows/Evoo-windows.zip">
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.1l7.4-1v7.2H3V5.1zm8.3-1.1L21 2.6v8.7h-9.7V4zM3 12.2h7.4v7.2L3 18.4v-6.2zm8.3 0H21v8.7l-9.7-1.4v-7.3z"/></svg>
-            Download for Windows
-          </a>
-          <a class="btn btn-ghost" href="https://github.com/chndr-prksh/evoo/tree/main/windows">Source</a>
-        </div>
-        <p class="fine" style="margin:14px 0 0">Windows 10 or 11, 64-bit · 75 MB download · plus a one-time 670 MB speech model</p>
+        <p class="lead">Dictate, give voice commands and polish your words with AI — all on the PC, in any app. The pictures below are the real app.</p>
       </div>
-      <ol class="win-steps">
-        <li><b>Unzip and run Evoo.exe.</b> Windows SmartScreen warns about apps it doesn't know yet: click <b>More info</b>, then <b>Run anyway</b>. The build isn't code-signed.</li>
-        <li><b>Download the speech model</b> from Evoo's setup window. It's a one-time 670 MB download; after that Evoo works offline.</li>
-        <li><b>Dictate anywhere.</b> Click into any text box, hold Ctrl + Win, and speak. Evoo lives next to the clock; right-click its icon to quit.</li>
-        <li class="honest"><b>What “preview” means.</b> It passes its automated checks on Windows, but it's brand new and real people haven't used it yet, so expect rough edges. AI polish, voice commands, lists and other languages are Mac-only for now. <a href="https://github.com/chndr-prksh/evoo/issues">Tell us what breaks.</a></li>
-      </ol>
+      <div class="win-cta">
+        <a class="btn btn-primary" href="https://github.com/chndr-prksh/evoo/releases/download/windows/Evoo-windows.zip">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.1l7.4-1v7.2H3V5.1zm8.3-1.1L21 2.6v8.7h-9.7V4zM3 12.2h7.4v7.2L3 18.4v-6.2zm8.3 0H21v8.7l-9.7-1.4v-7.3z"/></svg>
+          Download for Windows
+        </a>
+        <p class="fine">Windows 10 or 11, 64-bit · 90 MB · free</p>
+      </div>
+    </div>
+
+    <div class="win-keys">
+      <div><span class="k"><kbd>Ctrl</kbd><kbd>⊞ Win</kbd></span><b>Dictate</b><small>Hold, speak, let go.</small></div>
+      <div><span class="k"><kbd>Ctrl</kbd><kbd>⊞ Win</kbd><kbd>Shift</kbd></span><b>Command</b><small>Nothing is typed; Evoo acts.</small></div>
+      <div><span class="k"><kbd>Esc</kbd></span><b>Cancel</b><small>While you're holding.</small></div>
+    </div>
+
+    <div class="win-feats">
+      <article class="wf">
+        <div class="desk">
+          <div class="doc"><span class="app">Outlook · New message</span><p>Let's meet day after tomorrow at 4 PM.<i></i></p></div>
+          <img src="windows/pill-listening.png" alt="Evoo's pill on Windows while listening: a red dot and moving bars" width="135" height="40" loading="lazy">
+        </div>
+        <h3>Dictate anywhere</h3>
+        <p>Hold Ctrl + Win in any text box and speak. Change your mind mid-sentence and Evoo keeps the final version.</p>
+        <div class="ex"><span>You say</span>“Let's meet tomorrow, no, day after tomorrow at 4 PM”<span>It types</span><b>Let's meet day after tomorrow at 4 PM.</b></div>
+      </article>
+
+      <article class="wf">
+        <div class="desk stack">
+          <img src="windows/pill-command.png" alt="The pill in command mode" width="204" height="40" loading="lazy">
+          <img src="windows/pill-step.png" alt="The pill showing step 1 of 2: Close the tab" width="136" height="40" loading="lazy">
+          <img src="windows/pill-done.png" alt="The pill when done: Close the tab, then Switch to Chrome" width="227" height="40" loading="lazy">
+        </div>
+        <h3>Voice commands, chained</h3>
+        <p>Say what to do — one thing or several. Evoo runs each step in order and shows it. Add Shift to make sure nothing is typed.</p>
+        <ul class="chips">
+          <li>“Close the tab and switch to Chrome”</li>
+          <li>“Copy, then open a new tab and paste”</li>
+          <li>“Volume thirty” · “Mute”</li>
+          <li>“Open Notepad” · “Snap this to the left”</li>
+          <li>“Search Google for flights to Delhi”</li>
+        </ul>
+      </article>
+
+      <article class="wf">
+        <div class="desk">
+          <div class="doc"><span class="app">Slack · #launch</span><p>The launch is actually going fine, and we just need to test the payment page.<i></i></p></div>
+          <img src="windows/pill-polishing.png" alt="The pill while the AI polishes" width="116" height="40" loading="lazy">
+        </div>
+        <h3>AI polish, on the PC</h3>
+        <p>An optional small AI model tidies grammar and leftover fillers after Evoo's rules. It runs on your computer; if it takes over 4 seconds, your text goes in without it.</p>
+        <div class="ex"><span>You say</span>“I mean the launch is actually going fine, we just need to, like, test the the payment page”<span>It types</span><b>The launch is actually going fine, and we just need to test the payment page.</b></div>
+      </article>
+    </div>
+
+    <div class="win-setup">
+      <figure class="shot">
+        <div class="bar"><i></i><span>Evoo</span><em>— ▢ ✕</em></div>
+        <div class="scroll"><img src="windows/setup.png" alt="Evoo's setup window on Windows: speech model, microphone, dictate, AI polish and voice commands" width="527" loading="lazy"></div>
+        <figcaption>Evoo's setup window. Everything is one click; nothing needs an account.</figcaption>
+      </figure>
+      <div>
+        <h3 class="win-h3">Set up in three steps</h3>
+        <ol class="win-steps">
+          <li><b>Unzip and run Evoo.exe.</b> Windows SmartScreen warns about apps it doesn't know yet: click <b>More info</b>, then <b>Run anyway</b>. The build isn't code-signed.</li>
+          <li><b>Download the speech model</b> from the setup window (670 MB, once). AI polish is a second, optional download (397 MB).</li>
+          <li><b>Hold Ctrl + Win and speak</b> in any app. Evoo lives next to the clock; right-click its icon to quit.</li>
+          <li class="honest"><b>What “preview” means.</b> It passes its automated checks on Windows — including turning spoken audio into corrected, polished text — but it's brand new and real people haven't used it yet, so expect rough edges. Lists, number formatting and other languages are Mac-only for now. <a href="https://github.com/chndr-prksh/evoo/issues">Tell us what breaks.</a></li>
+        </ol>
+        <p class="fine" style="margin-top:14px"><a href="https://github.com/chndr-prksh/evoo/tree/main/windows">Source code</a> · Speech: Parakeet v3 · Polish: Qwen3 0.6B · both run on your PC</p>
+      </div>
     </div>
   </div>
 </section>
@@ -494,7 +586,7 @@
     <details class="q"><summary>Is Evoo really free?</summary><p>Yes. No subscription, no trial, no account. It's open source under Apache-2.0, and every model it uses is free and open-weight.</p></details>
     <details class="q"><summary>Is it safe? macOS says it “could not verify” it.</summary><p>That message appears for every app not signed with a paid Apple developer certificate — it doesn't mean anything was detected. You can read all of Evoo's code on GitHub, releases are built there automatically, and the one-line install checks the download's checksum. Evoo only goes online to download its models and check GitHub for updates.</p></details>
     <details class="q"><summary>Does the AI polish understand context, or just grammar?</summary><p>Both. Besides fillers, self-corrections and grammar, it fixes words the speech model misheard when the meaning makes it obvious — “Jack and Gill went up the hell” becomes “Jack and Jill went up the hill”, “I need to by milk” becomes “I need to buy milk”. On Macs with 16 GB or more it also reads the sentences you said just before and the text already in the box, so it knows the topic. It never changes a word that already makes sense, and it all runs on your Mac.</p></details>
-    <details class="q"><summary>Is there a Windows version?</summary><p>Yes, as a preview: <a href="#windows">download it here</a>. Hold Ctrl + Win, speak, and let go. It uses the same on-device speech model and correction rules as the Mac, on 64-bit Windows 10 or 11. Windows SmartScreen will warn about it because the build isn't code-signed yet. AI polish, voice commands, lists and other languages are Mac-only for now.</p></details>
+    <details class="q"><summary>Is there a Windows version?</summary><p>Yes, as a preview: <a href="#windows">download it here</a>. Hold Ctrl + Win, speak, and let go. It has the same on-device speech model and correction rules as the Mac, plus voice commands (including several in one breath) and optional AI polish, on 64-bit Windows 10 or 11. Windows SmartScreen will warn about it because the build isn't code-signed yet. Lists, number formatting and other languages are Mac-only for now.</p></details>
     <details class="q"><summary>Which Macs does it work on?</summary><p>Apple Silicon Macs (M1 or newer) with macOS 14 Sonoma or later. 8 GB of memory is enough for dictation; 16 GB gives the optional local AI (rewrite, reply, Class Notes) more room.</p></details>
     <details class="q"><summary>Which apps does it work in?</summary><p>Anywhere you can type: Chrome, Safari, Slack, WhatsApp, Gmail, Notion, Notes, Word, VS Code, Cursor, Terminal and more. It formats for each — Markdown in editors, plain bullets in chat, and never a line break in Terminal.</p></details>
     <details class="q"><summary>I use Wispr Flow or Apple Dictation — can I keep them?</summary><p>Yes, but don't run two fn-based dictation apps at once; both will react to the key. Set <span class="path">Keyboard › Press 🌐 key to › Do Nothing</span> so Apple's dictation doesn't pop up too.</p></details>
