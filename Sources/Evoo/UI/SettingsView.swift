@@ -205,6 +205,28 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Smart commands (preview)") {
+                Text("A small on-device model that understands commands said your own way — “it's too bright in here”, “I'm done with Safari”, “email Priya about the offsite”. Hold fn + Control and speak. It's a preview: right about four times in five, and it never types what it didn't understand.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if let progress = controller.toolsDownloadProgress {
+                    ProgressView(value: progress) { Text("Downloading \(Int(progress * 100))%") }
+                } else if controller.toolsModelInstalled {
+                    HStack {
+                        Label("Installed", systemImage: "checkmark").foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Remove") { controller.removeToolsModel() }
+                    }
+                } else {
+                    HStack {
+                        Text("290 MB, once").foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Download") { controller.downloadToolsModel() }
+                    }
+                }
+                Text("Built on Google's FunctionGemma, under the [Gemma Terms of Use](https://ai.google.dev/gemma/terms).")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("Smart cleanup (local AI)") {
                 if SystemInfo.canRunSmartCleanup {
                     Toggle("Polish every dictation with local AI", isOn: $settings.smartCleanup)

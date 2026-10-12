@@ -805,8 +805,32 @@ final class DictationController: ObservableObject {
 
     private let toolCaller = ToolCaller()
     /// Evoo's fine-tuned tool-calling model (optional download). Without the file, command mode uses the rules only.
-    static var toolsModel: URL { ModelPaths.root.appendingPathComponent("tools/evoo-tools-q8_0.gguf") }
-    var toolsModelInstalled: Bool { FileManager.default.fileExists(atPath: Self.toolsModel.path) }
+    static var toolsModel: URL { ModelDownloader.Tools.file }
+    var toolsModelInstalled: Bool { ModelDownloader.Tools.isInstalled }
+    @Published private(set) var toolsDownloadProgress: Double?
+
+    func downloadToolsModel() {
+        guard toolsDownloadProgress == nil, !toolsModelInstalled else { return }
+        toolsDownloadProgress = 0
+        Task {
+            do {
+                try await ModelDownloader.download(from: ModelDownloader.Tools.url, to: ModelDownloader.Tools.file,
+                                                   sha256: ModelDownloader.Tools.sha256) { p in
+                    Task { @MainActor in if self.toolsDownloadProgress != nil { self.toolsDownloadProgress = p } }
+                }
+                toolsDownloadProgress = nil
+            } catch {
+                toolsDownloadProgress = nil
+                show("Download failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func removeToolsModel() {
+        toolCaller.unload()
+        try? FileManager.default.removeItem(at: Self.toolsModel)
+        objectWillChange.send()
+    }
 
     /// Command mode, and the fixed phrases didn't match: the tool-calling model works out what was meant
     /// ("can you make it a bit louder and bring up my email") and Evoo carries out each step in turn.

@@ -17,6 +17,7 @@ struct WelcomeView: View {
     @State private var wantPolish = true
     @State private var wantLogin = true
     @State private var wantFast = false
+    @State private var wantTools = false
     @State private var applied = false
     private let pages = 5
     private let refresh = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -175,6 +176,10 @@ struct WelcomeView: View {
                          : "Fixes grammar and messy phrasing after Evoo's rules — while you speak, so it's ready about a second after you let go.",
                      state: settings.smartCleanup ? .done : .off, isOn: $wantPolish, locked: false)
                 .disabled(!wantAI)
+            SetupRow(icon: "command", title: "Smart commands (preview · 290 MB)",
+                     detail: "Understands commands said your own way with fn + Control — “it's too bright in here”. Built on Google's FunctionGemma (Gemma Terms of Use).",
+                     state: controller.toolsDownloadProgress != nil ? .working : controller.toolsModelInstalled ? .done : .off,
+                     isOn: $wantTools, locked: false, progress: controller.toolsDownloadProgress)
             SetupRow(icon: "brain", title: "Learn names and words",
                      detail: "From your screen and your corrections — kept only on this Mac.",
                      state: applied ? .done : .off, isOn: .constant(true), locked: true)
@@ -202,6 +207,7 @@ struct WelcomeView: View {
         settings.showTips = true
         settings.refinerModel = SystemInfo.isLowMemory ? .qwen3_0_6b : DictationController.notesModel
         if wantLogin, !LoginItem.isEnabled { try? LoginItem.set(true) }
+        if wantTools { controller.downloadToolsModel() }
         if wantAI {
             if controller.refinerInstalled {
                 settings.smartCleanup = wantPolish

@@ -1,0 +1,54 @@
+<!doctype html><meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { width: 1200px; height: 1200px; background: #fff; color: #0f1115; font: 400 26px/1.4 -apple-system, "SF Pro Display", "Inter", system-ui, sans-serif; padding: 64px 68px; display: flex; flex-direction: column; }
+  .brand { display: flex; align-items: center; gap: 14px; font-weight: 700; font-size: 30px; letter-spacing: -.01em; }
+  .brand svg { width: 46px; height: 46px; }
+  .brand span { margin-left: auto; font-weight: 500; font-size: 21px; color: #6b7280; }
+  h1 { font-size: 68px; line-height: 1.04; letter-spacing: -.035em; font-weight: 800; margin: 46px 0 14px; }
+  h1 em { font-style: normal; color: #c62828; }
+  .sub { font-size: 27px; color: #454b57; max-width: 1000px; }
+  .scores { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 40px; }
+  .score { border-radius: 26px; padding: 30px 34px 32px; border: 2px solid #e7e8ec; background: #f6f7f9; }
+  .score.field { background: #0f1115; border-color: #0f1115; color: #fff; }
+  .tag { font-size: 18px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: #6b7280; }
+  .field .tag { color: #9aa3b5; }
+  .num { font-size: 104px; font-weight: 800; letter-spacing: -.045em; line-height: 1; margin: 14px 0 6px; font-variant-numeric: tabular-nums; }
+  .num small { font-size: 40px; font-weight: 600; letter-spacing: -.02em; color: #6b7280; }
+  .field .num small { color: #9aa3b5; }
+  .what { font-size: 22px; color: #454b57; line-height: 1.38; }
+  .field .what { color: #c5cad6; }
+  .what b { color: inherit; font-weight: 650; }
+  .rows { margin-top: 30px; display: grid; gap: 12px; }
+  .row { display: grid; grid-template-columns: 1fr 44px 1fr; align-items: center; border: 2px solid #e7e8ec; border-radius: 18px; padding: 15px 22px; font-size: 22.5px; }
+  .row .l { color: #6b7280; font-size: 15.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; display: block; margin-bottom: 2px; }
+  .row .arrow { text-align: center; color: #9aa3b5; font-size: 28px; }
+  .row .bad { color: #c62828; font-weight: 600; }
+  .foot { margin-top: auto; padding-top: 24px; display: flex; align-items: baseline; gap: 16px; font-size: 21px; color: #6b7280; }
+  .foot b { color: #0f1115; font-weight: 700; }
+  .foot span { margin-left: auto; }
+</style>
+<div class="brand">
+  <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#111"/><g stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M9 13v6M13 10v12M17 8v16M21 11v10M25 14v4"/></g></svg>
+  Evoo <span>Free, open-source voice dictation that runs on your Mac</span>
+</div>
+<h1>Our evals said 99%.<br><em>Real use said 0 for 15.</em></h1>
+<p class="sub">Same app. The first score is the test we wrote. The second is what happened when a real person talked to it.</p>
+<div class="scores">
+  <div class="score">
+    <div class="tag">Lab eval · what developers measure</div>
+    <div class="num">68<small> / 69</small></div>
+    <div class="what">A clean computer voice reading <b>sentences we chose</b>, phrased the way we expected.</div>
+  </div>
+  <div class="score field">
+    <div class="tag">Field eval · what users did</div>
+    <div class="num">0<small> / 15 → 7 / 15</small></div>
+    <div class="what">Every case is a <b>real failure report</b>, kept exactly as it was said. 7 are fixed. 8 still fail.</div>
+  </div>
+</div>
+<div class="rows">
+  <div class="row"><div><span class="l">What was said</span>“ship an Android app”</div><div class="arrow">→</div><div><span class="l">What it wrote</span><span class="bad">“sip an Android API”</span></div></div>
+  <div class="row"><div><span class="l">What was said</span>“Copy, then open new tab and then paste”</div><div class="arrow">→</div><div><span class="l">What it did</span><span class="bad">Typed the sentence. Ran nothing.</span></div></div>
+  <div class="row"><div><span class="l">What was said</span>“Multi-tab, I'm sorry, multi-command not working”</div><div class="arrow">→</div><div><span class="l">What it wrote</span><span class="bad">Kept the mistake and the apology</span></div></div>
+</div>
+<div class="foot"><b>The lesson:</b> a test set you write yourself mostly measures your own imagination. <span>chndr-prksh.github.io/evoo</span></div>
