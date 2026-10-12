@@ -21,8 +21,34 @@ public enum ToolStep: Equatable, Sendable {
 
 public enum ToolPlan {
     /// Turns the model's calls into steps. `targets`: the apps and sites Evoo knows (installed apps included).
-    public static func steps(_ calls: [ToolCall], targets: [AppTarget], now: Date = Date()) -> [ToolStep] {
-        calls.prefix(CommandChain.maxSteps).map { step($0, targets: targets, now: now) }
+    /// `said`: what the person said — a call whose words they never said is refused instead of carried out.
+    public static func steps(_ calls: [ToolCall], said: String? = nil, targets: [AppTarget], now: Date = Date()) -> [ToolStep] {
+        calls.prefix(CommandChain.maxSteps).map { call in
+            if let said, !isGrounded(call, in: said) { return .unknown("Didn't catch that — try saying it another way") }
+            return step(call, targets: targets, now: now)
+        }
+    }
+
+    /// Arguments that are the person's own words (a name, a search, a note) and so must come from what they said.
+    static let spokenArguments: Set<String> = ["name", "site", "query", "label", "text", "task", "title", "to", "subject", "body",
+                                               "destination", "intent", "instruction", "language", "when"]
+
+    /// A small model sometimes invents an argument ("restaurants in New York" for "restaurants open now").
+    /// True when every word of every spoken argument was actually said.
+    public static func isGrounded(_ call: ToolCall, in said: String) -> Bool {
+        let words = { (s: String) in
+            s.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
+        }
+        let heard = Set(words(said))
+        let squeezed = words(said).joined()
+        for (key, value) in call.args where spokenArguments.contains(key) {
+            // web_search's site is one of a fixed list ("maps" for "on the map"), not the person's words.
+            if call.name == "web_search", key == "site" { continue }
+            // "text edit" said, "TextEdit" written: compare without spaces too.
+            if squeezed.contains(words(value).joined()) { continue }
+            if !words(value).allSatisfy(heard.contains) { return false }
+        }
+        return true
     }
 
     public static func step(_ call: ToolCall, targets: [AppTarget], now: Date = Date()) -> ToolStep {

@@ -1075,4 +1075,14 @@ struct ToolPlanTests {
             #expect(title == "Lunch with Priya" && minutes == 60)
         } else { Issue.record("add_event") }
     }
+
+    @Test func refusesWordsNobodySaid() {
+        let search = ToolCall(name: "web_search", args: ["query": "restaurants in New York", "site": "google"])
+        #expect(!ToolPlan.isGrounded(search, in: "run a google search on restaurants open now"))
+        #expect(ToolPlan.isGrounded(ToolCall(name: "web_search", args: ["query": "restaurants open now", "site": "maps"]), in: "find restaurants open now on the map"))
+        #expect(ToolPlan.isGrounded(ToolCall(name: "open_app", args: ["name": "TextEdit"]), in: "get me into text edit"))
+        #expect(ToolPlan.isGrounded(ToolCall(name: "set_volume", args: ["percent": "30"]), in: "volume thirty"))
+        let steps = ToolPlan.steps([search], said: "run a google search on restaurants open now", targets: targets)
+        if case .unknown = steps[0] {} else { Issue.record("an invented search should be refused") }
+    }
 }

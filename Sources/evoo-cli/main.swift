@@ -503,7 +503,7 @@ case "tools-eval":
         let one: (String) -> Bool = { MacCommands.parse($0) != nil || AppCommands.parse($0, targets: ruleTargets) != nil }
         return one(t) || CommandChain.parts(t, isCommand: one) != nil
     }
-    var rulesRight = 0
+    var rulesRight = 0, refused = 0, wrong = 0, refusedRight = 0
     let loadTime = try await clock.measure { try await caller.load(path: gguf, prefix: prefixText) }
     print("loaded in \(loadTime.ms) ms · tool list: \(caller.prefixTokens) tokens · \(rows.count) cases")
     var full = 0, toolsRight = 0, totalMs = 0
@@ -520,6 +520,9 @@ case "tools-eval":
         if names { toolsRight += 1 }
         let kind = want.count > 1 ? "chains" : want[0].name
         if rulesKnow(row.user) == (want.first?.name != "no_action") { rulesRight += 1 }
+        // After the safety check (a call with words the person never said is refused): right, refused, or wrong.
+        let safe = got.allSatisfy { ToolPlan.isGrounded($0, in: row.user) }
+        if !ok { if !safe || got.isEmpty { refused += 1 } else { wrong += 1 } } else if !safe { refusedRight += 1 }
         byKind[kind, default: (0, 0)].n += 1
         if ok { byKind[kind, default: (0, 0)].ok += 1 }
         if show, !ok {
@@ -532,6 +535,7 @@ case "tools-eval":
     }
     print(String(format: "\nTOOLS fully right %d/%d (%.1f%%) · right tool(s), any arguments %d/%d (%.1f%%) · %d ms avg",
                  full, rows.count, Double(full) / Double(rows.count) * 100, toolsRight, rows.count, Double(toolsRight) / Double(rows.count) * 100, totalMs / max(1, rows.count)))
+    print("WITH THE SAFETY CHECK: right \(full - refusedRight) · refused (asks you to rephrase) \(refused + refusedRight) · wrong action \(wrong)  of \(rows.count)")
     print("RULES recognise it as a command (or rightly not) \(rulesRight)/\(rows.count) — whether they then do the right thing isn't checked")
     caller.unload()
 
@@ -541,13 +545,13 @@ case "tools":
     let caller = ToolCaller()
     try await caller.load(path: gguf, prefix: ToolCall.prefix)
     let known = AppCommands.builtIn + ["Slack", "Safari", "Notes", "Mail", "Calendar", "Finder", "Music", "Messages", "Chrome"].map { AppTarget(name: $0, bundleID: "x") }
-    for said in args.dropFirst().filter({ !$0.hasPrefix("--") && $0 != gguf }) {
+    for said in args.filter({ !$0.hasPrefix("--") && $0 != gguf && $0 != "tools" }) {
         var raw = ""
         let t = try await clock.measure { raw = try await caller.complete(TextCleaner.clean(said)) }
         let calls = ToolCall.parse(raw)
         print("“\(said)” · \(t.ms) ms")
         if calls.isEmpty { print("   no call: \(raw.prefix(100))") }
-        for (call, step) in zip(calls, ToolPlan.steps(calls, targets: known)) { print("   \(call.name)\(call.args) → \(step)") }
+        for (call, step) in zip(calls, ToolPlan.steps(calls, said: said, targets: known)) { print("   \(call.name)\(call.args) → \(step)") }
     }
     caller.unload()
 

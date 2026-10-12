@@ -824,7 +824,7 @@ final class DictationController: ObservableObject {
         }
         guard !Task.isCancelled, session == self.session else { return true }
         let targets = InstalledApps.shared.targets(custom: settings.customApps)
-        let steps = ToolPlan.steps(calls, targets: targets)
+        let steps = ToolPlan.steps(calls, said: said, targets: targets)
         guard steps.contains(where: { $0 != .nothing }) else { return false }
         markUsed("tools")
         for (i, step) in steps.enumerated() {
