@@ -47,13 +47,18 @@ internal static class Program
         Save(window.Page, System.Windows.Media.Brushes.White, 28, Path.Combine(folder, "setup.png"));
         window.Hide();
 
-        var pill = new PillWindow();
+        PillWindow pill = null!;
         var wave = new[] { 0.2f, 0.5f, 0.9f, 0.6f, 0.3f, 0.7f, 1f, 0.55f, 0.25f, 0.6f, 0.85f, 0.45f, 0.3f, 0.5f };
         void Shot(string name, Action state)
         {
+            // A fresh pill for each picture: one that has just changed size is briefly drawn at its old width.
+            pill = new PillWindow();
             state();
             Settle();
+            pill.UpdateLayout();
+            Settle();
             Save(pill.Body, null, 0, Path.Combine(folder, name));
+            pill.HidePill();
         }
         Shot("pill-listening.png", () => { pill.ShowListening(); foreach (var level in wave) pill.SetLevel(level); });
         Shot("pill-command.png", () => { pill.ShowListening(command: true); foreach (var level in wave) pill.SetLevel(level); });
@@ -62,7 +67,6 @@ internal static class Program
         Shot("pill-step.png", () => pill.ShowWorking("1/2 · Close the tab"));
         Shot("pill-done.png", () => pill.ShowMessage("Close the tab → Switch to Chrome"));
         Shot("pill-volume.png", () => pill.ShowMessage("Volume 30%"));
-        pill.HidePill();
         app.Shutdown();
         return 0;
     }
