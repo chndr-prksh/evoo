@@ -1063,7 +1063,7 @@ struct ToolPlanTests {
 
     @Test func timersEmailAndDirections() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
-        #expect(step("set_timer", ["minutes": "10", "label": "pasta"]) == .mac(.reminder(task: "Pasta", due: now.addingTimeInterval(600))))
+        #expect(step("set_timer", ["minutes": "10", "label": "pasta"]) == .mac(.alarm(label: "Pasta", at: now.addingTimeInterval(600))))
         if case let .app(.openURL(url)) = step("compose_email", ["to": "raj@example.com", "subject": "lunch plans", "body": "see you at 1"]) {
             #expect(url.absoluteString == "mailto:raj@example.com?subject=Lunch%20plans&body=See%20you%20at%201")
         } else { Issue.record("compose_email") }
@@ -1099,5 +1099,37 @@ struct FullStopTests {
         #expect(DictationFormatter.dropLoneFullStop("We need:\n- Milk\n- Eggs.") == "We need:\n- Milk\n- Eggs.")
         #expect(DictationFormatter.dropLoneFullStop("It costs 4.5 dollars.") == "It costs 4.5 dollars")
         #expect(DictationFormatter.dropLoneFullStop("Is it ready? Send it over.") == "Is it ready? Send it over.")
+    }
+}
+
+struct AlarmTests {
+    let now = Date()
+
+    @Test func timersByVoice() {
+        #expect(MacCommands.parse("Set a timer for 15 minutes.", now: now) == .alarm(label: "15-minute timer", at: now.addingTimeInterval(900)))
+        #expect(MacCommands.parse("set a timer for fifteen minutes", now: now) == .alarm(label: "15-minute timer", at: now.addingTimeInterval(900)))
+        #expect(MacCommands.parse("ten minute timer for the pasta", now: now) == .alarm(label: "The pasta", at: now.addingTimeInterval(600)))
+        #expect(MacCommands.parse("start a 2 hour timer", now: now) == .alarm(label: "2-hour timer", at: now.addingTimeInterval(7200)))
+        #expect(MacCommands.parse("cancel all alarms") == .cancelAlarms)
+        #expect(MacCommands.parse("stop the timer") == .cancelAlarms)
+    }
+
+    @Test func alarmsAreInTheFuture() {
+        for said in ["set an alarm for 7 AM", "wake me up at 6:30 in the morning", "alarm at 11 pm", "Set an alarm for 5:45 PM."] {
+            guard case let .alarm(label, date)? = MacCommands.parse(said, now: now) else { Issue.record("\(said)"); continue }
+            #expect(label == "Alarm", "\(said)")
+            #expect(date > now && date < now.addingTimeInterval(24 * 3600 + 60), "\(said) → \(date)")
+        }
+        if case let .alarm(_, date)? = MacCommands.parse("set an alarm for 7 AM", now: now) {
+            #expect(Calendar.current.component(.hour, from: date) == 7 && Calendar.current.component(.minute, from: date) == 0)
+        }
+        if case let .alarm(label, date)? = MacCommands.parse("wake me up at 6:30 in the evening", now: now) {
+            #expect(label == "Alarm" && Calendar.current.component(.hour, from: date) == 18)
+        } else { Issue.record("evening alarm") }
+        if case let .alarm(label, _)? = MacCommands.parse("set an alarm for 8 am to call the bank", now: now) { #expect(label == "Call the bank") }
+        else { Issue.record("labelled alarm") }
+        // Not alarms: ordinary sentences, and an alarm with no time.
+        #expect(MacCommands.parse("the alarm was really loud this morning") == nil)
+        #expect(MacCommands.parse("set an alarm") == nil)
     }
 }

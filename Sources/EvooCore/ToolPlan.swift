@@ -31,7 +31,7 @@ public enum ToolPlan {
 
     /// Arguments that are the person's own words (a name, a search, a note) and so must come from what they said.
     static let spokenArguments: Set<String> = ["name", "site", "query", "label", "text", "task", "title", "to", "subject", "body",
-                                               "destination", "intent", "instruction", "language", "when"]
+                                               "destination", "intent", "instruction", "language", "when", "time"]
 
     /// A small model sometimes invents an argument ("restaurants in New York" for "restaurants open now").
     /// True when every word of every spoken argument was actually said.
@@ -129,10 +129,16 @@ public enum ToolPlan {
             let minutes = call.int("minutes") ?? MacCommands.defaultMinutes(for: title)
             return .mac(.event(title: MacCommands.capitalizedFirst(title), start: start, minutes: minutes))
         case "set_timer":
-            // A reminder that goes off in N minutes: it shows up (and rings) on every Apple device.
             guard let minutes = call.int("minutes"), minutes > 0 else { return missing }
             let label = text("label").map(MacCommands.capitalizedFirst) ?? "\(minutes)-minute timer"
-            return .mac(.reminder(task: label, due: now.addingTimeInterval(TimeInterval(minutes * 60))))
+            return .mac(.alarm(label: label, at: now.addingTimeInterval(TimeInterval(minutes * 60))))
+        case "set_alarm", "add_alarm": // the current model sometimes names it "add_alarm"
+            guard let time = text("time") ?? text("when"), let date = MacCommands.splitDate(time, now: now).1 else {
+                return .unknown("What time? Say “set an alarm for 7 AM”")
+            }
+            return .mac(.alarm(label: text("label").map(MacCommands.capitalizedFirst) ?? "Alarm", at: MacCommands.nextOccurrence(date, now: now)))
+        case "cancel_alarms":
+            return .mac(.cancelAlarms)
         case "save_note":
             return text("text").map { .mac(.note(MacCommands.capitalizedFirst($0))) } ?? missing
         case "search_history":

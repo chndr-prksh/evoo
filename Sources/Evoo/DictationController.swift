@@ -26,6 +26,8 @@ final class DictationController: ObservableObject {
     let live = LivePreviewModel()
     /// fn + ⌃: everything said in this recording is a command (or a chain of them), never typed as text.
     private var commandMode = false
+    /// What the speech model has made of this recording so far (the words shown above the pill).
+    private var heardWhileSpeaking = ""
     var levels: [Float] { meter.levels }
     @Published private(set) var lastText: String?
     @Published private(set) var lastTimings: String?
@@ -461,7 +463,9 @@ final class DictationController: ObservableObject {
         // When you pause (most people do, just before letting go), the whole dictation so far is transcribed —
         // and now polished too, so a release right after the pause finds it ready.
         let showWords = settings.livePreview
+        heardWhileSpeaking = ""
         streaming.onWholeResult = { [weak self] raw, atPause in
+            self?.heardWhileSpeaking = raw
             if showWords, let self, self.phase == .recording { self.live.show(raw) }
             // A command is never polished, so don't spend the Mac's effort preparing a polish for it.
             guard let self, !self.commandMode, let polisher = self.polisher, !raw.isEmpty else { return }
@@ -527,8 +531,15 @@ final class DictationController: ObservableObject {
         // Nothing more to pre-polish: whatever runs now would only compete with the final result.
         streaming.onWholeResult = nil
         streaming.onCommit = nil
-        guard seconds >= Self.minRecordingSeconds, !AudioStats.hasNoSpeech(samples, voiced: voiced) else {
-            phase = .idle
+        // Too quiet to count as speech — unless the speech model already made words of it while you spoke (a soft
+        // voice or a low mic level): words you saw above the pill must not be thrown away.
+        let heardWords = heardWhileSpeaking.split(separator: " ").count >= 2
+        let quiet = AudioStats.hasNoSpeech(samples, voiced: voiced)
+        if quiet, heardWords { log.notice("quiet recording kept: words were heard while speaking") }
+        guard seconds >= Self.minRecordingSeconds, !quiet || heardWords else {
+            log.notice("recording dropped: \(seconds < Self.minRecordingSeconds ? "too short" : "no speech heard", privacy: .public) (loudest level \(String(format: "%.4f", AudioStats.peakLevel(samples)), privacy: .public))")
+            // A real attempt (not a brushed key) deserves an answer.
+            if seconds >= 1.5 { show("Didn't hear anything — is the microphone picking you up?") } else { phase = .idle }
             return
         }
         let tCheck = (ContinuousClock.now - releasedAt).ms
@@ -748,6 +759,7 @@ final class DictationController: ObservableObject {
         case .keys: markUsed("keys")
         case .window: markUsed("windows")
         case .reminder, .event: markUsed("reminders")
+        case .alarm, .cancelAlarms: markUsed("alarms")
         case .note: markUsed("notes")
         case .askHistory: markUsed("history")
         case .readAloud: markUsed("readAloud")
@@ -772,6 +784,11 @@ final class DictationController: ObservableObject {
             if !MacActions.window(action) { show("Couldn't move this window") } else { phase = .idle }
         case let .click(label):
             show(MacActions.click(label) ? "Clicked “\(label)”" : "Couldn't find “\(label)”")
+        case let .alarm(label, date):
+            show(Alarms.shared.add(label, at: date))
+        case .cancelAlarms:
+            let n = Alarms.shared.cancelAll()
+            show(n == 0 ? "No alarms or timers set" : n == 1 ? "Cancelled 1 alarm" : "Cancelled \(n) alarms")
         case let .reminder(task, due):
             show(await Assistant.addReminder(task, due: due))
         case let .event(title, start, minutes):

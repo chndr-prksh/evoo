@@ -33,6 +33,9 @@ public enum MacCommand: Equatable, Sendable {
     case darkMode(Bool)
     case window(WindowAction)
     case click(String)
+    /// An alarm or a timer: Evoo rings at this time.
+    case alarm(label: String, at: Date)
+    case cancelAlarms
     case reminder(task: String, due: Date?)
     case event(title: String, start: Date, minutes: Int)
     case note(String)
@@ -116,6 +119,31 @@ public enum MacCommands {
            m[1].count >= 2, m[1].split(separator: " ").count <= 4
         {
             return .click(m[1])
+        }
+        // Alarms and timers: "set an alarm for 7 am", "wake me up at six thirty", "set a timer for 15 minutes"
+        if match(#"(?:cancel|stop|delete|remove|turn off|clear) (?:the |my |all |all my |all the )?(?:alarms?|timers?)"#) != nil { return .cancelAlarms }
+        if let m = match(#"(?:(?:set|create|add|put|make)(?: an?| my| the)? alarm|alarm|wake me(?: up)?)(?: for| at| by| on)? (.+)"#) {
+            let (rest, date) = splitDate(m[1], now: now)
+            if var date {
+                // "6:30 in the evening": the time of day isn't part of the alarm's name, and means PM.
+                let partOfDay = #"(?i)\b(?:in the (morning|afternoon|evening)|at (night)|(tonight))\b"#
+                if let r = rest.range(of: partOfDay, options: .regularExpression) {
+                    let phrase = rest[r].lowercased()
+                    if !phrase.contains("morning"), Calendar.current.component(.hour, from: date) < 12 { date.addTimeInterval(12 * 3600) }
+                }
+                let label = rest.replacingOccurrences(of: partOfDay, with: "", options: .regularExpression)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: " ,"))
+                    .replacingOccurrences(of: #"(?i)^(?:to |for |called |named )"#, with: "", options: .regularExpression)
+                return .alarm(label: label.isEmpty ? "Alarm" : capitalizedFirst(label), at: nextOccurrence(date, now: now))
+            }
+        }
+        if let m = matchN(#"(?:(?:set|start|put|give me|create|make) )?(?:a |an |the )?(?:timer|countdown) (?:on )?(?:for |of )?(\d{1,3}) (seconds?|minutes?|mins?|hours?)(?: (?:for|called) (.+))?"#)
+            ?? matchN(#"(?:(?:set|start|give me|create|make) )?(?:a |an )?(\d{1,3}) (seconds?|minutes?|mins?|hours?) (?:timer|countdown)(?: (?:for|called) (.+))?"#),
+            let n = Int(m[1]), n > 0
+        {
+            let seconds = m[2].hasPrefix("hour") ? n * 3600 : m[2].hasPrefix("sec") ? n : n * 60
+            let label = m.count > 3 && !m[3].isEmpty ? capitalizedFirst(m[3]) : "\(n)-\(m[2].hasPrefix("hour") ? "hour" : m[2].hasPrefix("sec") ? "second" : "minute") timer"
+            return .alarm(label: label, at: now.addingTimeInterval(TimeInterval(seconds)))
         }
         // Reminders & calendar
         if let m = match(#"remind me (?:to |about )?(.+)"#) {
@@ -241,7 +269,9 @@ public enum MacCommands {
             } else if let v = tens[w] {
                 if let next = words.first, let u = units[next], u < 10 { words.removeFirst(); out.append(String(v + u)) }
                 else { out.append(String(v)) }
-            } else if let v = units[w], out.last.map({ ["volume", "to", "at", "sound", "of", "level"].contains($0) }) ?? false {
+            } else if let v = units[w], (out.last.map({ ["volume", "to", "at", "sound", "of", "level"].contains($0) }) ?? false)
+                || ["minute", "minutes", "min", "mins", "hour", "hours", "second", "seconds"].contains(words.first ?? "")
+            {
                 out.append(String(v))
             } else {
                 out.append(w)
@@ -312,6 +342,11 @@ public enum MacCommands {
         }
         _ = now
         return (rest, due)
+    }
+
+    /// "7 am" said at 9 am means tomorrow morning: an alarm is never in the past.
+    static func nextOccurrence(_ date: Date, now: Date) -> Date {
+        date > now ? date : Calendar.current.date(byAdding: .day, value: 1, to: date) ?? date
     }
 
     static func defaultMinutes(for title: String) -> Int {

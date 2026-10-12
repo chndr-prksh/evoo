@@ -80,6 +80,18 @@ public enum AudioStats {
         return Double(voiced) * 0.02
     }
 
+    /// The loudest 100 ms of the clip (0 = silence; normal speech is around 0.02–0.2).
+    public static func peakLevel(_ samples: [Float], sampleRate: Int = 16_000) -> Float {
+        let window = sampleRate / 10
+        var peak: Float = 0
+        var i = 0
+        while i + window <= samples.count {
+            peak = max(peak, rms(samples[i ..< i + window]))
+            i += window
+        }
+        return peak
+    }
+
     /// Nothing worth transcribing: quiet, or only a click (the model would turn a key click into "Yeah.").
     public static func hasNoSpeech(_ samples: [Float], sampleRate: Int = 16_000, voiced: Double? = nil) -> Bool {
         (voiced ?? voicedSeconds(samples, sampleRate: sampleRate)) < 0.15 || isLikelySilent(samples, sampleRate: sampleRate)

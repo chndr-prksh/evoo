@@ -53,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             .store(in: &cancellables)
 
+        Alarms.shared.start()
         controller.onOpenHistory = { [weak self] in self?.openHistory() }
         controller.onOpenClassNotes = { [weak self] query in self?.openClassNotes(query: query) }
         PillModel.shared.openClassNotes = { [weak self] in self?.openClassNotes(query: nil) }
