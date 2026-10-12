@@ -8,7 +8,7 @@ on:
     inputs:
       iters:
         description: Training steps (30 for a quick check of the pipeline)
-        default: "2500"
+        default: "6000"
       version:
         description: Release suffix, e.g. v1 (leave empty to keep the model as a run artifact only)
         default: ""
@@ -17,10 +17,10 @@ on:
         default: "8"
       lr:
         description: Learning rate
-        default: "0.0002"
+        default: "0.0001"
       scale:
         description: LoRA scale
-        default: "20.0"
+        default: "10.0"
       eval_limit:
         description: How many test cases to score
         default: "344"

@@ -6,8 +6,8 @@ adapter_path: Tools/out/adapter
 fine_tune_type: lora
 num_layers: -1
 batch_size: 8
-iters: 2500
-learning_rate: 0.0002
+iters: 6000
+learning_rate: 0.0001
 steps_per_report: 50
 steps_per_eval: 500
 val_batches: 20
@@ -16,5 +16,5 @@ max_seq_length: 512
 mask_prompt: true
 lora_parameters:
   rank: 16
-  scale: 20.0
+  scale: 10.0
   dropout: 0.0

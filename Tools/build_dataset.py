@@ -392,16 +392,17 @@ def example(rng, phrasing, tool, args, test, plain=False):
 CHAINABLE = {"open_app", "quit_app", "open_website", "web_search", "edit", "browser", "scroll", "set_volume", "change_volume", "mute", "media", "brightness",
              "dark_mode", "window", "click", "system", "press_keys", "set_timer", "find_file"}
 JOINS = [" and ", " and then ", ", then ", " then ", ". ", ", and ", " and after that ", ", after that ", " and also "]
+JOINS_TRAIN = JOINS + [", ", ", ", ". Then ", " next ", ", next ", " and finally ", ", and then ", " followed by ", ". After that ", " plus "]
 
 def chain(rng, pool, test):
-    n = rng.choice([2, 2, 2, 3])
+    n = rng.choice([2, 2, 2, 3] if test else [2, 2, 3, 3, 3, 4])
     parts, calls = [], []
     for _ in range(n):
         phrasing, tool, args = rng.choice(pool)
         text, filled = fill(rng, phrasing, args, test)
         parts.append(text); calls.append((tool, filled))
     text = parts[0]
-    for p in parts[1:]: text += rng.choice(JOINS) + p
+    for p in parts[1:]: text += rng.choice(JOINS if test else JOINS_TRAIN) + p
     if rng.random() < 0.3: text = rng.choice(["please ", "can you ", "okay "]) + text
     return text, calls
 
@@ -454,13 +455,14 @@ FIELD = [("Copy, then open new tab and then paste.", [("edit", {"action": "copy"
          ("Search Google for flights to Delhi and mute", [("web_search", {"query": "flights to Delhi", "site": "google"}), ("mute", {"state": "on"})])]
 
 import more
-more.extend(globals())   # training only: far more names to fill in and ways to ask (see more.py)
+more.extend(globals())
+more.extend3(globals())   # training only: far more names to fill in and ways to ask (see more.py)
 
 def main():
     data = ROOT / "data"; data.mkdir(exist_ok=True)
     pre = prefix()
     (ROOT / "prefix.txt").write_text(pre)
-    train = build(1, per_phrasing=9, chains=5000, test=False)
+    train = build(1, per_phrasing=9, chains=8000, test=False)
     test = build(2, per_phrasing=2, chains=80, test=True) + [(t, c) for t, c in FIELD]
     train_texts = {t.lower() for t, _ in train}
     test = [(t, c) for t, c in test if t.lower() not in train_texts]

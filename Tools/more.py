@@ -397,3 +397,113 @@ def extend(g):
     for tool, args, phrasings in SLOTS:
         for p in phrasings: add(p, tool, args)
     g["NEGATIVES"] += [n for n in negatives() if n.lower() not in test_phrasings and n not in g["NEGATIVES"]]
+
+# ── Round 3: the three weak spots of the second model ───────────────────────────────────────────────────────
+# 1. It shortened long free text ("running shoes for flat feet" → "running shoes"): many longer things to copy.
+# 2. It acted on ordinary sentences that happen to contain a command word: many more of those, as no_action.
+# 3. It dropped steps from three-step chains: more and longer chains (see build_dataset.py).
+
+QUALIFIERS = ["for small apartments", "for people with bad knees", "under five hundred dollars", "that ship internationally", "with free delivery", "for a family of four",
+              "open on Sundays", "open late tonight", "with good reviews", "for complete beginners", "without a subscription", "that work offline", "for left handed people",
+              "for long flights", "in walking distance", "with vegetarian options", "for rainy weather", "made in India", "with a student discount", "for older laptops",
+              "that don't need wifi", "for dry skin", "with a long battery life", "for cold climates", "on a tight budget", "for two people", "before the end of the month",
+              "for a ten year old", "with step by step instructions", "that are easy to clean", "for working parents", "near the city center", "for wide feet", "at the weekend"]
+def long_queries():
+    out = set()
+    while len(out) < 1500:
+        t, q = rng.choice(TOPICS), rng.choice(QUALIFIERS)
+        out.add(rng.choice(["{t} {q}", "best {t} {q}", "cheap {t} {q}", "{t} in {c} {q}", "how to choose {t} {q}", "where to find {t} {q}", "difference between {t} and {t2}",
+                            "{t} and {t2} compared", "is {t} better than {t2} {q}", "what to know about {t} before buying", "requirements for {t} in {c}", "{t} that are {q2} and {q3}"])
+                .format(t=t, t2=rng.choice(TOPICS), q=q, c=rng.choice(CITIES), q2=rng.choice(["cheap", "reliable", "popular", "new", "small", "quiet"]), q3=rng.choice(["easy to use", "well reviewed", "good for travel", "safe for kids"])))
+    return sorted(out)
+
+CLAUSES = ["and I'll explain the rest when we meet", "but only if the weather holds", "so please don't wait for me", "because the client moved the deadline", "and thanks again for covering",
+           "unless you hear otherwise from me", "and we can sort out the details later", "so let's plan around that", "but I might be a few minutes late", "and bring the signed copy with you",
+           "since the office is closed on Monday", "and tell the others for me", "if that still works for you", "as soon as the review is done", "and no need to reply"]
+def long_sentences():
+    return sorted({f"{s} {c}" for s in SENTENCES for c in rng.sample(CLAUSES, 4)})
+
+MORE_SLOTS = [
+ ("type_text", {"text": "{text}"}, ["punch in {text}", "put {text} in here", "enter the words {text}", "type in the words {text}", "write in {text}", "add the words {text}", "type the sentence {text}", "write the line {text}",
+   "put the text {text} here", "the text is {text}, type it", "{text}, type that", "type this for me, {text}", "drop in the words {text}"]),
+ ("reply", {"intent": "{reply}"}, ["reply {reply}", "tell them {reply}", "write back that {reply}", "send a reply that says {reply}", "reply to say {reply}", "say {reply} in the reply", "answer with {reply}", "respond, {reply}",
+   "get back to them saying {reply}", "the reply should say {reply}"]),
+ ("save_note", {"text": "{note}"}, ["a quick one to note, {note}", "note down that {note}", "save this, {note}", "put a note, {note}", "one for my notes, {note}", "write a note that says {note}", "keep track of this, {note}"]),
+ ("search_history", {"query": "{q}"}, ["did I say something about {q}", "find where I talked about {q}", "anything in my dictations about {q}", "go back through what I dictated for {q}", "search everything I dictated for {q}"]),
+ ("find_file", {"query": "{file}"}, ["I can't find {file}, look on the Mac", "I lost {file}, search for it", "where did {file} go", "help me find {file}", "search the Mac for {file}", "dig out {file}", "track down {file} in my documents",
+   "where have I kept {file}", "look for the file {file}"]),
+ ("translate", {"text": "{phrase}", "language": "{lang}"}, ["I want {phrase} in {lang}", "get me {phrase} in {lang}", "{phrase} but in {lang}", "turn {phrase} into {lang}", "make {phrase} {lang}", "I need to say {phrase} in {lang}",
+   "{phrase}, in {lang} please", "change {phrase} to {lang}"]),
+ ("add_reminder", {"task": "{task}", "when": "{when}"}, ["poke me {when} to {task}", "I must {task} {when}, remind me", "see that I {task} {when}", "{when} I need to {task}, remind me", "buzz me {when} about needing to {task}",
+   "remind me {when}, I need to {task}", "don't let me skip this, {task} {when}"]),
+ ("add_event", {"title": "{event}", "when": "{when}"}, ["{event} is {when}, put it on my calendar", "there's {event} {when}, add it", "note {event} in the calendar for {when}", "add to calendar, {event} {when}", "I'm doing {event} {when}, calendar it",
+   "calendar this, {event} {when}", "make an event for {event} {when}"]),
+ ("click", {"label": "{btn}"}, ["click the thing that says {btn}", "press the button labelled {btn}", "hit the one marked {btn}", "tap where it says {btn}", "the button called {btn}, press it", "now click {btn}", "then press {btn}"]),
+ ("web_search", {"query": "{q}"}, ["I need to find out {q}", "look this up, {q}", "search this, {q}", "find information on {q}", "get me information about {q}", "I want to look up {q}", "do some searching on {q}", "can you search {q}",
+   "need to look up {q}", "check the web for {q}"]),
+ ("web_search", {"query": "{q}", "site": "google"}, ["do a google search on {q}", "google this, {q}", "run {q} through Google", "put {q} into Google", "look on Google for {q}", "search google, {q}"]),
+ ("open_app", {"name": "{app}"}, ["get me {app}", "get into {app}", "take me into {app}", "{app} now", "I'd like {app}", "let me use {app}", "over to {app}", "move to {app}", "let me have {app}", "open {app} please", "I want to see {app}"]),
+ ("open_website", {"site": "{site}"}, ["I want to look at {site}", "take a look at {site}", "over to {site}", "get {site} open", "I want to see {site}", "let me check {site}", "pull up the {site} page", "go check {site}"]),
+ ("press_keys", {"keys": "{keys}"}, ["give me a {keyname}", "press the {keyname} combination", "use {keyname}", "the shortcut {keyname}, press it", "hit {keyname} on the keyboard", "do the key combo {keyname}"]),
+]
+MORE_FIXED = {
+ ("browser", "action"): {"forward": ["move ahead a page", "ahead one page", "go to the next page in history", "step forward a page", "onward one page", "the next page forward"],
+                         "back": ["step back a page", "one page back", "go to the page I was on before", "backward one page"]},
+ ("edit", "action"): {"redo": ["put it back the way it was before I undid", "bring my change back", "restore the change I undid", "redo, I want that change back", "reapply my last change"],
+                      "undo": ["go back one edit", "take back my last change", "one step back in my edits", "revert my last edit"],
+                      "select_all": ["grab everything", "select all of the text here", "take all the text", "pick everything on the page"],
+                      "paste": ["put that in here", "drop it in here", "place what I copied here", "stick the clipboard here"]},
+ ("press_keys", "keys"): {"up": ["press the up arrow", "hit up arrow", "tap the up arrow key", "up arrow key"], "down": ["press the down arrow", "hit down arrow", "tap the down arrow key"],
+                          "left": ["press the left arrow", "hit left arrow"], "right": ["press the right arrow", "hit right arrow"]},
+ ("system", "action"): {"lock_screen": ["I'm leaving, lock the laptop", "lock it, I'm heading out", "keep the Mac safe, lock it", "lock the laptop before I go"]},
+}
+
+WORDS_IN_SENTENCES = [
+ "that's a {adj} move on their part", "it was a bold decision to {v}", "the bold text in the report stood out", "her reminder about the {o} was useful", "the reminder {s} sent was kind",
+ "my calendar is full until the {o}", "the calendar on the wall is from last year", "{s} opened the {o} and read it carefully", "{s} read the {o} out loud at dinner", "the tab for the {o} was expensive",
+ "there's a tab on the folder for the {o}", "the window in the {o} room faces east", "{s} closed the window because of the rain", "the volume of the {o} surprised everyone", "turn out {s} was right about the {o}",
+ "the search for the {o} is still going", "{s} was searching for a new {o}", "the copy of the {o} is on your desk", "{s} made a copy for the {o}", "the paste on the {o} dried quickly",
+ "{s} had to cut the {o} short", "cut the cake after the {o}", "the save by the goalkeeper won the {o}", "{s} tried to save money for the {o}", "the print on the {o} is too small",
+ "{s} undid the knot on the {o}", "they muted the {o} discussion for now", "{s} played the {o} at the wedding", "the next {o} starts in the spring", "the previous {o} was much better",
+ "{s} skipped breakfast before the {o}", "the screen at the {o} was huge", "{s} locked the {o} before leaving", "the brightness of the {o} was stunning", "it gets dark early near the {o}",
+ "the light in the {o} is perfect", "{s} minimized the risk in the {o}", "the full screen version of the {o} was better", "the center of the {o} is crowded", "{s} moved to the left side of the {o}",
+ "the timer went off during the {o}", "{s} timed the {o} at ten minutes", "the note on the {o} was sweet", "{s} noted that the {o} was late", "the email about the {o} never arrived",
+ "{s} emailed me about the {o} last week", "the directions to the {o} were unclear", "{s} translated the {o} for the guests", "the reply to the {o} was rude", "{s} replied about the {o} already",
+ "the shortcut through the {o} saves time", "{s} transcribed the {o} by hand", "the file on the {o} is thick", "{s} filed the {o} under taxes", "the button on my {o} fell off",
+ "{s} clicked with the {o} right away", "the keys to the {o} are missing", "{s} pressed the {o} for details", "typing the {o} took all night", "the scroll in the {o} is ancient",
+ "{s} zoomed past the {o}", "the page about the {o} was torn", "refresh my memory about the {o}", "back in the day the {o} was cheaper", "going forward the {o} will change",
+ "{s} quit the {o} last month", "the app for the {o} is confusing", "the website for the {o} is down again", "the multi {o} setup is not working", "that command about the {o} made no sense",
+ "nothing about the {o} is working", "the {o} feature is not working today", "{s} asked me to open up about the {o}", "{s} is open to the {o} idea", "{s} set the {o} on the table",
+ "remind {s} that the {o} matters", "I was reminded of the {o} again", "schedule wise the {o} is tight", "{s} booked the {o} months ago", "I think {s} should look into the {o}",
+ "what I meant was the {o}", "it's about the {o} not the money", "can we talk about the {o} later", "why did {s} bring up the {o}", "I wonder how the {o} is going"]
+ADJS = ["bold", "smart", "risky", "strange", "generous", "clever"]
+VERBS_NEG = ["leave early", "sell the house", "start over", "say no", "move abroad", "change teams"]
+def more_negatives():
+    out = set()
+    for f in WORDS_IN_SENTENCES:
+        for _ in range(22):
+            out.add(f.format(s=rng.choice(SUBJ), o=rng.choice(NEG_OBJ), adj=rng.choice(ADJS), v=rng.choice(VERBS_NEG)))
+    # Two ordinary sentences in a row are still not a command.
+    plain = list(out)
+    for _ in range(300):
+        a, b = rng.sample(plain, 2)
+        out.add(f"{a}{rng.choice([' and ', ', and ', '. ', ' but '])}{b}")
+    return sorted(out)
+
+def extend3(g):
+    test_values = {v.lower() for name in ("QUERIES_TEST", "REPLIES_TEST", "NOTES_TEST", "TEXTS_TEST", "PHRASES_TEST") for v in g[name]}
+    g["QUERIES"] += [q for q in long_queries() if q.lower() not in test_values]
+    longer = [s for s in long_sentences() if s.lower() not in test_values]
+    g["REPLIES"] += longer[:260]; g["NOTES"] += longer[260:520]; g["TEXTS"] += longer[520:780]
+    test_phrasings = {p.lower() for p, _, _ in g["TEST"]} | {n.lower() for n in g["NEGATIVES_TEST"]}
+    seen = {(p.lower(), t) for p, t, _ in g["TRAIN"]}
+    def add(phrasing, tool, args):
+        if phrasing.lower() in test_phrasings or (phrasing.lower(), tool) in seen: return
+        seen.add((phrasing.lower(), tool)); g["TRAIN"].append((phrasing, tool, dict(args)))
+    for tool, args, phrasings in MORE_SLOTS:
+        for p in phrasings: add(p, tool, args)
+    for (tool, key), table in MORE_FIXED.items():
+        for value, phrasings in table.items():
+            for p in phrasings: add(p, tool, {key: value})
+    have = {n.lower() for n in g["NEGATIVES"]}
+    g["NEGATIVES"] += [n for n in more_negatives() if n.lower() not in test_phrasings and n.lower() not in have]
