@@ -15,6 +15,12 @@ on:
       batch:
         description: Examples per step
         default: "8"
+      lr:
+        description: Learning rate
+        default: "0.0002"
+      scale:
+        description: LoRA scale
+        default: "20.0"
       eval_limit:
         description: How many test cases to score
         default: "344"
@@ -51,16 +57,29 @@ jobs:
 
       - name: Train
         run: |
-          sed -i '' -e "s/^iters: .*/iters: ${{ inputs.iters }}/" -e "s/^batch_size: .*/batch_size: ${{ inputs.batch }}/" Tools/lora.yaml
+          sed -i '' -e "s/^iters: .*/iters: ${{ inputs.iters }}/" -e "s/^batch_size: .*/batch_size: ${{ inputs.batch }}/" -e "s/^learning_rate: .*/learning_rate: ${{ inputs.lr }}/" -e "s/^  scale: .*/  scale: ${{ inputs.scale }}/" Tools/lora.yaml
+          cat Tools/lora.yaml
           if [ "${{ inputs.iters }}" -lt 200 ]; then sed -i '' -e "s/^steps_per_report: .*/steps_per_report: 10/" -e "s/^steps_per_eval: .*/steps_per_eval: 20/" -e "s/^val_batches: .*/val_batches: 4/" Tools/lora.yaml; fi
           python Tools/train.py --config Tools/lora.yaml
 
       - name: After training (phrasings the model never saw)
         run: python Tools/eval_mlx.py --model Tools/out/base --adapter Tools/out/adapter --limit ${{ inputs.eval_limit }} | tee Tools/out/eval.txt
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evoo-tools-adapter
+          path: |
+            Tools/out/adapter/adapters.safetensors
+            Tools/out/adapter/adapter_config.json
+            Tools/out/eval.txt
+          retention-days: 30
+
       - name: Merge and convert to GGUF
         run: |
           python -m mlx_lm fuse --model Tools/out/base --adapter-path Tools/out/adapter --save-path Tools/out/fused
+          # The converter reads Gemma's own word list (tokenizer.model), which the merge step doesn't copy.
+          cp Tools/out/base/tokenizer.model Tools/out/base/added_tokens.json Tools/out/base/special_tokens_map.json Tools/out/fused/ 2>/dev/null || true
+          ls -la Tools/out/fused
           git clone -q --depth 1 --branch b11155 https://github.com/ggml-org/llama.cpp.git llama.cpp
           python -m pip install -q torch transformers sentencepiece protobuf "numpy<3"
           python llama.cpp/convert_hf_to_gguf.py Tools/out/fused --outfile Tools/out/evoo-tools-q8_0.gguf --outtype q8_0
