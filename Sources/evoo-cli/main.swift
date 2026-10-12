@@ -546,11 +546,12 @@ case "tools":
     try await caller.load(path: gguf, prefix: ToolCall.prefix)
     let known = AppCommands.builtIn + ["Slack", "Safari", "Notes", "Mail", "Calendar", "Finder", "Music", "Messages", "Chrome"].map { AppTarget(name: $0, bundleID: "x") }
     for said in args.filter({ !$0.hasPrefix("--") && $0 != gguf && $0 != "tools" }) {
+        if flag("--tokens") { let t = caller.tokens(ToolCall.prefix + ToolCall.userTurn(said)); print(t.count, t.prefix(10), t.suffix(12)) }
         var raw = ""
         let t = try await clock.measure { raw = try await caller.complete(TextCleaner.clean(said)) }
         let calls = ToolCall.parse(raw)
         print("“\(said)” · \(t.ms) ms")
-        if calls.isEmpty { print("   no call: \(raw.prefix(100))") }
+        if calls.isEmpty || flag("--raw") { print("   raw: \(raw.prefix(400))") }
         for (call, step) in zip(calls, ToolPlan.steps(calls, said: said, targets: known)) { print("   \(call.name)\(call.args) → \(step)") }
     }
     caller.unload()
