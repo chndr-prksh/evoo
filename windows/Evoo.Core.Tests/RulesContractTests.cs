@@ -25,6 +25,18 @@ public class RulesContractTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void OneSentenceHasNoFullStop()
+    {
+        Assert.Equal("See you at five", TextCleaner.DropLoneFullStop("See you at five."));
+        Assert.Equal("I'll send it tonight. Thanks for waiting.", TextCleaner.DropLoneFullStop("I'll send it tonight. Thanks for waiting."));
+        Assert.Equal("Are you coming?", TextCleaner.DropLoneFullStop("Are you coming?"));
+        Assert.Equal("Bring plates, cups, etc.", TextCleaner.DropLoneFullStop("Bring plates, cups, etc."));
+        Assert.Equal("Let's meet at 5 p.m.", TextCleaner.DropLoneFullStop("Let's meet at 5 p.m."));
+        Assert.Equal("It costs 4.5 dollars", TextCleaner.DropLoneFullStop("It costs 4.5 dollars."));
+        Assert.Equal("Is it ready? Send it over.", TextCleaner.DropLoneFullStop("Is it ready? Send it over."));
+    }
+
+    [Fact]
     public void PipelineBasics()
     {
         Assert.Equal("", EvooPipeline.Process("[BLANK_AUDIO]"));

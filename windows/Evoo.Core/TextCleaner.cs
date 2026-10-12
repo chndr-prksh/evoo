@@ -5,6 +5,18 @@ namespace Evoo.Core;
 /// <summary>Removes speech-model noise before the rules run — a port of the Mac app's TextCleaner.</summary>
 public static class TextCleaner
 {
+    /// <summary>A single sentence is typed without its full stop ("See you at five"); two or more keep theirs.
+    /// Question and exclamation marks, lists and "etc." are left alone. Same rule as the Mac app.</summary>
+    public static string DropLoneFullStop(string text)
+    {
+        if (!text.EndsWith('.') || text.EndsWith("..") || text.Contains('\n')) return text;
+        var sentences = Regex.Matches(text, @"[.?!](?= |$)").Count;
+        if (sentences != 1) return text;
+        var last = text.Split(' ', StringSplitOptions.RemoveEmptyEntries)[^1].ToLowerInvariant();
+        if (last[..^1].Contains('.') || last is "etc." or "inc." or "ltd." or "jr." or "sr." or "vs." or "no." or "approx.") return text;
+        return text[..^1];
+    }
+
     /// <summary>Phrases speech models are known to make up on silence or noise.</summary>
     private static readonly HashSet<string> Hallucinations = new()
     {

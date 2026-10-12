@@ -163,6 +163,7 @@ internal sealed class AppController : IDisposable
             pill.ShowWorking("Polishing…");
             text = (await polisher.PolishAsync(text)).Text;
         }
+        text = TextCleaner.DropLoneFullStop(text); // one sentence: no full stop
         pill.HidePill();
         // Typing into Evoo's own try-it box needs no clipboard round trip.
         if (window.IsActive && window.TryBox.IsKeyboardFocused) window.TryBox.SelectedText = text + " ";

@@ -323,6 +323,19 @@ public enum DictationFormatter {
         return head + body + (rest.isEmpty ? "" : "\n\n" + rest)
     }
 
+    // MARK: - Final full stop
+
+    /// A single sentence is typed without its full stop ("See you at five"), the way people write a quick message;
+    /// two or more sentences keep theirs. Question and exclamation marks, lists and "etc." are left alone.
+    public static func dropLoneFullStop(_ text: String) -> String {
+        guard text.hasSuffix("."), !text.hasSuffix(".."), !text.contains("\n") else { return text }
+        guard splitSentences(text).count == 1 else { return text }
+        let lastWord = text.split(separator: " ").last.map { $0.lowercased() } ?? ""
+        // "etc.", "a.m.", "Inc.": the dot belongs to the word.
+        if lastWord.dropLast().contains(".") || ["etc.", "inc.", "ltd.", "jr.", "sr.", "vs.", "no.", "approx."].contains(lastWord) { return text }
+        return String(text.dropLast())
+    }
+
     // MARK: - Helpers
 
     static func splitSentences(_ text: String) -> [String] {

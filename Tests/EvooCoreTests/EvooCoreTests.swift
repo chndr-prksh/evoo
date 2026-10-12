@@ -1086,3 +1086,18 @@ struct ToolPlanTests {
         if case .unknown = steps[0] {} else { Issue.record("an invented search should be refused") }
     }
 }
+
+struct FullStopTests {
+    @Test func oneSentenceHasNoFullStop() {
+        #expect(DictationFormatter.dropLoneFullStop("See you at five.") == "See you at five")
+        #expect(DictationFormatter.dropLoneFullStop("I'll send it tonight. Thanks for waiting.") == "I'll send it tonight. Thanks for waiting.")
+        #expect(DictationFormatter.dropLoneFullStop("Are you coming?") == "Are you coming?")
+        #expect(DictationFormatter.dropLoneFullStop("That's great!") == "That's great!")
+        #expect(DictationFormatter.dropLoneFullStop("Bring plates, cups, etc.") == "Bring plates, cups, etc.")
+        #expect(DictationFormatter.dropLoneFullStop("Let's meet at 5 p.m.") == "Let's meet at 5 p.m.")
+        #expect(DictationFormatter.dropLoneFullStop("Wait...") == "Wait...")
+        #expect(DictationFormatter.dropLoneFullStop("We need:\n- Milk\n- Eggs.") == "We need:\n- Milk\n- Eggs.")
+        #expect(DictationFormatter.dropLoneFullStop("It costs 4.5 dollars.") == "It costs 4.5 dollars")
+        #expect(DictationFormatter.dropLoneFullStop("Is it ready? Send it over.") == "Is it ready? Send it over.")
+    }
+}

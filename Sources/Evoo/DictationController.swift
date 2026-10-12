@@ -635,9 +635,11 @@ final class DictationController: ObservableObject {
 
             // Habits learned from the user's edits in this app (e.g. no final full stop in WhatsApp).
             // Word swaps this person keeps making in this app ("going to" → "gonna"), learned from their edits.
+            // One sentence goes in without a full stop; two or more keep theirs.
+            let body = DictationFormatter.dropLoneFullStop(out.text)
             let swapped = settings.learnStyle
-                ? StyleRewrites.apply(out.text, rules: targetApp.flatMap { StyleStore.shared.rewrites[$0] } ?? [])
-                : out.text
+                ? StyleRewrites.apply(body, rules: targetApp.flatMap { StyleStore.shared.rewrites[$0] } ?? [])
+                : body
             let text = settings.learnFromEdits
                 ? settings.habits.adapt(swapped, app: targetApp) { [personal = settings.personalWords] word in
                     personal.contains(word) || !DictationPipeline.isKnownWord(word.lowercased())
