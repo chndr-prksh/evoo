@@ -13,6 +13,8 @@ internal sealed class KeyboardHook : IDisposable
     public event Action? HoldEnded;
     /// <summary>Esc, or another key pressed during the hold (the person meant a shortcut like Ctrl+Win+D).</summary>
     public event Action? Cancelled;
+    /// <summary>Shift pressed during the hold: what's being said is a command, not text.</summary>
+    public event Action? CommandRequested;
 
     private IntPtr hook;
     private readonly Native.HookProc proc; // kept alive: Windows calls it for as long as the hook is installed
@@ -60,12 +62,18 @@ internal sealed class KeyboardHook : IDisposable
             {
                 holding = true;
                 HoldStarted?.Invoke();
+                if (Native.IsDown(Native.VK_SHIFT)) CommandRequested?.Invoke(); // Shift was already down
             }
             else if (holding && (!ctrl || !win))
             {
                 holding = false;
                 HoldEnded?.Invoke();
             }
+            return;
+        }
+        if (holding && vk is Native.VK_SHIFT or Native.VK_LSHIFT or Native.VK_RSHIFT)
+        {
+            if (holding && down) CommandRequested?.Invoke();
             return;
         }
         if (holding && down)

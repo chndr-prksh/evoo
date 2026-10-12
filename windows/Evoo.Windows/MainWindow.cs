@@ -21,6 +21,13 @@ internal sealed class MainWindow : Window
     private readonly ProgressBar modelProgress = new() { Height = 6, Maximum = 1, Margin = new Thickness(0, 10, 0, 0), Visibility = Visibility.Collapsed };
     private readonly Button modelButton = PrimaryButton("Download");
     private readonly TextBlock micBody = Body("");
+    private readonly TextBlock polishTitle = Title2("AI polish (optional)");
+    private readonly TextBlock polishBody = Body("");
+    private readonly ProgressBar polishProgress = new() { Height = 6, Maximum = 1, Margin = new Thickness(0, 10, 0, 0), Visibility = Visibility.Collapsed };
+    private readonly Button polishButton = PrimaryButton("Download (397 MB)");
+    private readonly CheckBox polishToggle = new() { Content = "Polish my dictation with the local AI model", Margin = new Thickness(0, 10, 0, 0), FontSize = 14 };
+    /// <summary>The whole page, for pictures of the app.</summary>
+    public FrameworkElement Page { get; private set; } = null!;
     public TextBox TryBox { get; } = new()
     {
         AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 90, FontSize = 15, Padding = new Thickness(10),
@@ -39,7 +46,7 @@ internal sealed class MainWindow : Window
 
         var page = new StackPanel { Margin = new Thickness(28, 24, 28, 28) };
         page.Children.Add(new TextBlock { Text = "Evoo", FontSize = 32, FontWeight = FontWeights.Bold, Foreground = Ink });
-        page.Children.Add(Body("Hold Ctrl + Win, speak, let go. Voice typing in any app — free, and entirely on this PC. (Preview)", 15));
+        page.Children.Add(Body("Hold Ctrl + Win, speak, let go. Voice typing and voice commands in any app — free, and entirely on this PC. (Preview)", 15));
 
         modelButton.Click += async (_, _) => await DownloadAsync();
         page.Children.Add(Card(modelTitle, modelBody, modelProgress, modelButton));
@@ -52,14 +59,28 @@ internal sealed class MainWindow : Window
             Body("Click into any text box, hold Ctrl + Win, and speak. Let go and the text is typed there. Press Esc while holding to cancel.\n\nChange your mind mid-sentence and Evoo keeps the final version: “Let's meet tomorrow, no, day after tomorrow.”"),
             Body("Try it here:", 13), TryBox));
 
+        polishButton.Click += async (_, _) => await DownloadPolishAsync();
+        polishToggle.IsChecked = Settings.Current.Polish;
+        polishToggle.Click += (_, _) => { Settings.Current.Polish = polishToggle.IsChecked == true; Settings.Current.Save(); };
+        page.Children.Add(Card(polishTitle, polishBody, polishProgress, polishButton, polishToggle));
+
+        var commands = new CheckBox { Content = "Carry out voice commands", IsChecked = Settings.Current.VoiceCommands, Margin = new Thickness(0, 10, 0, 0), FontSize = 14 };
+        commands.Click += (_, _) => { Settings.Current.VoiceCommands = commands.IsChecked == true; Settings.Current.Save(); };
+        page.Children.Add(Card(Title2("Voice commands"),
+            Body("Say a command and Evoo does it instead of typing it. Add Shift (Ctrl + Win + Shift) to make sure nothing is ever typed.\n\n" +
+                 "“New tab” · “Copy that” · “Paste” · “Volume thirty” · “Mute” · “Open Chrome” · “Switch to Notepad” · “Search Google for flights to Delhi” · “Snap this to the left”\n\n" +
+                 "Several at once: “Close the tab and switch to Chrome” · “Copy, then open a new tab and paste”"),
+            commands));
+
         var startup = new CheckBox { Content = "Start Evoo when I sign in to Windows", IsChecked = Startup.IsEnabled, Margin = new Thickness(0, 4, 0, 0), FontSize = 14 };
         startup.Click += (_, _) => { try { Startup.IsEnabled = startup.IsChecked == true; } catch { } };
         page.Children.Add(Card(Title2("Settings"), startup));
 
         page.Children.Add(Body("Your voice never leaves this PC: no account, no cloud. The internet is used once, to download the speech model. " +
-            "Speech: NVIDIA Parakeet TDT 0.6B v3 (CC-BY-4.0) via sherpa-onnx (Apache-2.0). Evoo is open source (Apache-2.0).\n" +
+            "Speech: NVIDIA Parakeet TDT 0.6B v3 (CC-BY-4.0) via sherpa-onnx (Apache-2.0). Polish: Qwen3 0.6B (Apache-2.0) via llama.cpp (MIT). Evoo is open source (Apache-2.0).\n" +
             "Evoo " + (typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? ""), 12));
 
+        Page = page;
         Content = new ScrollViewer { Content = page, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Refresh();
     }
@@ -79,6 +100,25 @@ internal sealed class MainWindow : Window
             modelBody.Text = "Downloaded. Evoo now works offline.";
             modelButton.Visibility = Visibility.Collapsed;
             modelProgress.Visibility = Visibility.Collapsed;
+        }
+        if (!Polisher.IsAvailable)
+        {
+            polishBody.Text = "Not included in this build.";
+            polishButton.Visibility = Visibility.Collapsed;
+            polishToggle.Visibility = Visibility.Collapsed;
+        }
+        else if (Polisher.IsModelReady)
+        {
+            polishTitle.Text = "AI polish  ✓";
+            polishBody.Text = "Tidies grammar, leftover fillers and run-on sentences after Evoo's rules, using a small AI model (Qwen3 0.6B) on this PC. If it takes longer than 4 seconds, your text goes in without it.";
+            polishButton.Visibility = Visibility.Collapsed;
+            polishProgress.Visibility = Visibility.Collapsed;
+            polishToggle.Visibility = Visibility.Visible;
+        }
+        else if (!polishing)
+        {
+            polishBody.Text = "Tidies grammar, leftover fillers and run-on sentences after Evoo's rules, using a small AI model that runs on this PC. A one-time 397 MB download; nothing is sent anywhere.";
+            polishToggle.Visibility = Visibility.Collapsed;
         }
         micBody.Text = Recorder.DeviceCount > 0
             ? "Evoo listens only while you hold Ctrl + Win. If nothing is heard, check that Windows lets desktop apps use the microphone."
@@ -110,6 +150,37 @@ internal sealed class MainWindow : Window
             modelProgress.Visibility = Visibility.Collapsed;
         }
         downloading = false;
+        Refresh();
+    }
+
+    private bool polishing;
+
+    private async Task DownloadPolishAsync()
+    {
+        if (polishing) return;
+        polishing = true;
+        polishButton.Visibility = Visibility.Collapsed;
+        polishProgress.Visibility = Visibility.Visible;
+        try
+        {
+            var progress = new Progress<double>(p =>
+            {
+                polishProgress.Value = p;
+                polishBody.Text = $"Downloading… {(int)(p * 100)}% of 397 MB.";
+            });
+            await Task.Run(() => Polisher.DownloadModelAsync(progress));
+            Settings.Current.Polish = true;
+            Settings.Current.Save();
+            polishToggle.IsChecked = true;
+        }
+        catch (Exception e)
+        {
+            polishBody.Text = "The download didn't finish: " + e.Message + " It continues from where it stopped.";
+            polishButton.Content = "Try again";
+            polishButton.Visibility = Visibility.Visible;
+            polishProgress.Visibility = Visibility.Collapsed;
+        }
+        polishing = false;
         Refresh();
     }
 

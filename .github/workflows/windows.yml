@@ -39,11 +39,37 @@ jobs:
           path: models
           key: parakeet-v3-int8-2bda32ec
 
-      - name: End to end — a voice speaks, Evoo writes
+      - name: Polish model (cached between runs)
+        uses: actions/cache@v4
+        with:
+          path: polish
+          key: qwen3-0.6b-q4-50968a44
+
+      # The same llama.cpp release the Mac app uses, checksum-pinned. It runs the polish model on the PC.
+      - name: llama.cpp for Windows
+        shell: bash
+        run: |
+          curl -fsSL -o llama.zip "https://github.com/ggml-org/llama.cpp/releases/download/b11155/llama-b11155-bin-win-cpu-x64.zip"
+          echo "30366e3137d8aea2ed7686fdfc01a677220c5d866852c71ca2c6d4a67e5b9dcc  llama.zip" | sha256sum -c -
+          mkdir -p llama && unzip -q -o llama.zip -d llama
+          ls llama | head -40
+
+      - name: End to end — a voice speaks, Evoo writes, the AI polishes
+        env:
+          EVOO_LLAMA_DIR: ${{ github.workspace }}\llama
+          EVOO_POLISH_DIR: ${{ github.workspace }}\polish
         run: dotnet run --project windows/Evoo.E2E -c Release
 
       - name: Build the app
         run: dotnet publish windows/Evoo.Windows -c Release -o out/Evoo -p:Version=0.1.${{ github.run_number }}
+
+      - name: Bundle llama.cpp with the app
+        shell: bash
+        run: |
+          mkdir -p out/Evoo/llama
+          cp llama/llama-server.exe llama/*.dll out/Evoo/llama/
+          cp llama/LICENSE* out/Evoo/llama/ 2>/dev/null || true
+          du -sh out/Evoo/llama
 
       - name: Self-test the built app
         shell: pwsh
@@ -51,6 +77,20 @@ jobs:
           $p = Start-Process -FilePath out/Evoo/Evoo.exe -ArgumentList '--self-test', "$PWD\self-test.txt" -PassThru -Wait
           Get-Content self-test.txt
           if ($p.ExitCode -ne 0) { throw "self-test failed with exit code $($p.ExitCode)" }
+
+      - name: Pictures of the app (for the website)
+        shell: pwsh
+        env:
+          EVOO_POLISH_DIR: ${{ github.workspace }}\polish
+        run: |
+          $p = Start-Process -FilePath out/Evoo/Evoo.exe -ArgumentList '--screenshots', "$PWD\screenshots" -PassThru -Wait
+          Get-ChildItem screenshots
+          if ($p.ExitCode -ne 0) { throw "screenshots failed with exit code $($p.ExitCode)" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots
 
       - name: Package
         shell: pwsh

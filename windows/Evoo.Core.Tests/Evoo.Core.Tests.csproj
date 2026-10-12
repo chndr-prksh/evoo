@@ -13,5 +13,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Evoo.Core\Evoo.Core.csproj" />
     <None Include="rules.tsv" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="polish-prefix.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

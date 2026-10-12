@@ -16,6 +16,9 @@ internal static class Program
         var selfTest = Array.IndexOf(args, "--self-test");
         if (selfTest >= 0) return SelfTest(selfTest + 1 < args.Length ? args[selfTest + 1] : "evoo-self-test.txt");
 
+        var shots = Array.IndexOf(args, "--screenshots");
+        if (shots >= 0) return Screenshots(shots + 1 < args.Length ? args[shots + 1] : "screenshots");
+
         // One Evoo at a time: a second copy would fight over the keyboard and microphone.
         using var single = new Mutex(true, "Evoo.Windows.SingleInstance", out var first);
         if (!first) return 0;
@@ -24,6 +27,64 @@ internal static class Program
         using var controller = new AppController();
         app.Startup += (_, _) => controller.Start(background: args.Contains("--background"));
         return app.Run();
+    }
+
+    /// <summary>
+    /// Pictures of the real app, drawn by the app itself: the setup window and the pill in each of its states.
+    /// Used for the website; run by the automated build on Windows.
+    /// </summary>
+    private static int Screenshots(string folder)
+    {
+        Directory.CreateDirectory(folder);
+        var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        void Settle() => System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+
+        var window = new MainWindow();
+        window.Show();
+        window.TryBox.Text = "Let's meet day after tomorrow at 4 PM. ";
+        Settle();
+        Save(window.Page, System.Windows.Media.Brushes.White, 28, Path.Combine(folder, "setup.png"));
+        window.Hide();
+
+        var pill = new PillWindow();
+        var wave = new[] { 0.2f, 0.5f, 0.9f, 0.6f, 0.3f, 0.7f, 1f, 0.55f, 0.25f, 0.6f, 0.85f, 0.45f, 0.3f, 0.5f };
+        void Shot(string name, Action state)
+        {
+            state();
+            Settle();
+            Save(pill.Body, null, 0, Path.Combine(folder, name));
+        }
+        Shot("pill-listening.png", () => { pill.ShowListening(); foreach (var level in wave) pill.SetLevel(level); });
+        Shot("pill-command.png", () => { pill.ShowListening(command: true); foreach (var level in wave) pill.SetLevel(level); });
+        Shot("pill-writing.png", () => pill.ShowWorking());
+        Shot("pill-polishing.png", () => pill.ShowWorking("Polishing…"));
+        Shot("pill-step.png", () => pill.ShowWorking("1/2 · Close the tab"));
+        Shot("pill-done.png", () => pill.ShowMessage("Close the tab → Switch to Chrome"));
+        Shot("pill-volume.png", () => pill.ShowMessage("Volume 30%"));
+        pill.HidePill();
+        app.Shutdown();
+        return 0;
+    }
+
+    private static void Save(FrameworkElement element, System.Windows.Media.Brush? background, double padding, string path)
+    {
+        element.UpdateLayout();
+        const double scale = 2;
+        double width = element.ActualWidth + padding * 2, height = element.ActualHeight + padding * 2;
+        var visual = new System.Windows.Media.DrawingVisual();
+        using (var context = visual.RenderOpen())
+        {
+            if (background is not null) context.DrawRectangle(background, null, new Rect(0, 0, width, height));
+            var brush = new System.Windows.Media.VisualBrush(element) { Stretch = System.Windows.Media.Stretch.None };
+            context.DrawRectangle(brush, null, new Rect(padding, padding, element.ActualWidth, element.ActualHeight));
+        }
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Math.Ceiling(width * scale), (int)Math.Ceiling(height * scale),
+            96 * scale, 96 * scale, System.Windows.Media.PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+        using var file = File.Create(path);
+        encoder.Save(file);
     }
 
     /// <summary>
@@ -50,6 +111,15 @@ internal static class Program
             if (got != "Let's meet day after tomorrow.") throw new InvalidOperationException("got: " + got);
             return got;
         });
+        Check("voice commands", true, () =>
+        {
+            var steps = CommandChain.Parts("Close the tab and switch to Notepad.", p => VoiceCommands.Parse(p, AppLauncher.IsApp) is not null);
+            if (steps is not { Count: 2 }) throw new InvalidOperationException("the chain didn't split into two commands");
+            return CommandChain.Summary(steps) + "; Notepad → " + AppLauncher.Resolve("notepad");
+        });
+        Check("polish engine", false, () => Polisher.IsAvailable
+            ? "bundled" + (Polisher.IsModelReady ? ", model present" : ", no model yet")
+            : throw new FileNotFoundException("llama-server.exe is not next to Evoo.exe"));
         Check("model folder", true, () => ModelStore.Folder + (ModelStore.IsReady ? " (model present)" : " (no model yet)"));
         Check("keyboard hook", true, () =>
         {

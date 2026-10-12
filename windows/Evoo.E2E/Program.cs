@@ -53,5 +53,30 @@ for (var i = 0; i < cases.Length; i++)
     Console.WriteLine($"{(ok ? "PASS" : "FAIL")}  said:  {said}\n      heard: {heard}\n      typed: {text}\n      ({samples.Length / (double)rate:0.0} s of audio → text in {ms} ms)");
 }
 Console.WriteLine($"\nE2E {passed}/{cases.Length}");
+
+// AI polish: the bundled llama.cpp runs Qwen3 0.6B on this machine. Reported, and required to start and answer.
+var polishOk = true;
+if (Polisher.IsAvailable)
+{
+    watch.Restart();
+    await Polisher.DownloadModelAsync();
+    Console.WriteLine($"\nPolish model ready in {watch.Elapsed.TotalSeconds:0.0} s");
+    using var polisher = new Polisher();
+    await polisher.WarmUpAsync();
+    Console.WriteLine($"Polish warm-up (start the model, read the instructions once): {polisher.WarmUpTime.TotalSeconds:0.0} s");
+    foreach (var said in new[]
+    {
+        "So basically I think we could, like, ship it on Friday, you know, if the tests pass.",
+        "I mean the launch is actually going fine, we just need to, like, test the the payment page.",
+        "The design team finished the new onboarding screens last night.",
+    })
+    {
+        var rules = EvooPipeline.Process(said);
+        var (text, used, took) = await polisher.PolishAsync(rules);
+        Console.WriteLine($"POLISH {(used ? "used  " : RefinePrompt.NeedsPolish(rules) ? "kept  " : "skip  ")} {took.TotalMilliseconds:0} ms\n      rules:  {rules}\n      polish: {text}");
+    }
+    polishOk = polisher.IsWarm;
+}
+else Console.WriteLine("\nPolish: llama-server.exe not found (set EVOO_LLAMA_DIR) — skipped");
 // The Windows voice is robotic and the speech model may mishear a word: require most, report all.
-return passed >= cases.Length - 1 ? 0 : 1;
+return passed >= cases.Length - 1 && polishOk ? 0 : 1;

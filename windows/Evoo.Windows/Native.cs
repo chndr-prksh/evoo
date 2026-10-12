@@ -9,7 +9,7 @@ internal static class Native
     public const int WH_KEYBOARD_LL = 13;
     public const int WM_KEYDOWN = 0x0100, WM_KEYUP = 0x0101, WM_SYSKEYDOWN = 0x0104, WM_SYSKEYUP = 0x0105;
     public const int VK_CONTROL = 0x11, VK_LCONTROL = 0xA2, VK_RCONTROL = 0xA3, VK_LWIN = 0x5B, VK_RWIN = 0x5C;
-    public const int VK_ESCAPE = 0x1B, VK_V = 0x56, VK_SHIFT = 0x10, VK_MENU = 0x12;
+    public const int VK_ESCAPE = 0x1B, VK_V = 0x56, VK_SHIFT = 0x10, VK_MENU = 0x12, VK_LSHIFT = 0xA0, VK_RSHIFT = 0xA1;
     /// <summary>An unassigned key: pressing it while Win is down stops the Start menu opening on release.</summary>
     public const int VK_MASK = 0xE8;
     public const uint LLKHF_INJECTED = 0x10;
@@ -46,6 +46,11 @@ internal static class Native
     public static void Send(params INPUT[] inputs) => SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
 
     public static bool IsDown(int vk) => (GetAsyncKeyState(vk) & 0x8000) != 0;
+
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd, int command);
+    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
+    public const int SW_RESTORE = 9;
 
     public const int GWL_EXSTYLE = -20;
     public const int WS_EX_TRANSPARENT = 0x20, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000;

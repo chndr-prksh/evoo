@@ -82,13 +82,17 @@ internal sealed class PillWindow : Window
         Place();
     }
 
-    public void ShowListening()
+    /// <summary>`command`: Shift is held too — what's being said will be carried out, not typed.</summary>
+    public void ShowListening(bool command = false)
     {
-        Array.Clear(levels);
-        Present(true, true, "");
+        if (!command) Array.Clear(levels);
+        Present(true, true, command ? "Command" : "");
     }
 
-    public void ShowWorking() => Present(false, false, "Writing…");
+    public void ShowWorking(string text = "Writing…") => Present(false, false, text);
+
+    /// <summary>The pill's content, for pictures of the app.</summary>
+    public FrameworkElement Body => (FrameworkElement)Content;
 
     /// <summary>A short note ("Didn't catch that") that goes away by itself.</summary>
     public void ShowMessage(string text, double seconds = 2.5)
