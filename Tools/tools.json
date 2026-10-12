@@ -394,6 +394,29 @@
    ]
   },
   {
+   "name": "set_alarm",
+   "description": "Set an alarm for a time of day",
+   "params": {
+    "time": {
+     "type": "string",
+     "description": "Time"
+    },
+    "label": {
+     "type": "string",
+     "description": "Label"
+    }
+   },
+   "required": [
+    "time"
+   ]
+  },
+  {
+   "name": "cancel_alarms",
+   "description": "Cancel alarms and timers",
+   "params": {},
+   "required": []
+  },
+  {
    "name": "save_note",
    "description": "Save a quick note",
    "params": {

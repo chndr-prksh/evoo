@@ -17,9 +17,9 @@ public struct ToolCall: Equatable, Sendable {
     public static let toolNames = [
         "open_app", "quit_app", "open_website", "web_search", "find_file", "press_keys", "edit", "browser",
         "scroll", "set_volume", "change_volume", "mute", "media", "brightness", "dark_mode", "window", "click",
-        "system", "type_text", "add_reminder", "add_event", "set_timer", "save_note", "search_history",
-        "compose_email", "get_directions", "rewrite_selection", "reply", "translate", "read_aloud", "class_notes",
-        "run_shortcut", "transcribe_file", "no_action",
+        "system", "type_text", "add_reminder", "add_event", "set_timer", "set_alarm", "cancel_alarms", "save_note",
+        "search_history", "compose_email", "get_directions", "rewrite_selection", "reply", "translate",
+        "read_aloud", "class_notes", "run_shortcut", "transcribe_file", "no_action",
     ]
 
     /// What every prompt starts with (the same text as Tools/prefix.txt, which the training data is built from).

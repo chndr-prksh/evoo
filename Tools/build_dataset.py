@@ -272,6 +272,18 @@ TRAIN += slot("set_timer", ["set a timer for {dur}", "timer for {dur}", "start a
 TRAIN += slot("set_timer", ["set a timer for {dur} for {label}", "start a {dur} timer for {label}", "{dur} timer for {label}", "set a {label} timer for {dur}"], {"minutes": "{durm}", "label": "{label}"})
 TEST += slot("set_timer", ["let me know when {dur} have passed", "I need a countdown of {dur}"], {"minutes": "{durm}"})
 TEST += slot("set_timer", ["time {dur} for {label}"], {"minutes": "{durm}", "label": "{label}"})
+ALARM_TIMES = ["7 am", "6:30", "6:30 am", "five thirty", "8", "8:15 am", "noon", "9 pm", "10:45 pm", "seven", "quarter past six", "half past eight", "5 in the morning", "6 tomorrow morning",
+    "7:30 tomorrow", "4 pm", "eleven at night", "midnight", "3:20", "6 am on Saturday", "9:15", "ten to seven", "1 pm", "2:30 in the afternoon", "5:50 am", "8 tonight", "7 in the evening", "4:40"]
+ALARM_TIMES_TEST = ["5:15 am", "quarter to eight", "9:30 tomorrow morning", "six in the evening"]
+TRAIN += slot("set_alarm", ["set an alarm for {atime}", "alarm for {atime}", "wake me up at {atime}", "wake me at {atime}", "set my alarm to {atime}", "create an alarm for {atime}", "add an alarm at {atime}",
+    "alarm at {atime}", "I need an alarm for {atime}", "can you set an alarm for {atime}", "put an alarm on for {atime}", "get me up at {atime}", "ring me at {atime}", "make an alarm for {atime}",
+    "set the alarm for {atime}", "{atime} alarm", "I have to be up by {atime}, set an alarm", "new alarm, {atime}", "schedule an alarm for {atime}", "I want to wake up at {atime}", "alarm, {atime}"], {"time": "{atime}"})
+TRAIN += slot("set_alarm", ["set an alarm for {atime} for {label}", "alarm at {atime} for {label}", "set an alarm for {atime} called {label}", "{label} alarm at {atime}", "set a {label} alarm for {atime}",
+    "create an alarm for {atime} labelled {label}"], {"time": "{atime}", "label": "{label}"})
+TEST += slot("set_alarm", ["I need to be woken at {atime}", "have an alarm go off at {atime}", "make sure I'm up by {atime}"], {"time": "{atime}"})
+TRAIN += slot("cancel_alarms", ["cancel the alarm", "cancel my alarm", "cancel all alarms", "delete the alarm", "turn off the alarm", "remove my alarms", "stop the timer", "cancel the timer", "cancel all timers",
+    "clear my alarms", "I don't need the alarm anymore", "get rid of the alarm", "kill the timer", "switch off my alarm", "cancel all my alarms and timers", "no more alarms", "delete all timers", "scrap the alarm"], {})
+TEST += slot("cancel_alarms", ["forget the alarm I set", "I don't need that timer now, cancel it"], {})
 TRAIN += slot("save_note", ["note that {note}", "save a note {note}", "take a note {note}", "make a note {note}", "note to self {note}", "jot down {note}", "write this down {note}", "add a note {note}", "remember that {note}"], {"text": "{note}"})
 TEST += slot("save_note", ["keep a note of this, {note}", "quick note, {note}"], {"text": "{note}"})
 TRAIN += slot("search_history", ["what did I say about {q}", "search my history for {q}", "find what I dictated about {q}", "look in my dictations for {q}", "search my past dictations for {q}", "when did I mention {q}"], {"query": "{q}"})
@@ -345,6 +357,7 @@ def fill(rng, phrasing, args, test):
     if "{rewrite}" in phrasing: v["rewrite"] = pick(REWRITES, REWRITES_TEST)
     if "{phrase}" in phrasing: v["phrase"] = pick(PHRASES, PHRASES_TEST)
     if "{lang}" in phrasing: v["lang"] = pick(LANGS, LANGS_TEST)
+    if "{atime}" in phrasing: v["atime"] = pick(ALARM_TIMES, ALARM_TIMES_TEST)
     if "{sc}" in phrasing: v["sc"] = pick(SHORTCUTS, SHORTCUTS_TEST)
     if "{label}" in phrasing: v["label"] = rng.choice(LABELS if test else LABELS + MORE_LABELS)
     if "{keyname}" in phrasing:
@@ -390,7 +403,7 @@ def example(rng, phrasing, tool, args, test, plain=False):
     return text, [(tool, filled)]
 
 CHAINABLE = {"open_app", "quit_app", "open_website", "web_search", "edit", "browser", "scroll", "set_volume", "change_volume", "mute", "media", "brightness",
-             "dark_mode", "window", "click", "system", "press_keys", "set_timer", "find_file"}
+             "dark_mode", "window", "click", "system", "press_keys", "set_timer", "find_file", "set_alarm", "cancel_alarms"}
 JOINS = [" and ", " and then ", ", then ", " then ", ". ", ", and ", " and after that ", ", after that ", " and also "]
 JOINS_TRAIN = JOINS + [", ", ", ", ". Then ", " next ", ", next ", " and finally ", ", and then ", " followed by ", ". After that ", " plus "]
 
