@@ -120,10 +120,13 @@ internal sealed class MainWindow : Window
             polishBody.Text = "Tidies grammar, leftover fillers and run-on sentences after Evoo's rules, using a small AI model that runs on this PC. A one-time 397 MB download; nothing is sent anywhere.";
             polishToggle.Visibility = Visibility.Collapsed;
         }
-        micBody.Text = Recorder.DeviceCount > 0
+        micBody.Text = Recorder.DeviceCount > 0 || AssumeMicrophone
             ? "Evoo listens only while you hold Ctrl + Win. If nothing is heard, check that Windows lets desktop apps use the microphone."
             : "No microphone found. Plug one in, or check that Windows lets desktop apps use the microphone.";
     }
+
+    /// <summary>For pictures of the app taken on a build server, which has no microphone.</summary>
+    public bool AssumeMicrophone { get; set; }
 
     private bool downloading;
 

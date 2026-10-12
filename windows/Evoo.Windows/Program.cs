@@ -39,7 +39,8 @@ internal static class Program
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         void Settle() => System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
 
-        var window = new MainWindow();
+        var window = new MainWindow { AssumeMicrophone = true };
+        window.Refresh();
         window.Show();
         window.TryBox.Text = "Let's meet day after tomorrow at 4 PM. ";
         Settle();
