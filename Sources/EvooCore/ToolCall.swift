@@ -13,6 +13,21 @@ public struct ToolCall: Equatable, Sendable {
 
     public func int(_ key: String) -> Int? { args[key].flatMap { Int($0.trimmingCharacters(in: .whitespaces)) } }
 
+    /// Every tool, in the order of Tools/tools.json. The model was fine-tuned with exactly this list in its prompt.
+    public static let toolNames = [
+        "open_app", "quit_app", "open_website", "web_search", "find_file", "press_keys", "edit", "browser",
+        "scroll", "set_volume", "change_volume", "mute", "media", "brightness", "dark_mode", "window", "click",
+        "system", "type_text", "add_reminder", "add_event", "set_timer", "save_note", "search_history",
+        "compose_email", "get_directions", "rewrite_selection", "reply", "translate", "read_aloud", "class_notes",
+        "run_shortcut", "transcribe_file", "no_action",
+    ]
+
+    /// What every prompt starts with (the same text as Tools/prefix.txt, which the training data is built from).
+    public static var prefix: String {
+        "<start_of_turn>developer\nYou are a model that can do function calling with the following functions: "
+            + toolNames.joined(separator: ", ") + "<end_of_turn>\n"
+    }
+
     /// The format FunctionGemma was trained on: user turn in, calls out.
     public static func userTurn(_ text: String) -> String {
         "<start_of_turn>user\n\(text)<end_of_turn>\n<start_of_turn>model\n"

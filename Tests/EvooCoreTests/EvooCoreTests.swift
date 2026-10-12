@@ -1020,3 +1020,59 @@ struct ToolCallTests {
         #expect(!ToolCall(name: "set_timer", args: ["minutes": "10"]).matches(ToolCall(name: "set_timer", args: ["minutes": "10", "label": "tea"])))
     }
 }
+
+struct ToolPlanTests {
+    let targets = AppCommands.builtIn + [AppTarget(name: "Slack", bundleID: "com.tinyspeck.slackmacgap")]
+    func step(_ name: String, _ args: [String: String] = [:]) -> ToolStep {
+        ToolPlan.step(ToolCall(name: name, args: args), targets: targets, now: Date(timeIntervalSince1970: 1_800_000_000))
+    }
+
+    @Test func promptMatchesTrainingData() throws {
+        let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("Tools/prefix.txt")
+        #expect(try String(contentsOf: file, encoding: .utf8) == ToolCall.prefix)
+    }
+
+    @Test func everyToolHasAnAction() {
+        for name in ToolCall.toolNames {
+            let args = ["name": "Slack", "site": "google", "query": "x", "keys": "command shift t", "action": "", "direction": "up",
+                        "percent": "30", "state": "on", "label": "Send", "text": "hi", "task": "call Raj", "title": "Lunch",
+                        "when": "tomorrow at 5 PM", "minutes": "10", "destination": "airport", "instruction": "shorter",
+                        "intent": "yes", "language": "Spanish", "to": "raj@example.com"]
+            if case let .unknown(why) = step(name, args), !why.hasPrefix("Didn't catch") { Issue.record("\(name): \(why)") }
+        }
+    }
+
+    @Test func mapsCallsToActions() {
+        #expect(step("browser", ["action": "close_tab"]) == .mac(.keys(KeyCombo("w", command: true), name: "Close tab")))
+        #expect(step("edit", ["action": "delete_word"]) == .mac(.keys(KeyCombo("delete", option: true), name: "Delete word")))
+        #expect(step("set_volume", ["percent": "250"]) == .mac(.volume(100)))
+        #expect(step("mute", ["state": "off"]) == .mac(.mute(false)))
+        #expect(step("window", ["action": "left"]) == .mac(.window(.leftHalf)))
+        #expect(step("press_keys", ["keys": "command shift t"]) == .mac(.keys(KeyCombo("t", command: true, shift: true), name: "command shift t")))
+        #expect(step("no_action") == .nothing)
+        #expect(step("launch_rocket") == .unknown("Evoo can't do “launch_rocket” yet"))
+        if case let .app(.open(t)) = step("open_app", ["name": "slack"]) { #expect(t.name == "Slack") } else { Issue.record("open_app") }
+        if case let .app(.search(t, q)) = step("web_search", ["query": "flights to Delhi", "site": "youtube"]) {
+            #expect(t.name == "YouTube" && q == "flights to Delhi")
+        } else { Issue.record("web_search") }
+        if case let .app(.search(t, _)) = step("web_search", ["query": "salt"]) { #expect(t.name == "Google") } else { Issue.record("default search") }
+        #expect(step("open_website", ["site": "bbc.co.uk"]) == .app(.openURL(URL(string: "https://bbc.co.uk")!)))
+        if case .unknown = step("open_app", ["name": "Flibbertigibbet"]) {} else { Issue.record("unknown app") }
+    }
+
+    @Test func timersEmailAndDirections() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        #expect(step("set_timer", ["minutes": "10", "label": "pasta"]) == .mac(.reminder(task: "Pasta", due: now.addingTimeInterval(600))))
+        if case let .app(.openURL(url)) = step("compose_email", ["to": "raj@example.com", "subject": "lunch plans", "body": "see you at 1"]) {
+            #expect(url.absoluteString == "mailto:raj@example.com?subject=Lunch%20plans&body=See%20you%20at%201")
+        } else { Issue.record("compose_email") }
+        if case let .app(.openURL(url)) = step("get_directions", ["destination": "SFO airport"]) {
+            #expect(url.absoluteString == "https://maps.apple.com/?daddr=SFO%20airport")
+        } else { Issue.record("get_directions") }
+        if case .unknown = step("add_event", ["title": "Lunch"]) {} else { Issue.record("event without a time") }
+        if case let .mac(.event(title, _, minutes)) = step("add_event", ["title": "lunch with Priya", "when": "tomorrow at 1 PM"]) {
+            #expect(title == "Lunch with Priya" && minutes == 60)
+        } else { Issue.record("add_event") }
+    }
+}

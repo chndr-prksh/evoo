@@ -494,7 +494,16 @@ case "tools-eval":
     let rows = try String(contentsOf: URL(fileURLWithPath: dataPath), encoding: .utf8).split(separator: "\n").prefix(limit)
         .map { try JSONDecoder().decode(ToolRow.self, from: Data($0.utf8)) }
     let caller = ToolCaller()
-    let prefixText = try String(contentsOf: URL(fileURLWithPath: "Tools/prefix.txt"), encoding: .utf8)
+    // --full-prompt: the long prompt with every tool described (Tools/build_dataset.py --full), for untrained models.
+    let prefixText = flag("--full-prompt") ? try String(contentsOf: URL(fileURLWithPath: "Tools/prefix.txt"), encoding: .utf8) : ToolCall.prefix
+    // How many of these requests the fixed phrases (the rules) recognise at all, for comparison.
+    let ruleTargets = AppCommands.builtIn + ["Slack", "Safari", "Notes", "Mail", "Calendar", "Spotify", "Finder", "Music", "Messages", "Zoom", "Chrome", "Terminal", "Photos", "Xcode", "Figma", "Notion", "Word", "Excel", "Outlook", "Teams", "Discord", "Preview", "Maps"].map { AppTarget(name: $0, bundleID: "x") }
+    func rulesKnow(_ text: String) -> Bool {
+        let t = TextCleaner.clean(text)
+        let one: (String) -> Bool = { MacCommands.parse($0) != nil || AppCommands.parse($0, targets: ruleTargets) != nil }
+        return one(t) || CommandChain.parts(t, isCommand: one) != nil
+    }
+    var rulesRight = 0
     let loadTime = try await clock.measure { try await caller.load(path: gguf, prefix: prefixText) }
     print("loaded in \(loadTime.ms) ms · tool list: \(caller.prefixTokens) tokens · \(rows.count) cases")
     var full = 0, toolsRight = 0, totalMs = 0
@@ -510,6 +519,7 @@ case "tools-eval":
         if ok { full += 1 }
         if names { toolsRight += 1 }
         let kind = want.count > 1 ? "chains" : want[0].name
+        if rulesKnow(row.user) == (want.first?.name != "no_action") { rulesRight += 1 }
         byKind[kind, default: (0, 0)].n += 1
         if ok { byKind[kind, default: (0, 0)].ok += 1 }
         if show, !ok {
@@ -522,6 +532,23 @@ case "tools-eval":
     }
     print(String(format: "\nTOOLS fully right %d/%d (%.1f%%) · right tool(s), any arguments %d/%d (%.1f%%) · %d ms avg",
                  full, rows.count, Double(full) / Double(rows.count) * 100, toolsRight, rows.count, Double(toolsRight) / Double(rows.count) * 100, totalMs / max(1, rows.count)))
+    print("RULES recognise it as a command (or rightly not) \(rulesRight)/\(rows.count) — whether they then do the right thing isn't checked")
+    caller.unload()
+
+case "tools":
+    // What Evoo would do for a spoken request, without doing it:  evoo-cli tools "make it louder and open Slack" [--gguf model.gguf]
+    let gguf = option("--gguf") ?? ModelPaths.root.appendingPathComponent("tools/evoo-tools-q8_0.gguf").path
+    let caller = ToolCaller()
+    try await caller.load(path: gguf, prefix: ToolCall.prefix)
+    let known = AppCommands.builtIn + ["Slack", "Safari", "Notes", "Mail", "Calendar", "Finder", "Music", "Messages", "Chrome"].map { AppTarget(name: $0, bundleID: "x") }
+    for said in args.dropFirst().filter({ !$0.hasPrefix("--") && $0 != gguf }) {
+        var raw = ""
+        let t = try await clock.measure { raw = try await caller.complete(TextCleaner.clean(said)) }
+        let calls = ToolCall.parse(raw)
+        print("“\(said)” · \(t.ms) ms")
+        if calls.isEmpty { print("   no call: \(raw.prefix(100))") }
+        for (call, step) in zip(calls, ToolPlan.steps(calls, targets: known)) { print("   \(call.name)\(call.args) → \(step)") }
+    }
     caller.unload()
 
 case "field":

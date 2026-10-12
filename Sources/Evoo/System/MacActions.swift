@@ -86,6 +86,13 @@ enum MacActions {
         case .next: NX_KEYTYPE_NEXT
         case .previous: NX_KEYTYPE_PREVIOUS
         }
+        systemKey(code)
+    }
+
+    /// The brightness keys on the keyboard (one step).
+    static func brightness(up: Bool) { systemKey(up ? NX_KEYTYPE_BRIGHTNESS_UP : NX_KEYTYPE_BRIGHTNESS_DOWN) }
+
+    private static func systemKey(_ code: Int32) {
         for down in [true, false] {
             let flags = NSEvent.ModifierFlags(rawValue: down ? 0xA00 : 0xB00)
             let data1 = Int((code << 16) | ((down ? 0xA : 0xB) << 8))

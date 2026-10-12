@@ -215,6 +215,7 @@ final class DictationController: ObservableObject {
             guard !Task.isCancelled, let self, self.phase == .idle, self.refiner.isLoaded,
                   ClassNotesModel.shared.recorder == nil, ClassNotesModel.shared.makingStudyPack == nil else { return }
             self.refiner.unload()
+            self.toolCaller.unload()
             self.log.notice("polish model unloaded after \(Self.idleUnloadMinutes) idle minutes")
         }
     }
@@ -601,6 +602,8 @@ final class DictationController: ObservableObject {
             if selectionAtStart == nil { selectionAtStart = await Self.value(of: selectionTask, within: 100) ?? nil }
             if try await rewriteSelectionIfAsked(raw, selection: selectionAtStart, session: session) { return }
             if try await composeIfAsked(raw, session: session) { return }
+            // Command mode, and no fixed phrase matched: let the tool-calling model work out what was meant.
+            if commandMode, language.usesEnglishRules, await runTools(raw, session: session) { return }
             // Command mode never types: if nothing above recognised it, say so instead of pasting it somewhere.
             if commandMode {
                 let said = TextCleaner.clean(raw)
@@ -732,6 +735,11 @@ final class DictationController: ObservableObject {
 
     private func runMacCommand(_ raw: String) async -> Bool {
         guard settings.appCommands, let command = MacCommands.parse(TextCleaner.clean(raw)) else { return false }
+        await perform(command)
+        return true
+    }
+
+    private func perform(_ command: MacCommand) async {
         switch command {
         case .spotlight: markUsed("spotlight")
         case .keys: markUsed("keys")
@@ -788,6 +796,111 @@ final class DictationController: ObservableObject {
         case .transcribeFile:
             phase = .idle
             transcribeFile()
+        }
+    }
+
+    // MARK: - Tool-calling model
+
+    private let toolCaller = ToolCaller()
+    /// Evoo's fine-tuned tool-calling model (optional download). Without the file, command mode uses the rules only.
+    static var toolsModel: URL { ModelPaths.root.appendingPathComponent("tools/evoo-tools-q8_0.gguf") }
+    var toolsModelInstalled: Bool { FileManager.default.fileExists(atPath: Self.toolsModel.path) }
+
+    /// Command mode, and the fixed phrases didn't match: the tool-calling model works out what was meant
+    /// ("can you make it a bit louder and bring up my email") and Evoo carries out each step in turn.
+    private func runTools(_ raw: String, session: Int) async -> Bool {
+        let said = TextCleaner.clean(raw)
+        guard settings.appCommands, toolsModelInstalled, !said.isEmpty, said.count <= 300 else { return false }
+        phase = .refining
+        let calls: [ToolCall]
+        do {
+            let started = ContinuousClock.now
+            if !toolCaller.isLoaded { try await toolCaller.load(path: Self.toolsModel.path, prefix: ToolCall.prefix) }
+            calls = ToolCall.parse(try await toolCaller.complete(said))
+            log.notice("tools: \(calls.map(\.name).joined(separator: ", "), privacy: .public) in \((ContinuousClock.now - started).ms) ms")
+        } catch {
+            log.error("tools model failed: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+        guard !Task.isCancelled, session == self.session else { return true }
+        let targets = InstalledApps.shared.targets(custom: settings.customApps)
+        let steps = ToolPlan.steps(calls, targets: targets)
+        guard steps.contains(where: { $0 != .nothing }) else { return false }
+        markUsed("tools")
+        for (i, step) in steps.enumerated() {
+            let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            guard await run(step, session: session) else { return true } // it said why
+            guard i < steps.count - 1 else { break }
+            if case .app(.open) = step {
+                // Up to 2 s for the app to come forward, so the next step's keys reach it.
+                for _ in 0 ..< 20 where NSWorkspace.shared.frontmostApplication?.processIdentifier == front {
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+            }
+            try? await Task.sleep(for: .milliseconds(300))
+        }
+        if steps.count > 1 { show(calls.prefix(steps.count).map(ToolPlan.label).joined(separator: " → ")) }
+        return true
+    }
+
+    /// Carries out one step. False when it couldn't (the pill says why) and the rest shouldn't run.
+    private func run(_ step: ToolStep, session: Int) async -> Bool {
+        switch step {
+        case let .mac(command):
+            await perform(command)
+        case let .app(command):
+            guard let message = InstalledApps.shared.run(command) else { show("Couldn't open that"); return false }
+            show(message)
+        case let .quitApp(name):
+            let wanted = name.lowercased().filter { $0.isLetter || $0.isNumber }
+            let app = NSWorkspace.shared.runningApplications.first {
+                $0.activationPolicy == .regular && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
+                    && ($0.localizedName ?? "").lowercased().filter { $0.isLetter || $0.isNumber } == wanted
+            }
+            guard let app else { show("\(name) isn't open"); return false }
+            app.terminate() // a normal quit: the app still asks about unsaved work
+            show("Quit \(app.localizedName ?? name)")
+        case let .typeText(text):
+            phase = .idle
+            await injector.insert(Self.spaced(text), restoreClipboard: settings.restoreClipboard)
+            lastText = text
+        case let .brightness(up):
+            MacActions.brightness(up: up)
+            show(up ? "Brighter" : "Dimmer")
+        case let .rewrite(instruction):
+            guard smartCleanupReady else { show("Rewriting needs the AI polish model (Settings)"); return false }
+            guard let selection = ScreenText.selectedText() else { show("Select some text first"); return false }
+            phase = .refining
+            let rewritten = try? await refiner.rewrite(selection, instruction: instruction)
+            guard !Task.isCancelled, session == self.session else { return false }
+            guard let rewritten else { show("Couldn't rewrite that — try again"); return false }
+            await injector.insert(rewritten, restoreClipboard: settings.restoreClipboard)
+            lastText = rewritten
+            phase = .idle
+        case let .reply(intent):
+            guard smartCleanupReady else { show("Replies need the AI polish model (Settings)"); return false }
+            phase = .refining
+            let screen = await Task.detached { ScreenText.capture().joined(separator: "\n") }.value
+            let reply = try? await refiner.reply(screen: screen, intent: intent)
+            guard !Task.isCancelled, session == self.session else { return false }
+            guard let reply else { show("Couldn't write that — try again"); return false }
+            await injector.insert(Self.spaced(reply), restoreClipboard: settings.restoreClipboard)
+            lastText = reply
+            phase = .idle
+        case let .translate(text, language):
+            guard smartCleanupReady else { show("Translating needs the AI polish model (Settings)"); return false }
+            phase = .refining
+            let translated = try? await refiner.rewrite(text, instruction: "Translate to \(language)")
+            guard !Task.isCancelled, session == self.session else { return false }
+            guard let translated else { show("Couldn't translate that — try again"); return false }
+            await injector.insert(Self.spaced(translated), restoreClipboard: settings.restoreClipboard)
+            lastText = translated
+            phase = .idle
+        case .nothing:
+            break
+        case let .unknown(message):
+            show(message)
+            return false
         }
         return true
     }
