@@ -213,6 +213,7 @@ public final class DictationPipeline {
             text = r.text
             usedScreenTerms = r.used.filter { contextTerms.contains($0) && !dictionary.terms.contains($0) }
         }
+        text = PersonalDictionary.fixLandmarks(text) // "I fill tower" → "Eiffel Tower"
         var result = DictationRules.apply(text) // corrections, fillers, stutters
         if language == .hinglish { result.text = HinglishRules.apply(result.text) } // Hinglish restarts only
         if let style {

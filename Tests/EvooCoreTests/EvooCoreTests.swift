@@ -1151,4 +1151,26 @@ struct KeywordTests {
         #expect(RefinePrompt.accept(refined: "Deploy it on Azure with the iPhone build.", input: "so deploy it on AWS with the iPhone build") == nil)
         #expect(RefinePrompt.keywords("Send it to Mike. Then call Priya about the Q3 plan") == ["mike", "priya", "q3"])
     }
+
+    @Test func famousDictionaryWordsNeverTakeOverOtherWords() {
+        let dictionary = PersonalDictionary(["Kaggle", "Netflix", "Divya"])
+        let known: (String) -> Bool = { ["the", "on", "it", "is", "call"].contains($0) }
+        #expect(dictionary.apply("the Kagle notebook", isKnownWord: known) == "the Kagle notebook") // not forced to Kaggle
+        #expect(dictionary.apply("it is on netflix", isKnownWord: known) == "it is on Netflix")       // its own capitals: yes
+        #expect(dictionary.apply("call Deva", isKnownWord: known) == "call Divya")
+    }
+
+    @Test func landmarksHeardAsWords() {
+        #expect(PersonalDictionary.fixLandmarks("known words like Google, Kaggle, I fill tower, and other stuff") == "known words like Google, Kaggle, Eiffel Tower, and other stuff")
+        #expect(PersonalDictionary.fixLandmarks("we saw the Eiffel Tower at night") == "we saw the Eiffel Tower at night")
+        #expect(PersonalDictionary.fixLandmarks("I will fill the tower with water") == "I will fill the tower with water")
+        #expect(PersonalDictionary.fixLandmarks("we visited the taj mahal.") == "we visited the Taj Mahal.")
+    }
+
+    @Test func wordStartedTwice() {
+        #expect(DictationRules.apply("Personal diction dictionary is mostly for pet names.").text == "Personal dictionary is mostly for pet names.")
+        #expect(DictationRules.apply("it was an inter international flight").text == "It was an international flight")
+        #expect(DictationRules.apply("we work overtime with or without notice").text == "We work overtime with or without notice")
+        #expect(DictationRules.apply("it is a book bookmark").text == "It is a book bookmark")
+    }
 }

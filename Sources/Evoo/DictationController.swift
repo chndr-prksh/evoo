@@ -702,7 +702,8 @@ final class DictationController: ObservableObject {
         for case let .word(heard, meant) in lessons {
             // Only names and unusual words — not ordinary typo fixes like "there" → "their".
             let isName = meant.first?.isUppercase == true || !DictationPipeline.isKnownWord(meant.lowercased())
-            guard isName, meant.count >= 2, heard != meant, !settings.personalWords.contains(meant) else { continue }
+            guard isName, meant.count >= 2, heard != meant, !settings.personalWords.contains(meant),
+                  !PersonalDictionary.isFamous(meant) else { continue }
             settings.personalWords.append(meant)
             learned.append(meant)
         }
@@ -976,6 +977,9 @@ final class DictationController: ObservableObject {
         else { return false }
         // macOS's own (current) spelling dictionary: if it knows the word, it's not a name worth learning.
         let lower = word.lowercased()
+        // The dictionary is for names personal to you — people, pets, places, your own terms. Names everyone
+        // knows ("Google", "Kaggle", "Netflix") are already written correctly and don't belong in it.
+        if PersonalDictionary.isFamous(lower) { return false }
         let known = NSSpellChecker.shared.checkSpelling(of: lower, startingAt: 0).location == NSNotFound
         return !known
     }

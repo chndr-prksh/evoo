@@ -156,6 +156,8 @@ public enum DictationRules {
             let mismatches = zip(head, w).filter { $0 != $1 }.count
             let fragment = (w.count <= 2 && next.hasPrefix(w) && !shortWords.contains(w) && next.count > w.count)
                 || (w.count == 3 && mismatches <= 1 && !commonThreeLetter.contains(w) && next.count >= 6)
+                // A longer start that is itself a word: "diction dictionary", "inter international".
+                || (w.count >= 5 && next.hasPrefix(w) && next.count >= w.count + 2)
             return !fragment
         }.map(\.element)
         t = removeRestarts(t)

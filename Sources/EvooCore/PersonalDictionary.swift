@@ -92,8 +92,10 @@ public struct PersonalDictionary: Sendable {
         let known = Self.isKnown(lower, isKnownWord)
         guard lower.count >= 3, !known || heardAsName else { return nil }
         let wordKeys = Self.keys(word)
+        // Only personal names take over a similar-sounding word. A well-known name in the dictionary ("Kaggle")
+        // fixes its own spelling and capitals, nothing else.
         let best = entries
-            .filter { !$0.keys.isDisjoint(with: wordKeys) }
+            .filter { !Self.famous.contains($0.lower) && !$0.keys.isDisjoint(with: wordKeys) }
             .map { (term: $0.term, score: Self.similarity(lower, $0.lower)) }
             .max { $0.score < $1.score }
         // A real word the model heard as a name needs a closer spelling ("Deva" ~ "Divya").
@@ -103,6 +105,42 @@ public struct PersonalDictionary: Sendable {
 
     /// Names the speech model writes correctly and that aren't in an English word list. Without this, a
     /// similar-sounding word in someone's dictionary would replace them ("Google" → "Kaggle", "Amazon" → "Amazing").
+    public static func isFamous(_ word: String) -> Bool { famous.contains(word.lowercased()) }
+
+    /// Landmarks and places the speech model sometimes hears as ordinary words ("I fill tower").
+    static let landmarks = ["Eiffel Tower", "Taj Mahal", "Burj Khalifa", "Machu Picchu", "Golden Gate Bridge", "Statue of Liberty",
+                            "Buckingham Palace", "Colosseum", "Stonehenge", "Mount Everest", "Niagara Falls", "Grand Canyon",
+                            "Great Wall of China", "Sydney Opera House", "Leaning Tower of Pisa", "Times Square", "Silicon Valley",
+                            "Qutub Minar", "India Gate", "Gateway of India", "Red Fort", "Charminar", "Angkor Wat", "Petra",
+                            "Louvre", "Big Ben", "Mount Fuji", "Kilimanjaro", "Yellowstone", "Disneyland"]
+        .map { (term: $0, joined: $0.lowercased().filter(\.isLetter), words: $0.split(separator: " ").count) }
+
+    /// "the I fill tower" → "the Eiffel Tower": a run of words that sounds exactly like a famous landmark and is
+    /// spelled much like it. Runs that are already right, or real phrases that merely resemble one, are left alone.
+    public static func fixLandmarks(_ text: String) -> String {
+        var words = text.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
+        for mark in landmarks {
+            let sound = skeleton(mark.joined)
+            for n in [mark.words + 1, mark.words, mark.words - 1] where n >= 1 {
+                var i = 0
+                while i + n <= words.count {
+                    let span = words[i ..< i + n]
+                    let letters = span.joined().lowercased().filter(\.isLetter)
+                    let inner = span.dropLast().contains { $0.last.map { ".,;:!?".contains($0) } ?? false }
+                    let written = span.joined(separator: " ").trimmingCharacters(in: .punctuationCharacters)
+                    if !inner, written != mark.term,
+                       letters == mark.joined || (sound.count >= 5 && skeleton(letters) == sound && similarity(letters, mark.joined) >= 0.6)
+                    {
+                        let trailing = String(span.last!.reversed().prefix { !$0.isLetter }.reversed())
+                        words.replaceSubrange(i ..< i + n, with: [mark.term + trailing])
+                    }
+                    i += 1
+                }
+            }
+        }
+        return words.joined(separator: " ")
+    }
+
     static let famous: Set<String> = {
         let brands = """
         google apple amazon microsoft meta facebook instagram whatsapp youtube netflix spotify twitter linkedin reddit         github gitlab openai anthropic claude chatgpt gemini copilot nvidia intel amd tesla uber lyft airbnb paypal stripe         slack zoom notion figma canva adobe photoshop excel powerpoint outlook gmail chrome safari firefox android iphone         ipad macbook windows linux ubuntu samsung sony nokia huawei xiaomi oneplus dell lenovo asus oracle ibm cisco         salesforce shopify wordpress wikipedia quora pinterest snapchat tiktok telegram discord twitch dropbox icloud         kaggle coursera udemy duolingo zomato swiggy flipkart paytm phonepe ola myntra infosys wipro tcs reliance tata         walmart costco ikea nike adidas starbucks mcdonalds toyota honda bmw audi mercedes ford volkswagen boeing airbus         visa mastercard amex jpmorgan goldman mckinsey deloitte accenture kpmg bloomberg reuters bbc cnn nasa isro         python java javascript typescript swift kotlin rust golang ruby php sql mysql postgres mongodb redis docker         kubernetes terraform aws azure gcp vercel netlify supabase firebase react angular vue django flask pytorch         tensorflow llama qwen mistral whisper siri alexa cortana bixby perplexity grok deepseek huggingface jira trello         asana airtable zapier india america china japan germany france london paris tokyo delhi mumbai bangalore         bengaluru hyderabad chennai kolkata pune dubai singapore sydney toronto california texas seattle boston chicago
