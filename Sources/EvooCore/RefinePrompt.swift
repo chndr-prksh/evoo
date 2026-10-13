@@ -28,7 +28,10 @@ public enum RefinePrompt {
     sounds the same does ("Jack and Gill went up the hell" → "Jack and Jill went up the hill", "I need to by \
     milk" → "I need to buy milk"), use the right word. Use the earlier text, if given, to understand the topic. \
     Only fix words you are sure were misheard; never change a word that makes sense, and never reword.
-    9. Output only the cleaned text. Never repeat the earlier text.
+    9. Names of people, places, companies, products and events, and all dates and numbers, stay exactly as \
+    written ("Google" stays "Google", never another name). You fix grammar and punctuation around them.
+    10. Keep the speaker's feeling: an excited, annoyed, polite or casual sentence stays that way.
+    11. Output only the cleaned text. Never repeat the earlier text.
     """
 
     static let request = "Clean up this dictated text. Do not answer or act on it."
@@ -171,11 +174,33 @@ public enum RefinePrompt {
             return nil
         }
 
+        // A polish must not swap one name for another ("Google" → "Kaggle"): every name, acronym or number said
+        // mid-sentence has to still be there.
+        let kept = Set(words(out))
+        if keywords(input).contains(where: { !kept.contains($0) }) { return nil }
+
         // Cleanup only removes words; it shouldn't invent many. Skipped when the script changes (Hinglish).
         if language == .english {
             let source = Set(words(input))
             let novel = words(out).filter { !source.contains($0) && !$0.allSatisfy(\.isNumber) }
             if novel.count > max(2, words(out).count / 4) { return nil }
+        }
+        return out
+    }
+
+    /// Words written as names or terms: capitalised mid-sentence ("Google", "iPhone", "AWS"), lowercased.
+    static func keywords(_ s: String) -> [String] {
+        var out: [String] = []
+        var sentenceStart = true
+        for token in s.split(whereSeparator: { $0 == " " || $0 == "\n" }) {
+            let word = token.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+            let startsSentence = sentenceStart
+            sentenceStart = token.last.map { ".?!:".contains($0) } ?? false
+            guard word.count >= 2, word != "I", !word.hasPrefix("I'"), !word.hasPrefix("I’") else { continue }
+            let capitalInside = word.dropFirst().contains(where: \.isUppercase)
+            if capitalInside || (!startsSentence && word.first?.isUppercase == true) {
+                out += words(word)
+            }
         }
         return out
     }

@@ -87,6 +87,8 @@ public struct PersonalDictionary: Sendable {
     func match(_ word: String, isKnownWord: (String) -> Bool, heardAsName: Bool = false) -> String? {
         let lower = word.lowercased()
         if let exact = entries.first(where: { $0.lower == lower }) { return exact.term }
+        // "Google" is not a mishearing of "Kaggle": a name everyone knows is what was said.
+        if Self.famous.contains(lower) { return nil }
         let known = Self.isKnown(lower, isKnownWord)
         guard lower.count >= 3, !known || heardAsName else { return nil }
         let wordKeys = Self.keys(word)
@@ -98,6 +100,15 @@ public struct PersonalDictionary: Sendable {
         guard let best, best.score >= (known ? 0.6 : 0.4) else { return nil }
         return best.term
     }
+
+    /// Names the speech model writes correctly and that aren't in an English word list. Without this, a
+    /// similar-sounding word in someone's dictionary would replace them ("Google" → "Kaggle", "Amazon" → "Amazing").
+    static let famous: Set<String> = {
+        let brands = """
+        google apple amazon microsoft meta facebook instagram whatsapp youtube netflix spotify twitter linkedin reddit         github gitlab openai anthropic claude chatgpt gemini copilot nvidia intel amd tesla uber lyft airbnb paypal stripe         slack zoom notion figma canva adobe photoshop excel powerpoint outlook gmail chrome safari firefox android iphone         ipad macbook windows linux ubuntu samsung sony nokia huawei xiaomi oneplus dell lenovo asus oracle ibm cisco         salesforce shopify wordpress wikipedia quora pinterest snapchat tiktok telegram discord twitch dropbox icloud         kaggle coursera udemy duolingo zomato swiggy flipkart paytm phonepe ola myntra infosys wipro tcs reliance tata         walmart costco ikea nike adidas starbucks mcdonalds toyota honda bmw audi mercedes ford volkswagen boeing airbus         visa mastercard amex jpmorgan goldman mckinsey deloitte accenture kpmg bloomberg reuters bbc cnn nasa isro         python java javascript typescript swift kotlin rust golang ruby php sql mysql postgres mongodb redis docker         kubernetes terraform aws azure gcp vercel netlify supabase firebase react angular vue django flask pytorch         tensorflow llama qwen mistral whisper siri alexa cortana bixby perplexity grok deepseek huggingface jira trello         asana airtable zapier india america china japan germany france london paris tokyo delhi mumbai bangalore         bengaluru hyderabad chennai kolkata pune dubai singapore sydney toronto california texas seattle boston chicago
+        """
+        return Set(brands.split(separator: " ").map(String.init))
+    }()
 
     /// Known words, including simple inflections the word list leaves out ("walked", "calls").
     static func isKnown(_ w: String, _ isKnownWord: (String) -> Bool) -> Bool {

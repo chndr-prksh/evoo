@@ -1133,3 +1133,22 @@ struct AlarmTests {
         #expect(MacCommands.parse("set an alarm") == nil)
     }
 }
+
+struct KeywordTests {
+    @Test func famousNamesAreNotMisheardNames() {
+        let dictionary = PersonalDictionary(["Kaggle", "Divya", "Supabase"])
+        let known: (String) -> Bool = { ["the", "a", "sheet", "meeting", "link", "former", "product", "manager", "with", "call"].contains($0) }
+        #expect(dictionary.apply("I put it on a Google Sheet", isKnownWord: known) == "I put it on a Google Sheet")
+        #expect(dictionary.apply("a former Google product manager", isKnownWord: known) == "a former Google product manager")
+        #expect(dictionary.apply("I'm using kaggle", isKnownWord: known) == "I'm using Kaggle")
+        #expect(dictionary.apply("call Deva", isKnownWord: known) == "call Divya") // real mishearings are still fixed
+    }
+
+    @Test func polishKeepsNames() {
+        #expect(RefinePrompt.accept(refined: "I couldn't find the Kaggle meeting link.", input: "um I couldn't find the Google meeting link") == nil)
+        #expect(RefinePrompt.accept(refined: "I couldn't find the Google meeting link.", input: "um I couldn't find the Google meeting link") != nil)
+        #expect(RefinePrompt.accept(refined: "Deploy it on AWS with the iPhone build.", input: "so deploy it on AWS with the iPhone build") != nil)
+        #expect(RefinePrompt.accept(refined: "Deploy it on Azure with the iPhone build.", input: "so deploy it on AWS with the iPhone build") == nil)
+        #expect(RefinePrompt.keywords("Send it to Mike. Then call Priya about the Q3 plan") == ["mike", "priya", "q3"])
+    }
+}
