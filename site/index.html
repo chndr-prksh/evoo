@@ -298,6 +298,7 @@
     <div class="links">
       <a href="#features">Features</a>
       <a href="#commands">Commands</a>
+      <a href="#evoo-ai">Evoo AI</a>
       <a href="#install">Install</a>
       <a href="#windows">Windows</a>
       <a href="#privacy">Privacy</a>
@@ -310,7 +311,7 @@
 
 <header class="hero" id="top">
   <div class="wrap">
-    <span class="pill-tag"><b>Free &amp; open source</b> Runs 100% on your computer</span>
+    <span class="pill-tag"><b>New: Evoo AI v1</b> our own model, fine-tuned for dictation · <a href="#evoo-ai">see how</a></span>
     <h1>Hold fn. Speak.<br>It types what you meant.</h1>
     <p class="sub">Evoo is voice dictation for Mac — and now Windows — that fixes your self-corrections, formats lists, and learns your names. In any app, with no account and nothing sent to the cloud.</p>
     <div class="actions">
@@ -414,6 +415,30 @@
       <div class="stat"><div class="n">1–15 ms</div><div class="l">fn up → text, after a natural pause</div></div>
       <div class="stat"><div class="n">~130 ms</div><div class="l">fn up → text, releasing instantly</div></div>
       <div class="stat"><div class="n">0 bytes</div><div class="l">of your voice sent anywhere</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="evoo-ai">
+  <div class="wrap">
+    <p class="kicker">Our own model</p>
+    <h2>Evoo AI v1, fine-tuned for dictation.</h2>
+    <p class="lead">Evoo now polishes with a model we trained for exactly this job. We fine-tuned Qwen3&#8209;0.6B on 43,000 dictations, real speech and everyday messages read aloud and transcribed by the same speech model Evoo uses. It runs on your Mac, after Evoo's rules.</p>
+    <div class="stats">
+      <div class="stat"><div class="n">1.8&times;</div><div class="l">dictations exactly right: 78 vs 43 of 300 unseen ones, against the stock model</div></div>
+      <div class="stat"><div class="n">0.3 s</div><div class="l">to polish a dictation on an 8&nbsp;GB M1</div></div>
+      <div class="stat"><div class="n">0.6 GB</div><div class="l">on your Mac; nothing sent anywhere</div></div>
+      <div class="stat"><div class="n">1 MacBook</div><div class="l">trained in 6 hours on an 8&nbsp;GB M1</div></div>
+    </div>
+    <div class="grid" style="margin-top:36px">
+      <div class="card"><h3>Fillers and restarts</h3><p>Repeats and false starts go; your words stay.</p>
+        <div class="ex">“email the cast agent about the about the reshoot the reshoot dates” → <b>Email the cast agent about the reshoot dates.</b></div></div>
+      <div class="card"><h3>What you meant</h3><p>A change of mind keeps only the final version.</p>
+        <div class="ex">“who is the current premier I mean the current governor of Victoria” → <b>Who is the current Governor of Victoria?</b></div></div>
+      <div class="card"><h3>Types, doesn't answer</h3><p>A dictated question or request is typed as you said it.</p>
+        <div class="ex">“can you explain how a transformer works like in simple terms” → <b>Can you explain how a Transformer works in simple terms?</b></div></div>
+      <div class="card"><h3>Open</h3><p>Weights, examples and every test result are public, under Apache&#8209;2.0.</p>
+        <div class="ex"><a href="https://huggingface.co/e2chndr/evoo-ai-v1">huggingface.co/e2chndr/evoo-ai-v1</a></div></div>
     </div>
   </div>
 </section>
@@ -587,6 +612,7 @@
     <details class="q"><summary>Is Evoo really free?</summary><p>Yes. No subscription, no trial, no account. It's open source under Apache-2.0, and every model it uses is free and open-weight.</p></details>
     <details class="q"><summary>Is it safe? macOS says it “could not verify” it.</summary><p>That message appears for every app not signed with a paid Apple developer certificate — it doesn't mean anything was detected. You can read all of Evoo's code on GitHub, releases are built there automatically, and the one-line install checks the download's checksum. Evoo only goes online to download its models and check GitHub for updates.</p></details>
     <details class="q"><summary>Does the AI polish understand context, or just grammar?</summary><p>Both. Besides fillers, self-corrections and grammar, it fixes words the speech model misheard when the meaning makes it obvious — “Jack and Gill went up the hell” becomes “Jack and Jill went up the hill”, “I need to by milk” becomes “I need to buy milk”. On Macs with 16 GB or more it also reads the sentences you said just before and the text already in the box, so it knows the topic. It never changes a word that already makes sense, and it all runs on your Mac.</p></details>
+    <details class="q"><summary>What is Evoo AI?</summary><p>Evoo's own polish model: Qwen3&#8209;0.6B fine-tuned on 43,000 dictations so it turns what the speech model wrote into what you meant, without answering or adding anything. Pick it in Settings › Smart cleanup › Model. It runs after Evoo's rules, entirely on your Mac. The weights, test sentences and results are on <a href="https://huggingface.co/e2chndr/evoo-ai-v1">Hugging Face</a>.</p></details>
     <details class="q"><summary>Is there a Windows version?</summary><p>Yes, as a preview: <a href="#windows">download it here</a>. Hold Ctrl + Win, speak, and let go. It has the same on-device speech model and correction rules as the Mac, plus voice commands (including several in one breath) and optional AI polish, on 64-bit Windows 10 or 11. Windows SmartScreen will warn about it because the build isn't code-signed yet. Lists, number formatting and other languages are Mac-only for now.</p></details>
     <details class="q"><summary>Which Macs does it work on?</summary><p>Apple Silicon Macs (M1 or newer) with macOS 14 Sonoma or later. 8 GB of memory is enough for dictation; 16 GB gives the optional local AI (rewrite, reply, Class Notes) more room.</p></details>
     <details class="q"><summary>Which apps does it work in?</summary><p>Anywhere you can type: Chrome, Safari, Slack, WhatsApp, Gmail, Notion, Notes, Word, VS Code, Cursor, Terminal and more. It formats for each — Markdown in editors, plain bullets in chat, and never a line break in Terminal.</p></details>

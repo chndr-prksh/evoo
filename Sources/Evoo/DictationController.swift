@@ -85,7 +85,7 @@ final class DictationController: ObservableObject {
 
     /// Polish with context (fixes misheard words): 16 GB+ Macs with the 1.7B or 4B model.
     private var contextualPolish: Bool {
-        !SystemInfo.isLowMemory && refiner.loadedModel != .qwen3_0_6b
+        !SystemInfo.isLowMemory && refiner.loadedModel?.readsContext == true
     }
 
     private var gesture: HotkeyGesture

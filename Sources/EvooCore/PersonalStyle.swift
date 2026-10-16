@@ -192,6 +192,7 @@ public enum PersonalTraining {
     /// The MLX copy of each polish model that the trainer fine-tunes (same weights as the GGUF Evoo runs).
     public static func mlxModel(for model: RefinerModel) -> String {
         switch model {
+        case .evooAI_v1: "e2chndr/evoo-ai-v1"
         case .qwen3_0_6b: "mlx-community/Qwen3-0.6B-4bit"
         case .qwen3_1_7b: "mlx-community/Qwen3-1.7B-4bit"
         case .qwen3_4b: "mlx-community/Qwen3-4B-Instruct-2507-4bit"
@@ -213,7 +214,7 @@ public enum PersonalTraining {
 
     /// One JSONL line: Evoo's exact polish prompt, and what the person sent.
     public static func record(_ pair: StylePair, model: RefinerModel) -> String {
-        let row = ["prompt": RefinePrompt.prefix(language: .english)
+        let row = ["prompt": RefinePrompt.prefix(language: .english, fineTuned: model.isFineTuned)
             + RefinePrompt.suffix(transcript: pair.evoo, thinkBlock: model.usesThinkBlock),
             "completion": pair.sent + "<|im_end|>"]
         let data = (try? JSONSerialization.data(withJSONObject: row, options: [.sortedKeys])) ?? Data()

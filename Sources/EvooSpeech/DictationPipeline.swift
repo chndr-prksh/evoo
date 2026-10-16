@@ -115,8 +115,13 @@ public final class DictationPipeline {
         // With a streaming polisher, long dictations that contain a list still get their prose polished.
         // Contextual polish looks at every sentence (a misheard word looks clean to the rules); otherwise only at
         // dictations with something the rules can see is off.
-        let worth = polisher?.contextual == true
-            ? text.split(separator: " ").count >= StreamingPolisher.minWords : Self.needsPolish(text)
+        // A model fine-tuned on dictation (Evoo AI) improves even text the rules see nothing wrong with, so it
+        // polishes every English dictation of a few words; measured on held-out dictation, twice as many came out
+        // exactly right as with polishing only the flagged ones.
+        let words = text.split(separator: " ").count
+        // Lists the rules laid out (one item per line) are left as they are, in the app's own list style.
+        let worth = refiner.loadedModel?.isFineTuned == true && language == .english ? words >= 4 && !text.contains("\n")
+            : polisher?.contextual == true ? words >= StreamingPolisher.minWords : Self.needsPolish(text)
         // (The polisher itself only waits for sentences it checked while you spoke, or that visibly need fixing.)
         if llm == .polish, refiner.isLoaded, worth {
             t = clock.now
