@@ -8,7 +8,7 @@ import Foundation
 //
 //   evoo-cli bench [--lang english] [--engine parakeet|whisper] [--llm] [--vocab "Divya,Rahul"] file.wav …   audio → text, with timings
 //   evoo-cli post [--style markdown|plain|singleLine] "text" …                       rules + formatting only
-//   evoo-cli refine [--lang …] [--model qwen3_1_7b|qwen3_4b] "text" …                 LLM refinement only
+//   evoo-cli refine [--lang …] [--model evooAI_v1|qwen3_1_7b|qwen3_4b] [--model-file f.gguf] "text" …  LLM only
 //
 // Make test audio with macOS text-to-speech:
 //   say -o /tmp/a.wav --data-format=LEI16@16000 "let's meet tomorrow, no, day after tomorrow"
@@ -30,6 +30,8 @@ func flag(_ name: String) -> Bool {
 
 let language = option("--lang").flatMap(DictationLanguage.init(rawValue:)) ?? .english
 let model = option("--model").flatMap(RefinerModel.init(rawValue:)) ?? .qwen3_1_7b
+// --model-file path.gguf: run that file as the polish model (to test a model before it is published).
+if let file = option("--model-file") { ModelPaths.refinerOverride = URL(fileURLWithPath: file) }
 let engineID = option("--engine").flatMap(ASREngineID.init(rawValue:)) ?? EnginePreference.automatic.resolve(for: language)
 let useLLM = flag("--llm")
 let vocabulary = option("--vocab")?.split(separator: ",").map(String.init) ?? []

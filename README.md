@@ -13,6 +13,12 @@ Hold `fn`, speak, release — clean text appears at your cursor in any app.
   </a>
 </p>
 
+> **New — Evoo AI v1, our own fine-tuned model.** Evoo now polishes dictation with a model trained for exactly
+> this job: Qwen3-0.6B fine-tuned on 43,000 dictations, run after Evoo's rules. On 300 dictations it never saw,
+> almost twice as many come out exactly right as with the stock model (78 vs 43), in about 0.3 s each on an 8 GB M1.
+> [Model, examples and results on Hugging Face](https://huggingface.co/e2chndr/evoo-ai-v1) ·
+> [how it was trained](docs/evoo-ai.md)
+
 **Windows (preview):** [download Evoo-windows.zip](https://github.com/chndr-prksh/evoo/releases/download/windows/Evoo-windows.zip) — hold Ctrl + Win to dictate, with voice commands and optional on-device AI polish. See [windows/](windows/) for what works and what doesn't yet.
 
 Apple Silicon Mac (M1 or newer), macOS 14+. After downloading: unzip, drag **Evoo** to Applications, open it.
@@ -65,6 +71,9 @@ one-line install below. Evoo updates itself after that.
   - Assistant: "remind me to call Divya tomorrow at 5", "schedule lunch with Raj Friday at 1 PM",
     "note: …", "what did I say about the invoice?" (searches by meaning, on-device)
   - Audio: "read this aloud", "stop reading", "transcribe a file" (→ text + .srt subtitles)
+- **Smart cleanup with Evoo AI v1** (new, any Mac): Evoo's own model, fine-tuned for dictation, polishes every
+  dictation after the rules — fillers and restarts, punctuation, grammar — and never answers what you said.
+  Settings › Smart cleanup › Model › *Evoo AI v1*. [How it was trained](docs/evoo-ai.md).
 - **16 GB Macs — Smart cleanup (local AI):** a local model (Qwen3 4B, Apache-2.0) polishes each dictation after
   the rules — grammar, messy phrasing, "can u" → "can you" — and powers **rewrite by voice**: select text, hold fn,
   say "make this more formal", "shorten this", "translate to Hindi". Off by default; download from Settings.

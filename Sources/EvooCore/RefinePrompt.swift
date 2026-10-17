@@ -83,12 +83,19 @@ public enum RefinePrompt {
               output: "Main raat ko call karunga."),
     ]
 
+    /// What a model fine-tuned on dictation (Evoo AI) is asked: just the opening line, as in its training.
+    static var fineTunedSystem: String { system.components(separatedBy: "\n\nRules:")[0] }
+
     /// Static part: system prompt and few-shot turns. Identical for every dictation in a language.
-    public static func prefix(language: DictationLanguage, tone: Tone = .neutral) -> String {
+    /// A fine-tuned model learned the rules and examples, so for English it gets only the opening line.
+    public static func prefix(language: DictationLanguage, tone: Tone = .neutral, fineTuned: Bool = false) -> String {
+        let toneLine = tone.instruction.isEmpty ? "" : "\n" + tone.instruction
+        if fineTuned, language == .english {
+            return "<|im_start|>system\n\(fineTunedSystem)\(toneLine)<|im_end|>\n"
+        }
         var shots = examples
         if language == .hinglish { shots += hinglishExamples }
 
-        let toneLine = tone.instruction.isEmpty ? "" : "\n" + tone.instruction
         var p = "<|im_start|>system\n\(system)\n\n\(language.outputInstruction)\(toneLine)<|im_end|>\n"
         for ex in shots {
             p += userTurn(ex.input, context: ex.context)
