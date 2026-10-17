@@ -38,7 +38,7 @@ public enum RefinerModel: String, CaseIterable, Codable, Sendable {
 
     var revision: String {
         switch self {
-        case .evooAI_v1: "EVOO_AI_V1_REVISION"  // filled in once the model is on Hugging Face
+        case .evooAI_v1: "669c358a004f84546d86740b58bd20eb715efcec"
         case .qwen3_0_6b: "50968a4468ef4233ed78cd7c3de230dd1d61a56b"
         case .qwen3_1_7b: "d7f544eead698dbd1f15126ef60b45a1e1933222"
         case .qwen3_4b: "a06e946bb6b655725eafa393f4a9745d460374c9"
