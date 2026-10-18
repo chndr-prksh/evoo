@@ -668,6 +668,22 @@ import Testing
         #expect(Tone.forApp("com.apple.TextEdit") == .neutral)
         #expect(RefinePrompt.prefix(language: .english, tone: .casual).contains("casual"))
     }
+
+    /// Evoo AI was trained with only the opening line of the polish prompt; it must be asked the same way.
+    @Test func fineTunedPrefix() {
+        let short = RefinePrompt.prefix(language: .english, fineTuned: true)
+        #expect(short == "<|im_start|>system\nYou are a dictation editor inside a voice keyboard. You receive text "
+            + "the user just dictated and return it cleaned up, ready to be typed into their app.<|im_end|>\n")
+        #expect(RefinePrompt.prefix(language: .english, tone: .casual, fineTuned: true).contains("casual"))
+        // Hinglish keeps the full prompt with its examples: the fine-tuned model is English-only.
+        #expect(RefinePrompt.prefix(language: .hinglish, fineTuned: true) == RefinePrompt.prefix(language: .hinglish))
+    }
+
+    @Test func evooAIInCatalog() {
+        #expect(RefinerModel.evooAI_v1.isFineTuned && !RefinerModel.qwen3_0_6b.isFineTuned)
+        #expect(!RefinerModel.evooAI_v1.readsContext && RefinerModel.qwen3_4b.readsContext)
+        #expect(RefinerModel.evooAI_v1.downloadURL.absoluteString.hasPrefix("https://huggingface.co/e2chndr/evoo-ai-v1/"))
+    }
 }
 
 @Suite struct TipTests {

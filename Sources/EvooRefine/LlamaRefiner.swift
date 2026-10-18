@@ -40,7 +40,7 @@ public final class LlamaRefiner: @unchecked Sendable {
         try await run { [self] in
             _ = Self.backendReady
             if loadedModel == which, context != nil {
-                return try primePrefix(RefinePrompt.prefix(language: language))
+                return try primePrefix(RefinePrompt.prefix(language: language, fineTuned: which.isFineTuned))
             }
             freeAll()
 
@@ -66,7 +66,7 @@ public final class LlamaRefiner: @unchecked Sendable {
             sampler = chain
             loadedModel = which
             loadedLock.withLock { loaded = true }
-            try primePrefix(RefinePrompt.prefix(language: language))
+            try primePrefix(RefinePrompt.prefix(language: language, fineTuned: which.isFineTuned))
         }
     }
 
@@ -77,7 +77,8 @@ public final class LlamaRefiner: @unchecked Sendable {
     public func refine(_ transcript: String, language: DictationLanguage, tone: Tone = .neutral,
                        personal: String? = nil, context: String? = nil) async throws -> String {
         let raw = try await run { [self] in
-            try primePrefix(RefinePrompt.prefix(language: language, tone: tone))
+            try primePrefix(RefinePrompt.prefix(language: language, tone: tone,
+                                                fineTuned: loadedModel?.isFineTuned ?? false))
             let suffix = RefinePrompt.suffix(transcript: transcript, personal: personal, context: context,
                                              thinkBlock: loadedModel?.usesThinkBlock ?? true)
             let budget = RefinePrompt.maxTokens(forInputTokens: tokenize(transcript, vocab: vocab!, addSpecial: false).count)
