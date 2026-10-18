@@ -110,7 +110,9 @@ final class DictationController: ObservableObject {
         editWatcher.onLessons = { [weak self] lessons, app in self?.learn(lessons, app: app) }
         editWatcher.onStatus = { [weak self] status in self?.learningStatus = status }
         editWatcher.onPair = { [weak self] app, inserted, final in
-            guard let self, self.settings.learnStyle else { return }
+            guard let self else { return }
+            if self.settings.keepDictationLog { DictationLog.shared.noteEdit(inserted: inserted, final: final, app: app) }
+            guard self.settings.learnStyle else { return }
             StyleStore.shared.add(StylePair(app: app, evoo: inserted, sent: final))
         }
         recorder.onLevel = { [weak self] level in
@@ -680,9 +682,19 @@ final class DictationController: ObservableObject {
             log.info("\(self.lastTimings ?? "", privacy: .public)")
             // Bookkeeping after the pill is idle (reading the text box back can take a while in big documents).
             let app = targetApp
+            let heard = heardWhileSpeaking
             DispatchQueue.main.async { [self] in
-                if settings.learnFromEdits, out.action != .pressEnter { editWatcher.didInsert(text, app: app) }
+                if settings.learnFromEdits || settings.keepDictationLog, out.action != .pressEnter {
+                    editWatcher.didInsert(text, app: app)
+                }
                 if settings.keepHistory { DictationHistory.shared.add(text, app: app) }
+                if settings.keepDictationLog {
+                    DictationLog.shared.add(.init(
+                        app: app, language: language.rawValue, model: out.usedLLM ? settings.refinerModel.rawValue : nil,
+                        heard: heard, transcript: raw, rules: out.rules ?? out.text, polished: out.usedLLM ? out.text : nil,
+                        typed: text, screenNames: out.usedScreenTerms,
+                        asrMs: out.asrMs, rulesMs: out.postMs, polishMs: out.refineMs))
+                }
                 learnFromScreen(seen: names, used: out.usedScreenTerms)
                 noteFeatures(raw: raw, text: text)
                 offerTip()

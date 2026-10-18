@@ -280,6 +280,20 @@ struct SettingsView: View {
                     Button("Clear history") { DictationHistory.shared.clear() }
                         .disabled(DictationHistory.shared.entries.isEmpty)
                 }
+                Toggle("Keep a step-by-step log of each dictation", isOn: $settings.keepDictationLog)
+                Text("For finding what went wrong: saves what the pill heard, what Evoo's rules and the AI changed, what was typed, and your edits afterwards. Only on this Mac.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if settings.keepDictationLog || !DictationLog.shared.entries.isEmpty {
+                    HStack {
+                        Text("\(DictationLog.shared.entries.count) logged").foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Show in Finder") {
+                            NSWorkspace.shared.activateFileViewerSelecting([DictationLog.shared.fileURL])
+                        }
+                        Button("Clear log") { DictationLog.shared.clear() }
+                    }
+                    .disabled(DictationLog.shared.entries.isEmpty)
+                }
             }
 
             Section("Your writing style") {

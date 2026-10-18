@@ -65,6 +65,8 @@ final class AppSettings: ObservableObject {
     @Published var usedFeatures: [String] { didSet { save(usedFeatures, "usedFeatures") } }
     /// Keep recent dictations on this Mac so they can be searched and re-used.
     @Published var keepHistory: Bool { didSet { save(keepHistory, "keepHistory") } }
+    /// Keep every step of each dictation on this Mac, to find which step got it wrong (see `DictationLog`).
+    @Published var keepDictationLog: Bool { didSet { save(keepDictationLog, "keepDictationLog") } }
     /// Learn how the user writes from their edits (Layer 1: examples + style in the polish prompt).
     @Published var learnStyle: Bool { didSet { save(learnStyle, "learnStyle") } }
     /// Use the add-on fine-tuned on this Mac from the user's edits (Layer 2), when there is one.
@@ -112,6 +114,7 @@ final class AppSettings: ObservableObject {
         snippets = UserDefaults.standard.data(forKey: "snippets")
             .flatMap { try? JSONDecoder().decode([Snippet].self, from: $0) } ?? []
         keepHistory = bool("keepHistory", true)
+        keepDictationLog = bool("keepDictationLog", false)
         learnStyle = bool("learnStyle", true)
         usePersonalModel = bool("usePersonalModel", true)
         showTips = bool("showTips", true)

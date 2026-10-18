@@ -22,6 +22,8 @@ public final class DictationPipeline {
         public var action: DictationCommands.Action? = nil
         /// Names from the screen that corrected this dictation ("Deva" → "Divya") — worth learning for good.
         public var usedScreenTerms: [String] = []
+        /// The text after Evoo's rules, before the AI changed it (set when the AI ran), for the dictation log.
+        public var rules: String? = nil
 
         public var totalMs: Int { asrMs + postMs + refineMs }
 
@@ -110,7 +112,8 @@ public final class DictationPipeline {
             if let corrected = await correctWithLLM(raw, language: language, style: style, contextTerms: contextTerms) {
                 text = corrected
             }
-            return Output(text: text, raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: (clock.now - t).ms, usedLLM: true)
+            return Output(text: text, raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: (clock.now - t).ms, usedLLM: true,
+                          rules: post.text)
         }
         // With a streaming polisher, long dictations that contain a list still get their prose polished.
         // Contextual polish looks at every sentence (a misheard word looks clean to the rules); otherwise only at
@@ -127,7 +130,7 @@ public final class DictationPipeline {
                 text = polished
             }
             return Output(text: text, raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: (clock.now - t).ms,
-                          usedLLM: true, action: post.action)
+                          usedLLM: true, action: post.action, rules: post.text)
         }
         let needsLLM = post.unresolved || language == .hinglish // Hinglish needs romanizing
         if llm == .whenNeeded, needsLLM, !text.isEmpty, refiner.isLoaded {
@@ -137,7 +140,7 @@ public final class DictationPipeline {
             usedLLM = true
         }
         return Output(text: text, raw: raw, asrMs: asrMs, postMs: postTime.ms, refineMs: refineTime.ms, usedLLM: usedLLM,
-                      action: post.action, usedScreenTerms: post.usedScreenTerms)
+                      action: post.action, usedScreenTerms: post.usedScreenTerms, rules: usedLLM ? post.text : nil)
     }
 
     /// Whether the AI has something to improve after Evoo's rules. Clean text is pasted as it is — no wait.
