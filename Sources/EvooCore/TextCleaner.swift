@@ -50,6 +50,75 @@ extension TextCleaner {
         if text.hasSuffix("."), let last = out.last, !".?!".contains(last) { out += "." }
         return out
     }
+
+    static let scales: [String: Decimal] = [
+        "hundred": 100, "thousand": 1_000, "million": 1_000_000, "billion": 1_000_000_000,
+        "trillion": 1_000_000_000_000,
+    ]
+    static let scaleWords = "hundred|thousand|million|billion|trillion"
+
+    /// "40 million", "$3 million", "3 million dollars": the speech model already wrote the digits. The number
+    /// normalizer only reads spelled-out numbers and turns the lone scale word into digits ("40 1000000 rows"),
+    /// so these amounts are written here and swapped for placeholders until it has run.
+    public static func maskScaledNumbers(_ text: String, into restore: inout [(String, String)]) -> String {
+        let pattern = #"(?i)(\$\s?)?\b(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?\s+("# + scaleWords
+            + #")\b(\s+(?:dollars?|bucks)\b)?"#
+        guard let re = try? NSRegularExpression(pattern: pattern) else { return text }
+        var out = text
+        for m in re.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
+            guard let whole = Range(m.range, in: text), let num = Range(m.range(at: 2), in: text),
+                  let scale = Range(m.range(at: 4), in: text) else { continue }
+            let number = String(text[num]) + (Range(m.range(at: 3), in: text).map { String(text[$0]) } ?? "")
+            let amount = number + " " + text[scale].lowercased()
+            let isMoney = m.range(at: 1).location != NSNotFound || m.range(at: 5).location != NSNotFound
+            let written: String?
+            if isMoney {
+                written = dollars(amount)
+            } else if text[scale].lowercased() == "hundred" {
+                written = plain(amount) // "3 hundred" → "300", as the normalizer writes "three hundred"
+            } else {
+                written = amount // "40 million", as the normalizer writes "forty million"
+            }
+            guard let written else { continue }
+            let placeholder = "evoomoney\(restore.count)x"
+            restore.append((placeholder, written))
+            out.replaceSubrange(Range(m.range, in: out) ?? whole, with: placeholder)
+        }
+        return out
+    }
+
+    /// A dollar amount the way people type it: "1200" → "$1,200", "3 thousand" → "$3,000",
+    /// "2.5 million" → "$2.5 million". Nil when `amount` is not a number with an optional scale word.
+    public static func dollars(_ amount: String) -> String? {
+        let parts = amount.trimmingCharacters(in: .whitespaces).lowercased().split(separator: " ").map(String.init)
+        guard let first = parts.first, parts.count <= 2 else { return nil }
+        if parts.count == 2, ["million", "billion", "trillion"].contains(parts[1]) {
+            guard number(first) != nil else { return nil }
+            return "$" + first + " " + parts[1]
+        }
+        return plain(amount).map { "$" + $0 }
+    }
+
+    /// "3 thousand" → "3,000", "1200" → "1,200", "2.5 hundred" → "250".
+    static func plain(_ amount: String) -> String? {
+        let parts = amount.trimmingCharacters(in: .whitespaces).lowercased().split(separator: " ").map(String.init)
+        guard let first = parts.first, parts.count <= 2, var value = number(first) else { return nil }
+        if parts.count == 2 {
+            guard let scale = scales[parts[1]] else { return nil }
+            value *= scale
+        }
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.maximumFractionDigits = 2
+        f.locale = Locale(identifier: "en_US")
+        return f.string(from: value as NSDecimalNumber)
+    }
+
+    /// "1,200" → 1200, "2.5" → 2.5; nil for anything else.
+    static func number(_ s: String) -> Decimal? {
+        guard s.range(of: #"^(\d{1,3}(,\d{3})+|\d+)(\.\d+)?$"#, options: .regularExpression) != nil else { return nil }
+        return Decimal(string: s.replacingOccurrences(of: ",", with: ""), locale: Locale(identifier: "en_US_POSIX"))
+    }
 }
 
 public enum AudioStats {

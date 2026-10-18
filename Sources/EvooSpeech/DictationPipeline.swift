@@ -246,6 +246,7 @@ public final class DictationPipeline {
             var body2 = body.replacingOccurrences(of: #"(?i)\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)-(\w)"#,
                                                   with: "$1 $2", options: .regularExpression)
             var money: [(String, String)] = []
+            body2 = TextCleaner.maskScaledNumbers(body2, into: &money) // "40 million" the speech model wrote
             body2 = maskMoney(body2, into: &money)
             let (masked, restore) = Self.maskOrdinals(body2)
             var out = normalizer.normalizeSentence(masked)
@@ -259,21 +260,19 @@ public final class DictationPipeline {
         + "fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|"
         + "thousand|million|billion"
 
-    /// "one thousand two hundred dollars" → "$1,200". The normalizer gets thousands + hundreds + dollars wrong
-    /// ("$100200"), so the amount is converted on its own and kept out of its way.
+    /// "one thousand two hundred dollars" → "$1,200", "three million dollars" → "$3 million". The normalizer gets
+    /// thousands + hundreds + dollars wrong ("$100200"), so the amount is converted on its own and kept out of its way.
     func maskMoney(_ text: String, into restore: inout [(String, String)]) -> String {
-        let pattern = "(?i)\\b((?:(?:" + Self.numberWords + ")(?:\\s+and)?\\s+)*(?:" + Self.numberWords + "))\\s+(dollars?|bucks)\\b"
+        let pattern = "(?i)\\b((?:(?:" + Self.numberWords + "|point)(?:\\s+and)?\\s+)*(?:" + Self.numberWords
+            + "))\\s+(dollars?|bucks)\\b"
         guard let re = try? NSRegularExpression(pattern: pattern) else { return text }
         var out = text
         for m in re.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
             guard let whole = Range(m.range, in: text), let num = Range(m.range(at: 1), in: text) else { continue }
-            let digits = normalizer.normalizeSentence(String(text[num])).filter { $0.isNumber || $0 == "." }
-            guard let value = Double(digits) else { continue }
-            let f = NumberFormatter()
-            f.numberStyle = .decimal
-            f.maximumFractionDigits = 2
+            // "three million" comes back as "3 million": keep the scale word, don't read it as "$3".
+            guard let dollars = TextCleaner.dollars(normalizer.normalizeSentence(String(text[num]))) else { continue }
             let placeholder = "evoomoney\(restore.count)x"
-            restore.append((placeholder, "$" + (f.string(from: NSNumber(value: value)) ?? digits)))
+            restore.append((placeholder, dollars))
             out.replaceSubrange(Range(m.range, in: out) ?? whole, with: placeholder)
         }
         return out

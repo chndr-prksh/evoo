@@ -91,6 +91,50 @@ import Testing
         #expect(TextCleaner.tidyTimes("Wait... ok") == "Wait... ok")
     }
 
+    /// Masks digit + scale-word amounts, then puts the written amounts back (the normalizer runs in between).
+    func scaled(_ text: String) -> String {
+        var restore: [(String, String)] = []
+        var out = TextCleaner.maskScaledNumbers(text, into: &restore)
+        for (placeholder, written) in restore { out = out.replacingOccurrences(of: placeholder, with: written) }
+        return out
+    }
+
+    @Test func digitsBeforeScaleWordsKeepTheirMeaning() {
+        // The speech model writes "40 million"; it must not become "40 1000000".
+        #expect(scaled("The staging database has about 40 million rows") == "The staging database has about 40 million rows")
+        #expect(scaled("We have about 40 million users") == "We have about 40 million users")
+        #expect(scaled("2.5 billion people") == "2.5 billion people")
+        #expect(scaled("3 thousand steps") == "3 thousand steps")
+        #expect(scaled("we need 2 million and 3 thousand") == "we need 2 million and 3 thousand")
+        #expect(scaled("3 hundred people") == "300 people") // as "three hundred people" is written
+        // Money: "$" + digits, as "one thousand two hundred dollars" → "$1,200".
+        #expect(scaled("It costs 3 million dollars") == "It costs $3 million")
+        #expect(scaled("It costs $3 million.") == "It costs $3 million.")
+        #expect(scaled("We raised $2.5 billion") == "We raised $2.5 billion")
+        #expect(scaled("10 thousand dollars") == "$10,000")
+        #expect(scaled("3 million bucks") == "$3 million")
+        // The normalizer never sees the amount.
+        var restore: [(String, String)] = []
+        #expect(TextCleaner.maskScaledNumbers("about 40 million rows", into: &restore) == "about evoomoney0x rows")
+        #expect(restore.map(\.1) == ["40 million"])
+        // Nothing to mask.
+        #expect(scaled("about 40,000 users") == "about 40,000 users")
+        #expect(scaled("the 3 million-dollar budget") == "the 3 million-dollar budget")
+        #expect(scaled("forty million users") == "forty million users") // spelled out: the normalizer's job
+    }
+
+    @Test func dollarAmountsKeepTheScale() {
+        // What the normalizer returns for the words before "dollars".
+        #expect(TextCleaner.dollars("1200") == "$1,200")
+        #expect(TextCleaner.dollars("3 million") == "$3 million") // "three million dollars" was "$3"
+        #expect(TextCleaner.dollars("2.5 billion") == "$2.5 billion")
+        #expect(TextCleaner.dollars("3 thousand") == "$3,000") // "three thousand dollars" was "$3"
+        #expect(TextCleaner.dollars("15 thousand") == "$15,000")
+        #expect(TextCleaner.dollars("4.5") == "$4.5")
+        #expect(TextCleaner.dollars("2 million 50 thousand") == nil) // unreadable: left for the normalizer
+        #expect(TextCleaner.dollars("point 5") == nil)
+    }
+
     @Test func silenceDetection() {
         #expect(AudioStats.isLikelySilent([Float](repeating: 0.001, count: 16000)))
         let tone = (0 ..< 16000).map { Float(sin(Double($0) * 0.1)) * 0.2 }
