@@ -216,4 +216,4 @@ signed/notarized release yet.
 
 ## License
 
-Apache-2.0. See [NOTICE](NOTICE) for model and library attributions..
+Apache-2.0. See [NOTICE](NOTICE) for model and library attributions.
