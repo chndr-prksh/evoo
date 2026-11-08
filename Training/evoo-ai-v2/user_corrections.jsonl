@@ -1,0 +1,9 @@
+{"raw": "Whether or not the goal is clear I think it's pretty much straightforward. Usually it takes a day or 2, no no, I think a week to finish the task. We'll try to do it in 10 h.", "ref": "Whether or not the goal is clear, I think it's pretty much straightforward. Usually it takes a week to finish the task. We'll try to do it in 10 hours."}
+{"raw": "I think this is the best way no a great way", "ref": "I think this is a great way."}
+{"raw": "I think this is a great way an best way", "ref": "I think this is the best way."}
+{"raw": "Hi Raj, I want to meet you tomorrow. Like no day after tomorrow would be better at 6 PM.", "ref": "Hi Raj, I want to meet you day after tomorrow at 6 PM."}
+{"raw": "Let's meet day after tomorrow. At 5 PM? I think no 6 PM.", "ref": "Let's meet day after tomorrow at 6 PM."}
+{"raw": "I want to meet you day after tomorrow at 5 PM. I think 6 PM would be better", "ref": "I want to meet you day after tomorrow at 6 PM."}
+{"raw": "Hey what's up? Can we meet day after tomorrow 6 PM.", "ref": "Hey, what's up? Can we meet day after tomorrow at 6 PM?"}
+{"raw": "No, I think that's fine, let's keep it.", "ref": "No, I think that's fine, let's keep it."}
+{"raw": "I think we should ship it on Friday.", "ref": "I think we should ship it on Friday."}

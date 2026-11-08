@@ -1,0 +1,62 @@
+<!doctype html><meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { width: 1200px; height: 1200px; background: #fff; color: #0f1115; font: 400 26px/1.4 -apple-system, "SF Pro Display", "Inter", system-ui, sans-serif; padding: 64px 68px; display: flex; flex-direction: column; }
+  .brand { display: flex; align-items: center; gap: 14px; font-weight: 700; font-size: 30px; letter-spacing: -.01em; }
+  .brand svg { width: 46px; height: 46px; }
+  .brand span { margin-left: auto; font-weight: 500; font-size: 21px; color: #6b7280; }
+  h1 { font-size: 68px; line-height: 1.04; letter-spacing: -.035em; font-weight: 800; margin: 32px 0 14px; }
+  h1 em { font-style: normal; color: #2f6bff; }
+  .sub { font-size: 26px; color: #454b57; max-width: 1040px; }
+  .chart { margin-top: 28px; border-radius: 26px; padding: 24px 34px 26px; border: 2px solid #e7e8ec; background: #f6f7f9; }
+  .tag { font-size: 18px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: #6b7280; }
+  .bars { margin-top: 16px; display: grid; gap: 10px; }
+  .bar { display: grid; grid-template-columns: 340px 1fr; align-items: center; column-gap: 22px; }
+  .name { font-size: 23px; font-weight: 650; line-height: 1.2; }
+  .note { display: block; font-size: 18px; font-weight: 400; color: #6b7280; margin-top: 3px; }
+  .plot { position: relative; height: 40px; }
+  .track, .fill { position: absolute; left: 0; top: 8px; height: 24px; }
+  .track { right: 0; background: #e7e8ec; border-radius: 0 4px 4px 0; }
+  .fill { background: #a9b0bd; border-radius: 0 4px 4px 0; }
+  .last .fill { background: #2f6bff; }
+  .val { position: absolute; top: 0; line-height: 40px; padding-left: 12px; font-size: 30px; font-weight: 750; letter-spacing: -.02em; color: #454b57; white-space: nowrap; }
+  .caption { margin-top: 12px; font-size: 19px; color: #6b7280; }
+  .caption b { color: #0f1115; font-weight: 650; }
+  .last .val { color: #0f1115; }
+  .val small { font-size: 18px; font-weight: 500; color: #6b7280; letter-spacing: 0; margin-left: 6px; }
+  .rows { margin-top: 20px; display: grid; gap: 10px; }
+  .row { display: grid; grid-template-columns: 1fr 44px 1fr; align-items: center; border: 2px solid #e7e8ec; border-radius: 18px; padding: 12px 22px; font-size: 22.5px; }
+  .row .l { color: #6b7280; font-size: 15.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; display: block; margin-bottom: 2px; }
+  .row .arrow { text-align: center; color: #9aa3b5; font-size: 28px; }
+  .row .good { font-weight: 600; }
+  .row .bad { color: #c62828; font-weight: 600; }
+  .foot { margin-top: auto; padding-top: 22px; display: flex; align-items: baseline; gap: 16px; font-size: 21px; color: #6b7280; }
+  .foot b { color: #0f1115; font-weight: 700; }
+  .foot span { margin-left: auto; }
+</style>
+<div class="brand">
+  <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#111"/><g stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M9 13v6M13 10v12M17 8v16M21 11v10M25 14v4"/></g></svg>
+  Evoo <span>Free, open-source voice dictation that runs on your Mac</span>
+</div>
+<h1>The model never changed.<br><em>The score went 6% → 79%.</em></h1>
+<p class="sub">Google's FunctionGemma 270M, fine-tuned to turn what you say into Mac actions. It runs on the laptop, in under a second.</p>
+<div class="chart">
+  <div class="tag">Fully right · 344 phrasings it never saw in training</div>
+  <div class="bars">
+    <div class="bar"><div class="name">Off the shelf<span class="note">No fine-tuning</span></div>
+      <div class="plot"><div class="track"></div><div class="fill" style="width:6%"></div><div class="val" style="left:6%">6%<small>20 of 344</small></div></div></div>
+    <div class="bar"><div class="name">First fine-tune<span class="note">Memorised its 600 phrasings</span></div>
+      <div class="plot"><div class="track"></div><div class="fill" style="width:21%"></div><div class="val" style="left:21%">21%</div></div></div>
+    <div class="bar"><div class="name">3× the data<span class="note">1,800 ways of asking, thousands of names</span></div>
+      <div class="plot"><div class="track"></div><div class="fill" style="width:74%"></div><div class="val" style="left:74%">74%</div></div></div>
+    <div class="bar last"><div class="name">More examples + one bug fix<span class="note">Turn markers weren't special tokens</span></div>
+      <div class="plot"><div class="track"></div><div class="fill" style="width:79%"></div><div class="val" style="left:79%">79%</div></div></div>
+  </div>
+  <p class="caption">The last model also picks the <b>right action 93% of the time</b>.</p>
+</div>
+<div class="rows">
+  <div class="row"><div><span class="l">What was said</span>“it's too bright in here”</div><div class="arrow">→</div><div><span class="l">What it did</span><span class="good">Turned the brightness down</span></div></div>
+  <div class="row"><div><span class="l">What was said</span>“turn it down a bit and open my notes”</div><div class="arrow">→</div><div><span class="l">What it did</span><span class="good">Volume down, then opened Notes</span></div></div>
+  <div class="row"><div><span class="l">What was said</span>“I can't hear anything, and pull up my calendar”</div><div class="arrow">→</div><div><span class="l">What it did</span><span class="bad">Nothing. 1 in 5 still isn't fully right.</span></div></div>
+</div>
+<div class="foot"><b>The lesson:</b> score it on phrasings it has never seen. <span>chndr-prksh.github.io/evoo</span></div>
