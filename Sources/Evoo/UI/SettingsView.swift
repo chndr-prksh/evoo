@@ -1,4 +1,5 @@
 import EvooCore
+import EvooRefine
 import EvooSpeech
 import SwiftUI
 
@@ -218,9 +219,10 @@ struct SettingsView: View {
                     }
                 } else {
                     HStack {
-                        Text("290 MB, once").foregroundStyle(.secondary)
+                        Text(ModelDownloader.Tools.updateAvailable ? "Update available: adds alarms (290 MB)" : "290 MB, once")
+                            .foregroundStyle(.secondary)
                         Spacer()
-                        Button("Download") { controller.downloadToolsModel() }
+                        Button(ModelDownloader.Tools.updateAvailable ? "Update" : "Download") { controller.downloadToolsModel() }
                     }
                 }
                 Text("Built on Google's FunctionGemma, under the [Gemma Terms of Use](https://ai.google.dev/gemma/terms).")

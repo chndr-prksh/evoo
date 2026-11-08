@@ -837,6 +837,7 @@ final class DictationController: ObservableObject {
                                                    sha256: ModelDownloader.Tools.sha256) { p in
                     Task { @MainActor in if self.toolsDownloadProgress != nil { self.toolsDownloadProgress = p } }
                 }
+                try? FileManager.default.removeItem(at: ModelDownloader.Tools.oldFile)
                 toolsDownloadProgress = nil
             } catch {
                 toolsDownloadProgress = nil

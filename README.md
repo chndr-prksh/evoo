@@ -136,9 +136,10 @@ The LLM only runs when a correction cue can't be resolved by rules, or for Hingl
 | `fn` + any other key | Ignored (so Fn+arrows / F-keys keep working) |
 | Hold `fn` + `Control`, speak, release | Command mode: nothing is typed. “Close the tab and switch to Claude” |
 
-**Smart commands (preview).** An optional 290 MB on-device model (FunctionGemma 270M, fine-tuned on Evoo's 34 tools)
-understands commands said your own way in command mode: “it's too bright in here”, “I'm done with Safari”.
-On 344 phrasings it never saw it gets 79% fully right and the right tool 93% of the time, in about 0.4 s. Fixed
+**Smart commands (preview).** An optional 290 MB on-device model (FunctionGemma 270M, fine-tuned on Evoo's 36 tools)
+understands commands said your own way in command mode: “it's too bright in here”, “I'm done with Safari”,
+“wake me up at six thirty”. On 356 phrasings it never saw it gets 79% fully right and the right tool 93% of the
+time, leaves ordinary sentences alone (11 of 11), in about 0.3 s. Fixed
 phrases are always tried first. Download it in Settings; how it is built and scored is in [Tools/](Tools/README.md).
 The model is built on Google's FunctionGemma and is subject to the [Gemma Terms of Use](https://ai.google.dev/gemma/terms).
 
