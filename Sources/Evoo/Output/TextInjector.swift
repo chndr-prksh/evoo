@@ -35,17 +35,41 @@ final class TextInjector {
         postPaste()
 
         guard restoreClipboard else { return }
-        // Returns right away (the text is in); the user's clipboard comes back once the app has read ours.
+        // Returns right away (the text is in); the user's clipboard comes back once the app has pasted ours.
         pendingRestore = saved
         restoreTask?.cancel()
         restoreTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(400))
+            await Self.waitForPaste(of: text)
             guard !Task.isCancelled else { return }
             self?.pendingRestore = nil
             // If the user copied something in the meantime, leave it alone.
             guard pasteboard.changeCount == ourChange else { return }
             pasteboard.clearContents()
             if !saved.isEmpty { pasteboard.writeObjects(saved) }
+        }
+    }
+
+    /// The app reads the clipboard only when it gets round to handling ⌘V, which on a busy Mac can be well after
+    /// we posted it. Putting the user's clipboard back before then makes the app paste *that* instead of the
+    /// dictation (it did, with a fixed 400 ms wait). So wait until the dictation shows up in the text box; in
+    /// apps whose text box can't be read, wait a fixed, longer time.
+    private static func waitForPaste(of text: String) async {
+        let probe = String(text.trimmingCharacters(in: .whitespacesAndNewlines).suffix(24))
+        let start = ContinuousClock.now
+        try? await Task.sleep(for: .milliseconds(400)) // never sooner than before
+        while !Task.isCancelled {
+            let waited = ContinuousClock.now - start
+            if waited >= .milliseconds(2_500) { return } // landed somewhere we can't see, or was sent right away
+            // Off the main thread: reading a big text box can take 100+ ms.
+            let value = await Task.detached(priority: .userInitiated) {
+                ScreenText.focusedField().flatMap(ScreenText.value(of:))
+            }.value
+            if let value {
+                if probe.isEmpty || value.contains(probe) { return }
+            } else if waited >= .milliseconds(1_200) {
+                return // this app's text box can't be read
+            }
+            try? await Task.sleep(for: .milliseconds(100))
         }
     }
 
